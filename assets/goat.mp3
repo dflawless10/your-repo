@@ -1,0 +1,17 @@
+import { playGoatMelody } from '@/assets/sounds/GoatsFavoriteMelodies';
+
+function handleNewBid() {
+  playGoatMelody(0); // Stutter Baa
+}
+
+function handleSignIn() {
+  playGoatMelody(2); // Sneaky Snort
+}
+
+function handleRegister() {
+  playGoatMelody(1); // Victory Baa
+}
+
+function handleItemListed() {
+  playGoatMelody(3); // Confident Bleat (add to array)
+}

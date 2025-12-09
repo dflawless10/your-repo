@@ -1,0 +1,14 @@
+› Installing 1 SDK 53.0.0 compatible native module using npm
+> npm install --legacy-peer-deps
+
+up to date, audited 1090 packages in 1s
+
+209 packages are looking for funding
+  run `npm fund` for details
+
+1 high severity vulnerability
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.

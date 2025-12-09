@@ -1,0 +1,17 @@
+<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" width="40" height="40">
+  <defs>
+    <linearGradient id="diamondGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00f0ff" />
+      <stop offset="100%" stop-color="#0044ff" />
+    </linearGradient>
+  </defs>
+
+  <!-- Outer diamond with gradient fill -->
+  <polygon points="20,0 40,20 20,40 0,20" fill="url(#diamondGradient)" />
+
+  <!-- Inner facets -->
+  <polygon points="20,0 30,20 20,20" fill="#00d0dd" />
+  <polygon points="20,0 10,20 20,20" fill="#00aacc" />
+  <polygon points="10,20 20,40 20,20" fill="#0088bb" />
+  <polygon points="30,20 20,40 20,20" fill="#006699" />
+</svg>
