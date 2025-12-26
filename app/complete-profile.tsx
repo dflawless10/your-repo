@@ -79,8 +79,8 @@ export default function CompleteProfile() {
       });
 
       if (result === 'OK') {
-        Alert.alert('🎉 Profile Complete!', 'Welcome to the barnyard.');
-        router.push('/api/myauctionscreen');
+        Alert.alert('🎉 Welcome to BidGoat!', 'Your profile has been created. Start exploring auctions or list your first item!');
+        router.replace('/(tabs)/profile');
       } else {
         Alert.alert('🛑 Failed', 'Could not complete profile.');
       }

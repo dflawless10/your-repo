@@ -15,77 +15,13 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/hooks/AuthContext';
-import Svg, { Defs, LinearGradient, Stop, Polygon } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
 import { CharacterCounterInput, CHARACTER_LIMITS, validateCharacterCount } from 'app/components/CharacterCounterInput';
+import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useImageValidation } from '@/hooks/useImageValidation';
+import ImageValidationFeedback from '@/app/components/ImageValidationFeedback';
 
-const AnimatedSvg = Animated.createAnimatedComponent(Svg);
-
-// Spins an image
-const SpinningImage = ({ uri }: { uri: string }) => {
-  const rotation = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.timing(rotation, {
-        toValue: 1,
-        duration: 6000,
-        useNativeDriver: true,
-      })
-    ).start();
-  }, []);
-
-  const rotate = rotation.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
-
-  return (
-    <Animated.View style={{ transform: [{ rotate }] }}>
-      <Image
-        source={{ uri }}
-        style={{ width: 200, height: 200, borderRadius: 12 }}
-      />
-    </Animated.View>
-  );
-};
-
-// Spins the SVG polygon
-const SpinningWatch = () => {
-  const rotation = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.timing(rotation, {
-        toValue: 1,
-        duration: 4000,
-        useNativeDriver: true,
-      })
-    ).start();
-  }, []);
-
-  const rotate = rotation.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
-
-  return (
-    <AnimatedSvg
-      width={24}
-      height={24}
-      viewBox="0 0 40 40"
-      style={{ transform: [{ rotate }], marginRight: 8 }}
-    >
-      <Defs>
-        <LinearGradient id="watchGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-          <Stop offset="0%" stopColor="#FFD700" />
-          <Stop offset="100%" stopColor="#FF8C00" />
-        </LinearGradient>
-      </Defs>
-      <Polygon points="20,0 40,20 20,40 0,20" fill="url(#watchGradient)" />
-    </AnimatedSvg>
-  );
-};
 
 
 export default function WatchListingScreen() {
@@ -93,13 +29,53 @@ export default function WatchListingScreen() {
   const params = useLocalSearchParams();
   const { token } = useAuth();
 
+  // Debug: Log all params
+  console.log('🐐 Watch listing params:', params);
+  console.log('🐐 additionalImages param:', params.additionalImages);
+
+  // Parse watchSpecs from URL parameter
+  let parsedWatchSpecs: any = {};
+  try {
+    if (params.watchSpecs && typeof params.watchSpecs === 'string') {
+      parsedWatchSpecs = JSON.parse(decodeURIComponent(params.watchSpecs as string));
+      console.log('📊 Parsed watch specs from params:', parsedWatchSpecs);
+    }
+  } catch (e) {
+    console.error('Failed to parse watchSpecs:', e);
+  }
+
   const [title, setTitle] = useState(`${params.brand} ${params.model}`);
   const [description, setDescription] = useState<string>('');
   const [imageUris, setImageUris] = useState<string[]>([]);
 
-  const [startingBid, setStartingBid] = useState(params.price?.toString() || '');
+  // Default starting bid to 60% of appraised value for better auction dynamics
+  const defaultStartingBid = params.price
+    ? (parseFloat(params.price as string) * 0.6).toFixed(0)
+    : '';
+  const [startingBid, setStartingBid] = useState(defaultStartingBid);
   const [duration, setDuration] = useState('7');
-  const [buyItNowPrice, setBuyItNowPrice] = useState<string>('');
+
+  // Advanced auction options
+  const [hasReserve, setHasReserve] = useState(false);
+  const [reservePrice, setReservePrice] = useState('');
+  const [hasBuyItNow, setHasBuyItNow] = useState(false);
+  const [buyItNowPrice, setBuyItNowPrice] = useState('');
+  const [isMustSell, setIsMustSell] = useState(false);
+
+  // Header state
+  const [username, setUsername] = useState<string | null>(null);
+  const scrollY = useRef(new Animated.Value(0)).current;
+
+  // Image validation for first image
+  const imageValidation = useImageValidation(imageUris.length > 0 ? imageUris[0] : null);
+
+  useEffect(() => {
+    const loadUsername = async () => {
+      const name = await AsyncStorage.getItem('username');
+      setUsername(name);
+    };
+    loadUsername();
+  }, []);
 
     // Normalize preview URIs
 const previewUris: string[] =
@@ -141,14 +117,50 @@ useEffect(() => {
 
 
   const handleCreateListing = async () => {
-  if (!title || !description) {
+  if (!title || !description || !startingBid) {
     Alert.alert('Error', 'Please fill in all required fields');
     return;
   }
 
-  if (!startingBid && !buyItNowPrice) {
-    Alert.alert('Error', 'You must enter either a Starting Bid or a Buy It Now price');
-    return;
+  // Validate Must Sell constraints
+  if (isMustSell) {
+    const durationNum = parseInt(duration);
+    if (durationNum < 1 || durationNum > 7) {
+      Alert.alert('Error', 'Must Sell duration must be between 1 and 7 days');
+      return;
+    }
+    if (hasReserve || hasBuyItNow) {
+      Alert.alert('Error', 'Must Sell mode cannot have Reserve Price or Buy It Now options');
+      return;
+    }
+  }
+
+  // Validate Reserve Price
+  if (hasReserve && reservePrice) {
+    const reserve = parseFloat(reservePrice);
+    const starting = parseFloat(startingBid);
+    const appraised = params.price ? parseFloat(params.price as string) : starting;
+
+    if (reserve < starting) {
+      Alert.alert('Error', 'Reserve price must be greater than or equal to starting bid');
+      return;
+    }
+
+    if (reserve > appraised) {
+      Alert.alert('Error', `Reserve price cannot exceed appraised value of $${appraised.toLocaleString()}`);
+      return;
+    }
+  }
+
+  // Validate Buy It Now Price
+  if (hasBuyItNow && buyItNowPrice) {
+    const buyNow = parseFloat(buyItNowPrice);
+    const starting = parseFloat(startingBid);
+    const reserve = hasReserve && reservePrice ? parseFloat(reservePrice) : starting;
+    if (buyNow <= reserve) {
+      Alert.alert('Error', 'Buy It Now price must be greater than reserve price (or starting bid if no reserve)');
+      return;
+    }
   }
 
   // Character count validation with moderation
@@ -179,46 +191,66 @@ try {
   formData.append('rarity', 'collectible');
   formData.append('duration_hours', duration);
 
-  // 🐐 Price logic
-  if (startingBid && buyItNowPrice) {
-    formData.append('price', startingBid);
-    formData.append('buy_it_now', buyItNowPrice);
-  } else if (startingBid) {
-    formData.append('price', startingBid);
-  } else if (buyItNowPrice) {
-    formData.append('price', buyItNowPrice);
-    formData.append('buy_it_now', buyItNowPrice);
+  // 🐐 Watch Specifications JSON - Use parsed specs from URL parameter
+  formData.append('watch_specifications', JSON.stringify(parsedWatchSpecs));
+  console.log('📊 Watch specifications being sent:', parsedWatchSpecs);
+
+  // 🐐 Price - always use starting bid as the price field
+  formData.append('price', parseFloat(startingBid).toString());
+  console.log('price:', parseFloat(startingBid));
+
+  // Advanced auction options
+  if (hasReserve && reservePrice) {
+    formData.append('reserve_price', parseFloat(reservePrice).toString());
+    console.log('reserve_price:', parseFloat(reservePrice));
   }
 
-  // Primary photo
-  const firstUri = previewUris[0];
-  const firstFilename = firstUri.split('/').pop() || 'watch.jpg';
-  const firstMatch = /\.(\w+)$/.exec(firstFilename);
-  const firstType = firstMatch ? `image/${firstMatch[1]}` : 'image/jpeg';
+  if (hasBuyItNow && buyItNowPrice) {
+    formData.append('buy_it_now', parseFloat(buyItNowPrice).toString());
+    console.log('buy_it_now:', parseFloat(buyItNowPrice));
+  }
 
-  // @ts-ignore
-  formData.append('photo', { uri: firstUri, name: firstFilename, type: firstType });
+  if (isMustSell) {
+    formData.append('is_must_sell', '1');
+    console.log('is_must_sell: 1');
+  }
 
-  // Additional photos
-  previewUris.slice(1).forEach((uri, idx) => {
-    const filename = uri.split('/').pop() || `watch_${idx}.jpg`;
-    const match = /\.(\w+)$/.exec(filename);
-    const type = match ? `image/${match[1]}` : 'image/jpeg';
-
-    // @ts-ignore
-    formData.append('additional_photos', { uri, name: filename, type });
-  });
-
-if (previewUris.length > 0) {
-  // Primary photo
-  const firstUri = previewUris[0];
-  const filename = firstUri.split('/').pop() || 'watch.jpg';
+  // Handle the main image file
+  const imageUri = params.imageUrl as string;
+  const filename = imageUri.split('/').pop() || 'watch.jpg';
   const match = /\.(\w+)$/.exec(filename);
   const type = match ? `image/${match[1]}` : 'image/jpeg';
 
-  // @ts-ignore
-  formData.append('photo', { uri: firstUri, name: filename, type });
-}
+  formData.append('photo', {
+    uri: imageUri,
+    name: filename,
+    type: type,
+  } as any);
+  console.log('photo:', imageUri, filename, type);
+
+  // Handle additional images (backend expects keys like "additional_photo_0", "additional_photo_1", etc.)
+  if (params.additionalImages) {
+    try {
+      const additionalImagesArray = JSON.parse(params.additionalImages as string);
+      console.log('Additional images to upload:', additionalImagesArray.length);
+
+      for (let i = 0; i < additionalImagesArray.length; i++) {
+        const addUri = additionalImagesArray[i];
+        const addFilename = addUri.split('/').pop() || `watch_${i + 1}.jpg`;
+        const addMatch = /\.(\w+)$/.exec(addFilename);
+        const addType = addMatch ? `image/${addMatch[1]}` : 'image/jpeg';
+
+        formData.append(`additional_photo_${i}`, {
+          uri: addUri,
+          name: addFilename,
+          type: addType,
+        } as any);
+        console.log(`Additional photo ${i}:`, addUri, addFilename, addType);
+      }
+    } catch (error) {
+      console.error('Error parsing additional images:', error);
+    }
+  }
 
 
 
@@ -239,7 +271,19 @@ if (previewUris.length > 0) {
     console.log('📥 Server response:', responseData);
 
     if (response.ok) {
-      Alert.alert('Success', '⌚ Watch listed successfully!', [
+      let successMessage = '⌚ Watch listed successfully!';
+
+      if (hasReserve && reservePrice) {
+        successMessage += `\n🔒 Reserve price set at $${parseFloat(reservePrice).toLocaleString()}`;
+      }
+      if (hasBuyItNow && buyItNowPrice) {
+        successMessage += `\n⚡ Buy It Now price: $${parseFloat(buyItNowPrice).toLocaleString()}`;
+      }
+      if (isMustSell) {
+        successMessage += `\n🔥 Must Sell mode activated (${duration} days)`;
+      }
+
+      Alert.alert('Success', successMessage, [
         { text: 'OK', onPress: () => router.push('/(tabs)/MyAuctionScreen') },
       ]);
     } else {
@@ -255,22 +299,24 @@ if (previewUris.length > 0) {
 
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={100}
-    >
-      <ScrollView
+    <View style={{ flex: 1, backgroundColor: '#F7FAFC' }}>
+      <EnhancedHeader scrollY={scrollY} username={username} onSearch={() => {}} />
+      <Animated.ScrollView
         style={styles.container}
-        contentContainerStyle={{ paddingBottom: 150 }}
+        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20, paddingBottom: 150 }}
         keyboardShouldPersistTaps="handled"
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
+        scrollEventThrottle={16}
       >
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color="#1A202C" />
+        {/* Page Title with Back Button */}
+        <View style={styles.pageHeader}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#1a1a1a" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>List Your Watch</Text>
-          <View style={{ width: 24 }} />
+          <Text style={styles.pageTitle}>List Your Watch</Text>
         </View>
 
       {/* Watch Preview Card */}
@@ -289,7 +335,11 @@ if (previewUris.length > 0) {
      <View style={styles.imageRow}>
   {previewUris.length > 0 ? (
     previewUris.map((uri: string, idx: number) => (
-      <SpinningImage key={idx} uri={uri} />
+      <Image
+        key={idx}
+        source={{ uri }}
+        style={{ width: 200, height: 200, borderRadius: 12, marginRight: 8 }}
+      />
     ))
   ) : (
     <View style={styles.placeholderImage}>
@@ -304,6 +354,11 @@ if (previewUris.length > 0) {
             {imageUris ? 'Change Photo' : 'Upload Photo'}
           </Text>
         </TouchableOpacity>
+
+        {/* Image Validation Feedback */}
+        {imageUris.length > 0 && (
+          <ImageValidationFeedback validation={imageValidation} />
+        )}
       </View>
 
       <View style={styles.form}>
@@ -331,7 +386,7 @@ if (previewUris.length > 0) {
         />
 
 
-        <Text style={styles.label}>Starting Bid ($) (Optional)</Text>
+        <Text style={styles.label}>Starting Bid ($) *</Text>
         <TextInput
           style={styles.input}
           value={startingBid}
@@ -339,16 +394,12 @@ if (previewUris.length > 0) {
           placeholder="0.00"
           keyboardType="decimal-pad"
         />
-
-        <Text style={styles.label}>Buy It Now Price (Optional)</Text>
-        <TextInput
-          style={styles.input}
-          value={buyItNowPrice}
-          onChangeText={setBuyItNowPrice}
-          placeholder="0.00"
-          keyboardType="decimal-pad"
-        />
-
+        <View style={styles.infoBox}>
+          <Ionicons name="information-circle" size={20} color="#6A0DAD" />
+          <Text style={styles.infoText}>
+            This is the minimum opening bid. Set it below appraisal value to attract bidders. You can add a Buy It Now price below for instant purchase.
+          </Text>
+        </View>
 
         <Text style={styles.label}>Auction Duration (days) *</Text>
         <View style={styles.durationRow}>
@@ -373,6 +424,161 @@ if (previewUris.length > 0) {
           ))}
         </View>
 
+        {/* Advanced Auction Options */}
+        <View style={styles.advancedOptionsContainer}>
+          <Text style={styles.sectionHeader}>⌚ Advanced Options</Text>
+
+          {/* Reserve Price Option */}
+          <TouchableOpacity
+            style={styles.optionRow}
+            onPress={() => {
+              if (!isMustSell) {
+                setHasReserve(!hasReserve);
+                if (hasReserve) setReservePrice('');
+              }
+            }}
+            disabled={isMustSell}
+            activeOpacity={0.7}
+          >
+            <View style={styles.checkboxContainer}>
+              <View style={[styles.checkbox, hasReserve && styles.checkboxActive, isMustSell && styles.checkboxDisabled]}>
+                {hasReserve && <Ionicons name="checkmark" size={18} color="#fff" />}
+              </View>
+              <Text style={[styles.optionLabel, isMustSell && styles.optionLabelDisabled]}>Set Reserve Price</Text>
+            </View>
+            <Ionicons name="shield-checkmark" size={20} color={isMustSell ? "#CBD5E0" : "#6A0DAD"} />
+          </TouchableOpacity>
+          {hasReserve && !isMustSell && (
+            <View style={styles.optionInputContainer}>
+              <Text style={styles.optionHelpText}>Minimum price you will accept (hidden from buyers)</Text>
+              {params.price && (
+                <View style={styles.quickSelectRow}>
+                  <TouchableOpacity
+                    style={styles.quickSelectButton}
+                    onPress={() => setReservePrice((parseFloat(params.price as string) * 0.70).toFixed(0))}
+                  >
+                    <Text style={styles.quickSelectText}>70%</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.quickSelectButton}
+                    onPress={() => setReservePrice((parseFloat(params.price as string) * 0.80).toFixed(0))}
+                  >
+                    <Text style={styles.quickSelectText}>80%</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.quickSelectButton}
+                    onPress={() => setReservePrice((parseFloat(params.price as string) * 0.90).toFixed(0))}
+                  >
+                    <Text style={styles.quickSelectText}>90%</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.quickSelectButton}
+                    onPress={() => setReservePrice((parseFloat(params.price as string) * 0.95).toFixed(0))}
+                  >
+                    <Text style={styles.quickSelectText}>95%</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              <TextInput
+                style={styles.optionInput}
+                value={reservePrice}
+                onChangeText={setReservePrice}
+                placeholder="0.00"
+                keyboardType="decimal-pad"
+              />
+            </View>
+          )}
+
+          {/* Buy It Now Option */}
+          <TouchableOpacity
+            style={styles.optionRow}
+            onPress={() => {
+              if (!isMustSell) {
+                setHasBuyItNow(!hasBuyItNow);
+                if (hasBuyItNow) setBuyItNowPrice('');
+              }
+            }}
+            disabled={isMustSell}
+            activeOpacity={0.7}
+          >
+            <View style={styles.checkboxContainer}>
+              <View style={[styles.checkbox, hasBuyItNow && styles.checkboxActive, isMustSell && styles.checkboxDisabled]}>
+                {hasBuyItNow && <Ionicons name="checkmark" size={18} color="#fff" />}
+              </View>
+              <Text style={[styles.optionLabel, isMustSell && styles.optionLabelDisabled]}>Buy It Now Price</Text>
+            </View>
+            <Ionicons name="flash" size={20} color={isMustSell ? "#CBD5E0" : "#FF6B35"} />
+          </TouchableOpacity>
+          {hasBuyItNow && !isMustSell && (
+            <View style={styles.optionInputContainer}>
+              <Text style={styles.optionHelpText}>Let buyers purchase instantly at this price</Text>
+              <TextInput
+                style={styles.optionInput}
+                value={buyItNowPrice}
+                onChangeText={setBuyItNowPrice}
+                placeholder="0.00"
+                keyboardType="decimal-pad"
+              />
+            </View>
+          )}
+
+          {/* OR Divider */}
+          <View style={styles.optionDivider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>OR</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Must Sell Mode */}
+          <TouchableOpacity
+            style={styles.optionRow}
+            onPress={() => {
+              const newMustSell = !isMustSell;
+              setIsMustSell(newMustSell);
+              if (newMustSell) {
+                setHasReserve(false);
+                setReservePrice('');
+                setHasBuyItNow(false);
+                setBuyItNowPrice('');
+                setDuration('7');
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.checkboxContainer}>
+              <View style={[styles.checkbox, isMustSell && styles.checkboxActive]}>
+                {isMustSell && <Ionicons name="checkmark" size={18} color="#fff" />}
+              </View>
+              <Text style={styles.optionLabel}>Must Sell Mode 🔥</Text>
+            </View>
+            <Ionicons name="flame" size={20} color="#D97706" />
+          </TouchableOpacity>
+          {isMustSell && (
+            <View style={styles.optionInputContainer}>
+              <Text style={styles.optionHelpText}>Item MUST sell to highest bidder (no reserve, 1-7 days only)</Text>
+              <View style={styles.mustSellDurationRow}>
+                {['1', '3', '5', '7'].map((days) => (
+                  <TouchableOpacity
+                    key={days}
+                    style={[
+                      styles.mustSellDurationButton,
+                      duration === days && styles.mustSellDurationButtonActive,
+                    ]}
+                    onPress={() => setDuration(days)}
+                  >
+                    <Text style={[
+                      styles.mustSellDurationText,
+                      duration === days && styles.mustSellDurationTextActive,
+                    ]}>
+                      {days}d
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+        </View>
+
         <View style={styles.infoBox}>
           <Ionicons name="information-circle" size={20} color="#FF6B35" />
           <Text style={styles.infoText}>
@@ -383,7 +589,7 @@ if (previewUris.length > 0) {
         <View style={styles.infoBox}>
           <Ionicons name="cash" size={20} color="#38a169" />
           <Text style={styles.infoText}>
-            You'll receive 89% after BidGoat fees (8% commission + 3% processing)
+            You will receive 89% after BidGoat fees (8% commission + 3% processing)
           </Text>
         </View>
 
@@ -391,12 +597,11 @@ if (previewUris.length > 0) {
           style={styles.submitButton}
           onPress={handleCreateListing}
         >
-          <SpinningWatch />
-          <Text style={styles.submitButtonText}>List Watch</Text>
+          <Text style={styles.submitButtonText}>⌚ List Watch</Text>
         </TouchableOpacity>
       </View>
-    </ScrollView>
-    </KeyboardAvoidingView>
+    </Animated.ScrollView>
+    </View>
   );
 }
 
@@ -405,19 +610,22 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F7FAFC',
   },
-  header: {
+  pageHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    paddingTop: 16,
+    paddingBottom: 8,
+    backgroundColor: '#F7FAFC',
+    marginTop: 16,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+  backButton: {
+    marginRight: 12,
+    padding: 4,
+  },
+  pageTitle: {
+    fontSize: 20,
+    fontWeight: '700',
     color: '#1A202C',
   },
   previewCard: {
@@ -580,5 +788,150 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#fff',
+  },
+  // Advanced Auction Options Styles
+  advancedOptionsContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 24,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  sectionHeader: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#2D3748',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F7FAFC',
+  },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#CBD5E0',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxActive: {
+    backgroundColor: '#6A0DAD',
+    borderColor: '#6A0DAD',
+  },
+  checkboxDisabled: {
+    backgroundColor: '#F7FAFC',
+    borderColor: '#E2E8F0',
+    opacity: 0.5,
+  },
+  optionLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#2D3748',
+  },
+  optionLabelDisabled: {
+    color: '#A0AEC0',
+  },
+  optionInputContainer: {
+    paddingLeft: 36,
+    paddingRight: 8,
+    paddingBottom: 16,
+    marginTop: 8,
+  },
+  optionHelpText: {
+    fontSize: 12,
+    color: '#718096',
+    marginBottom: 8,
+    fontStyle: 'italic',
+  },
+  quickSelectRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  quickSelectButton: {
+    flex: 1,
+    backgroundColor: '#6A0DAD',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  quickSelectText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  optionInput: {
+    backgroundColor: '#F7FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: '#1A202C',
+  },
+  optionDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+    gap: 12,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E2E8F0',
+  },
+  dividerText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#A0AEC0',
+    letterSpacing: 1,
+  },
+  mustSellDurationRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+  },
+  mustSellDurationButton: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+  },
+  mustSellDurationButtonActive: {
+    borderColor: '#D97706',
+    backgroundColor: '#FEF3C7',
+  },
+  mustSellDurationText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#718096',
+  },
+  mustSellDurationTextActive: {
+    color: '#D97706',
   },
 });

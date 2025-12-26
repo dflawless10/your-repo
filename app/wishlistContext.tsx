@@ -76,7 +76,7 @@ const refreshWishlist = async () => {
   try {
     const token = await AsyncStorage.getItem('jwtToken');
     if (!token) {
-      console.warn("❌ No token found in AsyncStorage");
+      console.log("🐐 WishlistContext: No token found, skipping refresh");
       return;
     }
 
@@ -88,8 +88,15 @@ const refreshWishlist = async () => {
     });
 
     if (!res.ok) {
+      if (res.status === 401) {
+        console.log("🐐 WishlistContext: Auth token expired, user needs to re-login");
+        // Clear invalid token
+        await AsyncStorage.removeItem('jwtToken');
+        return;
+      }
+
       const errorText = await res.text();
-      console.error("🐐 Wishlist fetch failed:", errorText);
+      console.log(`🐐 WishlistContext: Fetch returned ${res.status}:`, errorText);
       return;
     }
 
@@ -101,7 +108,7 @@ const refreshWishlist = async () => {
     console.log(`🐐 WishlistContext: Loaded ${data.active?.length || 0} active, ${data.expired?.length || 0} expired items`);
 
   } catch (err) {
-    console.error('🐐 Failed to refresh wishlist:', err);
+    console.log('🐐 WishlistContext: Network error refreshing wishlist:', err instanceof Error ? err.message : 'Unknown error');
   }
 };
 

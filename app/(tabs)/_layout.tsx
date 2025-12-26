@@ -10,9 +10,10 @@ import { Colors } from '@/constants/Colors';
 import EnhancedHeader from 'app/components/EnhancedHeader';
 import { HapticTab } from 'components/HapticTab';
 import TabBarBackground from '@/components/ui/TabBarBackground';
-import wishlistIcon from 'app/components/assets/wishlist-coin.png';
+import wishlistIcon from '../../assets/goat-stamp-coin.png';
 import { WishlistProvider } from 'app/wishlistContext';
 import { ThemeProvider } from 'app/theme/ThemeContext';
+import 'react-native-reanimated';
 
 // ✅ Force global light mode
 Appearance.setColorScheme('light');
@@ -64,50 +65,65 @@ function CustomTabIcon({
   username?: string;
 }>) {
   switch (routeName) {
+    case 'index':
+      return (
+        <Ionicons
+          name={focused ? 'home' : 'home-outline'}
+          size={size}
+          color={color}
+        />
+      );
+    case 'jewelry-box':
+      return (
+        <Ionicons
+          name={focused ? 'diamond' : 'diamond-outline'}
+          size={size}
+          color={color}
+        />
+      );
+    case 'MyAuctionScreen':
+      return (
+        <MaterialCommunityIcons
+          name={focused ? 'gavel' : 'gavel'}
+          size={size}
+          color={color}
+        />
+      );
     case 'wishlist':
       return (
-        <View>
+        <View style={{ position: 'relative' }}>
           <Image
             source={wishlistIcon}
-            style={{ width: size, height: size, resizeMode: 'contain' }}
+            style={{
+              width: size,
+              height: size,
+            }}
+            resizeMode="contain"
           />
           {wishlistItems.length > 0 && (
             <View
               style={{
                 position: 'absolute',
-                top: -4,
-                right: -10,
-                backgroundColor: 'red',
-                borderRadius: 8,
-                paddingHorizontal: 4,
-                paddingVertical: 2,
+                top: -8,
+                right: -12,
+                backgroundColor: '#FF6B35',
+                borderRadius: 10,
+                minWidth: 20,
+                height: 20,
+                paddingHorizontal: 5,
+                justifyContent: 'center',
+                alignItems: 'center',
+                borderWidth: 2,
+                borderColor: '#fff',
               }}
             >
-              <Text style={{ color: 'white', fontSize: 10 }}>
-                {wishlistItems.length}
+              <Text style={{ color: 'white', fontSize: 11, fontWeight: '700' }}>
+                {wishlistItems.length > 99 ? '99+' : wishlistItems.length}
               </Text>
             </View>
           )}
         </View>
       );
-    case 'index':
-      return (
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Ionicons
-            name={focused ? 'home' : 'home-outline'}
-            size={size}
-            color={color}
-          />
-        </View>
-      );
-    case 'explore':
-      return <Ionicons name={focused ? 'search' : 'search-outline'} size={size} color={color} />;
-    case 'JewelryBoxScreen':
-      return <Ionicons name={focused ? 'heart' : 'heart-outline'} size={size} color={color} />;
-    case 'MyAuctionScreen':
-      return <MaterialCommunityIcons name="gavel" size={size} color={color} />;
-    case 'discover':
-      return <Ionicons name={focused ? 'compass' : 'compass-outline'} size={size} color={color} />;
     default:
       return null;
   }
@@ -157,21 +173,23 @@ export default function AppLayout() {
                   }),
               })}
             >
-              {/* Visible Tabs */}
+              {/* Visible Tabs - Complete User Journey: Browse → Bid → Win → Collect */}
               <Tabs.Screen name="index" options={{ title: 'Home' }} />
-              <Tabs.Screen name="explore" options={{ title: 'Explore' }} />
-              <Tabs.Screen name="wishlist" options={{ title: 'Wishlist' }} />
-              <Tabs.Screen name="JewelryBoxScreen" options={{ title: 'Favorites', headerShown: false }} />
+              <Tabs.Screen name="jewelry-box" options={{ title: 'My Jewelry Box', headerShown: false }} />
               <Tabs.Screen name="MyAuctionScreen" options={{ title: 'My Auctions' }} />
-              <Tabs.Screen name="discover" options={{ title: 'Discover' }} />
+              <Tabs.Screen name="wishlist" options={{ title: 'Wishlist' }} />
 
-              {/* Hidden Routes */}
-               <Tabs.Screen name="MyBidsScreen" options={{ href: null }} />   {/* 👈 hides MyBidsScreen */}
+              {/* Hidden Routes - Accessible via Menu Modal */}
+              <Tabs.Screen name="discover" options={{ href: null }} />
+              <Tabs.Screen name="explore" options={{ href: null }} />
+              <Tabs.Screen name="MyBidsScreen" options={{ href: null }} />
+              <Tabs.Screen name="JewelryBoxScreen" options={{ href: null, headerShown: false }} />
               <Tabs.Screen name="cart" options={{ href: null }} />
               <Tabs.Screen name="profile" options={{ href: null }} />
               <Tabs.Screen name="editProfile" options={{ href: null }} />
               <Tabs.Screen name="favorites" options={{ href: null, headerShown: false }} />
               <Tabs.Screen name="list-item" options={{ href: null, title: 'List an Item' }} />
+              <Tabs.Screen name="community-guidelines" options={{ href: null }} />
               <Tabs.Screen name="navigation/AuthNavigator" options={{ href: null }} />
               <Tabs.Screen name="navigation/index" options={{ href: null }} />
               <Tabs.Screen name="navigation/LegacyTabNavigator" options={{ href: null }} />

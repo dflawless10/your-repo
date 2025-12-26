@@ -8,7 +8,7 @@ type Props = {
 
 const TAGS = ['Fast shipping', 'Great quality', 'Responsive seller', 'Poor packaging', 'Accurate description'];
 
-export default function TagSelector({ selected, onChange }: Props) {
+export default function TagSelector({ selected, onChange }: Readonly<Props>) {
   const toggleTag = (tag: string) => {
     if (selected.includes(tag)) {
       onChange(selected.filter((t) => t !== tag));

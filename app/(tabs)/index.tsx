@@ -25,6 +25,8 @@ import { useFocusEffect } from '@react-navigation/native';
 
 
 
+
+
 const { width } = Dimensions.get('window');
 const COLUMN_GAP = 12;
 const NUM_COLUMNS = 2;
@@ -343,7 +345,7 @@ export default function HomeScreen() {
   return (
   <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
     {/* 🎉 Welcome Modal */}
-    {!!showWelcomeModal && (
+    {showWelcomeModal && (
       <Modal transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>

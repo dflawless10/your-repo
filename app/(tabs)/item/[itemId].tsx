@@ -65,9 +65,10 @@ interface User {
 
 
 type Bid = {
-  id: string;
+  id?: string;
   amount: number;
   user_id: number;
+  username?: string;
   timestamp: string;
 };
 
@@ -78,8 +79,12 @@ type ItemDetail = {
   price: number;
   highest_bid?: number;
   reserve_price?: number;
+  has_reserve?: boolean;
   buy_it_now?: number;
+  buy_it_now_price?: number;
   registration_time?: string;
+  status?: string;
+  is_sold?: boolean;
 
   additional_photos?: string[];
   category?: string;
@@ -89,12 +94,14 @@ type ItemDetail = {
   listedAt: string;
   recent_bids?: Bid[];
   is_highest_bidder?: number;
+  is_favorited?: boolean;
   type?: string;
   item_media?: string[];
   rarity?: string;
   auction_ends_at?: string;
   weight_lbs?: number;
   relist_count?: number;
+  diamond_specifications?: string;
   relisted_at?: string;
   original_price?: number;
   is_must_sell?: number | boolean;
@@ -238,11 +245,40 @@ export default function ItemScreen() {
   const [showShippingModal, setShowShippingModal] = useState(false);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const [aboutExpanded, setAboutExpanded] = useState(false);
+  const [movementExpanded, setMovementExpanded] = useState(false);
+  const [caseExpanded, setCaseExpanded] = useState(false);
+  const [bandExpanded, setBandExpanded] = useState(false);
+  const [otherExpanded, setOtherExpanded] = useState(false);
+  const [diamondCertExpanded, setDiamondCertExpanded] = useState(false);
+  const [diamondShippingExpanded, setDiamondShippingExpanded] = useState(false);
+  const [showBiddingHelp, setShowBiddingHelp] = useState(false);
+  const [showRecentBidsHelp, setShowRecentBidsHelp] = useState(false);
+  const [showListingTypeModal, setShowListingTypeModal] = useState(false);
+  const [showAuctionHelp, setShowAuctionHelp] = useState(false);
+  const [showBuyItNowHelp, setShowBuyItNowHelp] = useState(false);
+  const [showMustSellHelp, setShowMustSellHelp] = useState(false);
   const scrollY = useRef(new RNAnimated.Value(0)).current;
   const scrollViewRef = useRef<ScrollView>(null);
 
 
 const { cartItems, addToCart, isInCart } = useCartBackend();
+
+  // Check if auction has ended
+  const isAuctionEnded = () => {
+    if (!item?.auction_ends_at) return false;
+    const endTime = new Date(item.auction_ends_at).getTime();
+    const now = Date.now();
+    return now > endTime;
+  };
+
+  // Check if auction is ending soon (within 24 hours)
+  const isEndingSoon = () => {
+    if (!item?.auction_ends_at) return false;
+    const endTime = new Date(item.auction_ends_at).getTime();
+    const now = Date.now();
+    const hoursRemaining = (endTime - now) / (1000 * 60 * 60);
+    return hoursRemaining > 0 && hoursRemaining <= 24;
+  };
 
   useEffect(() => {
     if (itemId) {
@@ -409,8 +445,39 @@ const { cartItems, addToCart, isInCart } = useCartBackend();
 
   const fetchItem = async () => {
     try {
-      const res = await fetch(`${API_URL}/item/${itemId}`);
+      const token = await AsyncStorage.getItem('jwtToken');
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const res = await fetch(`${API_URL}/item/${itemId}`, { headers });
       const data = await res.json();
+      console.log('🔍 Item data received:', { reserve_price: data.reserve_price, buy_it_now: data.buy_it_now, item_id: data.item_id });
+
+      // Fetch recent bids and highest bid in parallel
+      try {
+        const [recentBidsRes, highestBidRes] = await Promise.all([
+          fetch(`${API_URL}/item/${itemId}/recent-bids`),
+          fetch(`${API_URL}/item/${itemId}/highest-bid`)
+        ]);
+
+        if (recentBidsRes.ok) {
+          const recentBidsData = await recentBidsRes.json();
+          data.recent_bids = recentBidsData.recent_bids;
+        }
+
+        if (highestBidRes.ok) {
+          const highestBidData = await highestBidRes.json();
+          data.highest_bid = highestBidData.highest_bid;
+        }
+      } catch (bidError) {
+        console.log('Could not fetch bid history:', bidError);
+        // Non-critical error, continue with item data
+      }
+
       setItem(data);
       await fetchSimilarItems(data);
     } catch (error) {
@@ -431,11 +498,30 @@ const { cartItems, addToCart, isInCart } = useCartBackend();
   };
 
   const handleBidSubmit = async () => {
+    console.log('🔨 Place Bid button clicked');
+    console.log('📊 Bid amount entered:', bidAmount);
     const numericBid = Number.parseFloat(bidAmount);
-    if (!item || isNaN(numericBid) || numericBid <= item.price) {
-      Alert.alert('Invalid bid', 'Enter a valid amount above the current price');
+    console.log('📊 Numeric bid:', numericBid);
+
+    // Validate bid amount
+    if (!item || isNaN(numericBid)) {
+      console.log('❌ Validation failed: invalid bid amount');
+      Alert.alert('Invalid bid', 'Please enter a valid bid amount');
       return;
     }
+
+    // Check against minimum next bid if available, otherwise check against current price
+    const minRequired = item.min_next_bid ?? item.price;
+    console.log('📊 Min required:', minRequired);
+    console.log('📊 Comparison:', numericBid, '<', minRequired, '=', numericBid < minRequired);
+
+    if (numericBid < minRequired) {
+      console.log('❌ Bid too low');
+      Alert.alert('Bid Too Low', `Your bid must be at least $${minRequired.toLocaleString()}`);
+      return;
+    }
+
+    console.log('✅ Validation passed, submitting bid...');
 
     try {
       const token = await AsyncStorage.getItem('jwtToken');
@@ -452,19 +538,39 @@ const { cartItems, addToCart, isInCart } = useCartBackend();
         // Trigger celebration
         triggerGoatBah();
         await playGoatSoundByName('Victory Baa');
-        
+
         // Clear bid input
         setBidAmount('');
-        
+
         // Refresh item to show updated state
         await fetchItem();
-        
-        // Show success toast with option to view My Bids
+
+        // Calculate time remaining
+        const getTimeRemaining = () => {
+          if (!item?.auction_ends_at) return 'Unknown';
+          const endsAt = new Date(item.auction_ends_at);
+          const now = new Date();
+          const diff = endsAt.getTime() - now.getTime();
+
+          if (diff <= 0) return 'Auction ended';
+
+          const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+          const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+          const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+          if (days > 0) return `${days}d ${hours}h remaining`;
+          if (hours > 0) return `${hours}h ${minutes}m remaining`;
+          return `${minutes}m remaining`;
+        };
+
+        const timeLeft = getTimeRemaining();
+
+        // Show enhanced success toast with time remaining
         Toast.show({
           type: 'success',
-          text1: '🎉 Bid Placed Successfully!',
-          text2: `You're currently winning at $${numericBid.toLocaleString()}`,
-          visibilityTime: 4000,
+          text1: '🎉 You\'re the High Bidder!',
+          text2: `Current bid: $${numericBid.toLocaleString()} • ${timeLeft}\n✨ We'll notify you if you're outbid`,
+          visibilityTime: 8000,
           position: 'top',
           onPress: () => {
             // Navigate to My Bids screen when user taps the toast
@@ -475,7 +581,8 @@ const { cartItems, addToCart, isInCart } = useCartBackend();
             fontWeight: '700',
           },
           text2Style: {
-            fontSize: 14,
+            fontSize: 13,
+            lineHeight: 18,
           },
         });
         
@@ -575,6 +682,7 @@ const handleBuyNow = async () => {
               }
 
               // Navigate to the buyer orders screen to see the new order
+              router.push('/orders');
 
             } catch (error) {
               console.error('Purchase error:', error);
@@ -695,7 +803,44 @@ const handleAddToCart = async () => {
   }
 };
 
-  const handleFavorite = () => Alert.alert('Favorited', 'Goat bleated with joy!');
+  const handleFavorite = async () => {
+    if (!item) return;
+
+    try {
+      const token = await AsyncStorage.getItem('jwtToken');
+      if (!token) {
+        Alert.alert('Login Required', 'Please sign in to add items to your Jewelry Box');
+        router.push('/sign-in');
+        return;
+      }
+
+      const response = await fetch('http://10.0.0.170:5000/api/favorites', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ item_id: item.id }),
+      });
+
+      if (response.ok) {
+        Alert.alert('Added to Jewelry Box! 💎', 'View it in your Jewelry Box tab', [
+          { text: 'OK' },
+          { text: 'View Jewelry Box', onPress: () => router.push('/(tabs)/JewelryBoxScreen') }
+        ]);
+        // Update local state to hide the favorite button
+        if (item) {
+          setItem({ ...item, is_favorited: true });
+        }
+      } else {
+        const error = await response.json();
+        Alert.alert('Error', error.message || 'Failed to add to favorites');
+      }
+    } catch (error) {
+      console.error('Favorite error:', error);
+      Alert.alert('Error', 'Could not add to favorites. Please try again.');
+    }
+  };
 
   const handleShare = async () => {
     if (!item) return;
@@ -715,6 +860,42 @@ const handleAddToCart = async () => {
     } catch (error) {
       console.error('Error sharing:', error);
       Alert.alert('Error', 'Could not share this item');
+    }
+  };
+
+  const handleSellSimilar = () => {
+    // Always show modal asking for listing type
+    setShowListingTypeModal(true);
+  };
+
+  const routeToListingScreen = (listingType?: 'auction' | 'buy_it_now' | 'must_sell') => {
+    if (!item) return;
+
+    // Determine category-specific route - safely handle undefined values
+    const category = String(item.category || '').toLowerCase();
+    const tags = String(item.tags || '').toLowerCase();
+    const itemName = String(item.name || '').toLowerCase();
+
+    // Watches - route to watch-appraisal (price calculator)
+    if (category === '2' || category === 'watches' || tags.includes('watch') || itemName.includes('watch')) {
+      router.push('/watch-appraisal');
+      return;
+    }
+
+    // Diamonds (loose stones only) - route to diamond-appraisal (price calculator)
+    if (category === '1' || category === 'diamonds' || tags.includes('diamond') || itemName.includes('diamond')) {
+      router.push('/diamond-appraisal');
+      return;
+    }
+
+    // All other jewelry (bracelets, necklaces, rings, earrings, etc.) - route to general listing
+    // Pass listingType in the route path using Expo Router's push with params
+    if (listingType === 'buy_it_now') {
+      router.push('/listing/create?listingType=buy_it_now' as any);
+    } else if (listingType === 'must_sell') {
+      router.push('/listing/create?listingType=must_sell' as any);
+    } else {
+      router.push('/listing/create?listingType=auction' as any);
     }
   };
 
@@ -867,6 +1048,27 @@ const handleAddToCart = async () => {
               cachePolicy="memory-disk"
               priority="high"
             />
+
+            {/* SOLD Banner Overlay for Ended Auctions */}
+            {isAuctionEnded() && item.highest_bid && item.highest_bid > 0 && (
+              <View style={styles.soldBannerOverlay}>
+                <View style={styles.soldBannerDiagonal}>
+                  <Text style={styles.soldBannerText}>
+                    {item.is_highest_bidder ? 'YOU WON' : 'SOLD'}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* PRICE DROP Badge - Bottom Left for Converted Items */}
+            {item.original_price && item.buy_it_now && item.original_price > item.buy_it_now && !isAuctionEnded() && (
+              <View style={styles.priceDropBadge}>
+                <Ionicons name="flash" size={14} color="#FFF" />
+                <Text style={styles.priceDropBadgeText}>
+                  PRICE DROP
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
 
           {/* Thumbnail Strip */}
@@ -909,15 +1111,9 @@ const handleAddToCart = async () => {
         <View style={styles.contentContainer}>
 
 
-          {/* Title & Category */}
+          {/* Title */}
           <View style={styles.headerSection}>
             <Text style={styles.itemTitle}>{item.name || 'Unnamed'}</Text>
-            {item.category && (
-  <View style={styles.categoryBadge}>
-    <Text style={styles.categoryText}>{String(item.category)}</Text>
-  </View>
-)}
-
           </View>
 
           {/* Price Cards */}
@@ -949,13 +1145,66 @@ const handleAddToCart = async () => {
                 )}
               </View>
             )}
-            {item.buy_it_now && (
+            {!!item.buy_it_now && (
               <View style={[styles.priceCard, styles.buyNowCard]}>
                 <Text style={styles.priceLabel}>Buy It Now</Text>
                 <Text style={[styles.priceValue, styles.buyNowPrice]}>${item.buy_it_now}</Text>
+
+                {/* Show old price if this was converted from auction with price drop */}
+                {item.original_price && item.original_price > item.buy_it_now && (
+                  <Text style={styles.originalPrice}>Was ${item.original_price}</Text>
+                )}
               </View>
             )}
           </View>
+
+          {/* Price Drop Deal Card - Show for converted items with savings */}
+          {item.original_price && item.buy_it_now && item.original_price > item.buy_it_now && (
+            <View style={styles.priceDropDealCard}>
+              <View style={styles.dealCardHeader}>
+                <Ionicons name="pricetag" size={28} color="#FF6B35" />
+                <Text style={styles.dealCardTitle}>💰 Price Drop Special!</Text>
+              </View>
+
+              <Text style={styles.dealCardText}>
+                This item was previously listed as an auction starting at ${item.original_price}.
+                The seller has now made it available as Buy It Now for only ${item.buy_it_now} -
+                save ${item.original_price - item.buy_it_now}! No waiting, no bidding wars.
+              </Text>
+
+              <View style={styles.priceComparison}>
+                <View style={styles.comparisonColumn}>
+                  <Text style={styles.comparisonLabel}>Original Auction</Text>
+                  <Text style={styles.comparisonOld}>${item.original_price}</Text>
+                </View>
+                <Ionicons name="arrow-forward" size={24} color="#6A0DAD" />
+                <View style={styles.comparisonColumn}>
+                  <Text style={styles.comparisonLabel}>Buy It Now</Text>
+                  <Text style={styles.comparisonNew}>${item.buy_it_now}</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={styles.savingsBadgeLarge}
+                onPress={() => {
+                  console.log('💚 Savings badge tapped!', { buy_it_now: item.buy_it_now, buy_it_now_price: item.buy_it_now_price });
+                  handleBuyNow();
+                }}
+              >
+                <Text style={styles.savingsBadgeText}>
+                  SAVE ${item.original_price - item.buy_it_now} ({Math.round(((item.original_price - item.buy_it_now) / item.original_price) * 100)}% OFF)
+                </Text>
+                <View style={{ marginLeft: 8 }}>
+                  <Ionicons name="cart" size={18} color="#FFF" />
+                </View>
+              </TouchableOpacity>
+
+              <View style={styles.urgencyRow}>
+                <Ionicons name="flash" size={16} color="#FF6B35" />
+                <Text style={styles.urgencyText}>Seller motivated - Priced to sell!</Text>
+              </View>
+            </View>
+          )}
 
           {/* Seller Info - Moved up for trust & credibility */}
           <View style={styles.sellerInfoCard}>
@@ -964,31 +1213,31 @@ const handleAddToCart = async () => {
               <Text style={styles.sectionTitle}>Seller Info</Text>
             </View>
             
-            {item.seller?.username && (
+            {!!item.seller?.username && (
               <Text style={styles.sellerUsername}>@{item.seller.username}</Text>
             )}
 
             {/* Seller Rating with Stars */}
-            {item.seller?.rating && item.seller.rating.review_count > 0 && (
+            {item.seller?.rating && item.seller?.rating?.review_count > 0 && (
               <View style={styles.sellerRatingRow}>
                 <View style={styles.starsContainer}>
                   {[...Array(5)].map((_, i) => (
                     <Ionicons
                       key={i}
-                      name={i < Math.round(item.seller.rating.avg_rating) ? "star" : "star-outline"}
+                      name={i < Math.round(item.seller?.rating?.avg_rating ?? 0) ? "star" : "star-outline"}
                       size={16}
                       color="#FFD700"
                     />
                   ))}
                 </View>
                 <Text style={styles.ratingText}>
-                  {item.seller.rating.avg_rating.toFixed(1)} ({item.seller.rating.review_count} {item.seller.rating.review_count === 1 ? 'review' : 'reviews'})
+                  {item.seller?.rating?.avg_rating?.toFixed(1)} ({item.seller?.rating?.review_count} {item.seller?.rating?.review_count === 1 ? 'review' : 'reviews'})
                 </Text>
               </View>
             )}
-            {item.seller?.rating && item.seller.rating.positive_percent > 0 && (
+            {item.seller?.rating && item.seller?.rating?.positive_percent > 0 && (
               <Text style={styles.positiveText}>
-                ✓ {item.seller.rating.positive_percent}% positive feedback
+                ✓ {item.seller?.rating?.positive_percent}% positive feedback
               </Text>
             )}
 
@@ -999,7 +1248,7 @@ const handleAddToCart = async () => {
                   <Text style={styles.sellerStatText}>{item.seller.items_sold} sold</Text>
                 </View>
               )}
-              {item.seller?.joined && (
+              {!!item.seller?.joined && (
                 <View style={styles.sellerStatItem}>
                   <Ionicons name="calendar" size={16} color="#718096" />
                   <Text style={styles.sellerStatText}>Joined {item.seller.joined}</Text>
@@ -1013,16 +1262,16 @@ const handleAddToCart = async () => {
             </TouchableOpacity>
           </View>
 
-          {/* Watching Count & Activity Stats */}
-          {(item.watching_count || item.bid_count) && (
+          {/* Watching Count & Activity Stats - Only show for active auctions */}
+          {!isAuctionEnded() && ((item.watching_count ?? 0) > 0 || (item.bid_count ?? 0) > 0) && (
             <View style={styles.activityStatsBar}>
-              {item.watching_count > 0 && (
+              {(item.watching_count ?? 0) > 0 && (
                 <View style={styles.statItem}>
                   <Ionicons name="eye" size={18} color="#6A0DAD" />
                   <Text style={styles.statText}>{item.watching_count} watching</Text>
                 </View>
               )}
-              {item.bid_count > 0 && (
+              {(item.bid_count ?? 0) > 0 && (
                 <View style={styles.statItem}>
                   <Ionicons name="flash" size={18} color="#FF6B35" />
                   <Text style={styles.statText}>{item.bid_count} {item.bid_count === 1 ? 'bid' : 'bids'}</Text>
@@ -1031,8 +1280,20 @@ const handleAddToCart = async () => {
             </View>
           )}
 
+          {/* Ended Auction - Show total bid count as historical info */}
+          {isAuctionEnded() && (item.bid_count ?? 0) > 0 && (
+            <View style={styles.endedStatsBar}>
+              <View style={styles.statItem}>
+                <Ionicons name="hammer" size={18} color="#718096" />
+                <Text style={styles.endedStatText}>
+                  {item.bid_count} {item.bid_count === 1 ? 'bid placed' : 'bids placed'}
+                </Text>
+              </View>
+            </View>
+          )}
+
           {/* Big Countdown Timer (for active auctions) */}
-          {item.auction_ends_at && !item.buy_it_now && (() => {
+          {!!item.auction_ends_at && !item.buy_it_now && (() => {
             const now = new Date().getTime();
             const endTime = new Date(item.auction_ends_at).getTime();
             const timeLeft = endTime - now;
@@ -1070,8 +1331,8 @@ const handleAddToCart = async () => {
             return null;
           })()}
 
-          {/* Minimum Next Bid (for auction items with bids) */}
-          {!item.buy_it_now && item.min_next_bid && item.bid_count > 0 && (
+          {/* Minimum Next Bid (for auction items with bids) - Only show if auction is still active */}
+          {!item.buy_it_now && !!item.min_next_bid && (item.bid_count ?? 0) > 0 && !isAuctionEnded() && (
             <View style={styles.minBidCard}>
               <Text style={styles.minBidLabel}>Minimum Next Bid</Text>
               <Text style={styles.minBidValue}>${item.min_next_bid.toLocaleString()}</Text>
@@ -1085,7 +1346,7 @@ const handleAddToCart = async () => {
               <Text style={styles.infoLabel}>🕒 Listed</Text>
               <Text style={styles.infoValue}>{formattedDate}</Text>
             </View>
-            {item.buy_it_now && item.auction_ends_at && (
+            {!!item.buy_it_now && !!item.auction_ends_at && (
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>🎁 Buy Before</Text>
                 <Text style={styles.infoValue}>
@@ -1093,12 +1354,13 @@ const handleAddToCart = async () => {
                 </Text>
               </View>
             )}
-            {item.relist_count && item.relist_count > 0 && (
+            {/* Only show "Relisted" if NOT a price drop conversion */}
+            {!!item.relist_count && item.relist_count > 0 && !(item.original_price && item.buy_it_now && item.original_price > item.buy_it_now) && (
               <View style={styles.relistInfoCard}>
                 <Text style={styles.relistLabel}>
                    Relisted: {item.relist_count} {item.relist_count === 1 ? 'time' : 'times'}
                 </Text>
-                {item.relisted_at && (
+                {!!item.relisted_at && (
                   <Text style={styles.relistDate}>
                     Last relisted: {safeFormat(item.relisted_at, 'PPP')}
                   </Text>
@@ -1106,21 +1368,56 @@ const handleAddToCart = async () => {
               </View>
             )}
 
-            {/* Seller Recommendations for Relisted Items */}
-            {item.relist_count && item.relist_count > 0 && currentUserId === item.seller?.id && (
+            {/* Success Message for Sellers - SOLD Relisted Items */}
+            {!!item.relist_count &&
+             item.relist_count > 0 &&
+             currentUserId === item.seller?.id &&
+             isAuctionEnded() &&
+             item.highest_bid &&
+             item.highest_bid > 0 && (
+              <View style={styles.sellerSuccessCard}>
+                <View style={styles.successHeader}>
+                  <Ionicons name="trophy" size={32} color="#FFD700" />
+                  <Text style={styles.successTitle}>🎉 Congratulations!</Text>
+                </View>
+                <Text style={styles.successText}>
+                  Your item sold for ${item.highest_bid.toLocaleString()} after being relisted {item.relist_count} {item.relist_count === 1 ? 'time' : 'times'}.
+                  Persistence pays off!
+                </Text>
+                <View style={styles.successStats}>
+                  <View style={styles.successStatItem}>
+                    <Text style={styles.successStatLabel}>Final Price</Text>
+                    <Text style={styles.successStatValue}>${item.highest_bid.toLocaleString()}</Text>
+                  </View>
+                  <View style={styles.successStatItem}>
+                    <Text style={styles.successStatLabel}>Total Bids</Text>
+                    <Text style={styles.successStatValue}>{item.bid_count || 0}</Text>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* Seller Recommendations for Relisted Items - ONLY for unsold items */}
+            {!!item.relist_count &&
+             item.relist_count > 0 &&
+             currentUserId === item.seller?.id &&
+             isAuctionEnded() &&
+             (!item.highest_bid || item.highest_bid === 0) && (
               <View style={styles.sellerRecommendationCard}>
-                <Text style={styles.recommendationTitle}> Seller Tips</Text>
+                <Text style={styles.recommendationTitle}>💡 Seller Tips</Text>
                 <Text style={styles.recommendationText}>
-                  Your item has been relisted. Consider these strategies:
+                  Your item has been relisted {item.relist_count} {item.relist_count === 1 ? 'time' : 'times'} without selling. Consider these strategies:
                 </Text>
                 <View style={styles.recommendationList}>
                   <Text style={styles.recommendationItem}>• Lower starting bid to attract more bidders</Text>
                   <Text style={styles.recommendationItem}>• Add more detailed photos</Text>
-                  <Text style={styles.recommendationItem}>• Offer a competitive "Buy It Now" price</Text>
+                  <Text style={styles.recommendationItem}>• Offer a competitive &quot;Buy It Now&quot; price</Text>
                   <Text style={styles.recommendationItem}>• Highlight unique features in description</Text>
                 </View>
-                {/* Only show Adjust Price button if there are no bids */}
-                {(!item.recent_bids || item.recent_bids.length === 0) && (
+                {/* Only show the Adjust Price button if there are no bids AND auction has ended */}
+                {(!item.recent_bids || item.recent_bids.length === 0) &&
+                 item.auction_ends_at &&
+                 new Date(item.auction_ends_at) < new Date() && (
                   <TouchableOpacity
                     style={styles.adjustPriceButton}
                     onPress={() => setShowPriceAdjustment(true)}
@@ -1133,16 +1430,22 @@ const handleAddToCart = async () => {
             {!item.buy_it_now && (
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}> Ends</Text>
-                <Text style={[styles.infoValue, styles.endTimeText]}>
+                <Text style={[
+                  styles.infoValue,
+                  isEndingSoon() ? styles.urgentTimeText : styles.endTimeText
+                ]}>
                   {item.auction_ends_at ? format(new Date(item.auction_ends_at), 'PPPp') : 'No end time'}
                 </Text>
               </View>
             )}
-            {!item.buy_it_now && (
+            {!item.buy_it_now && item.has_reserve && (
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>🔒 Reserve</Text>
                 <Text style={styles.infoValue}>
-                  {item.reserve_price ? `$${item.reserve_price}` : 'Not set'}
+                  {item.reserve_price
+                    ? `$${item.reserve_price}` // Seller sees actual amount
+                    : 'Reserve in place' // Buyers just know it exists
+                  }
                 </Text>
               </View>
             )}
@@ -1168,7 +1471,7 @@ const handleAddToCart = async () => {
                 {item.description || 'No description available'}
               </Text>
             ) : (
-              <Text style={styles.seeMoreText}>See seller's description</Text>
+              <Text style={styles.seeMoreText}>See seller&apos;s description</Text>
             )}
           </TouchableOpacity>
 
@@ -1180,8 +1483,10 @@ const handleAddToCart = async () => {
           >
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>
-                {(item.category === 2 || item.category === '2' || item.tags?.toLowerCase().includes('watch'))
+                {(item.category === '2' || item.tags?.toLowerCase().includes('watch'))
                   ? 'Technical Specifications'
+                  : item.diamond_specifications
+                  ? "Seller's Certificate of Diamond"
                   : 'About this item'}
               </Text>
               <Ionicons
@@ -1193,14 +1498,13 @@ const handleAddToCart = async () => {
 
             {aboutExpanded ? (
               <View style={styles.aboutTable}>
-                {/* 🐐 ACCORDION-STYLE WATCH TECHNICAL SPECIFICATIONS */}
-                {(item.category === 2 || item.category === '2' || item.tags?.toLowerCase().includes('watch')) && (() => {
+                {/* 🐐 WATCH TECHNICAL SPECIFICATIONS WITH COLLAPSIBLE GROUPS */}
+                {(item.category === '2' || item.tags?.toLowerCase().includes('watch')) && (() => {
                   // Parse watch specifications
                   let watchSpecs: any = {};
                   try {
                     watchSpecs = item.watch_specifications ? JSON.parse(item.watch_specifications) : {};
                     console.log('📊 Parsed watch specs:', watchSpecs);
-                    console.log('📊 Raw watch_specifications field:', item.watch_specifications);
                   } catch (e) {
                     console.error('Failed to parse watch specs:', e);
                   }
@@ -1217,127 +1521,329 @@ const handleAddToCart = async () => {
                   const brand = tagArray[1]?.trim();
                   const model = tagArray[2]?.trim();
 
-                  // Organize specs by category
-                  const specsCategories = {
-                    'BASIC INFORMATION': [
-                      { label: 'Brand', value: brand },
-                      { label: 'Model', value: model },
-                      { label: 'Gender', value: watchSpecs.gender },
-                      { label: 'Condition', value: watchSpecs.condition },
-                      { label: 'Rarity', value: watchSpecs.rarity || item.rarity },
-                    ],
-                    'CASE SPECIFICATIONS': [
-                      { label: 'Case Material', value: watchSpecs.caseMaterial },
-                      { label: 'Case Shape', value: watchSpecs.caseShape },
-                      { label: 'Case Thickness', value: watchSpecs.caseThickness },
-                      { label: 'Watch Size', value: watchSpecs.watchSize },
-                    ],
-                    'BEZEL DETAILS': [
-                      { label: 'Bezel Material', value: watchSpecs.bezelMaterial },
-                      { label: 'Bezel Type', value: watchSpecs.bezelType },
-                      { label: 'Bezel Style', value: watchSpecs.bezelStyle },
-                      { label: 'Bezel Weight (carats)', value: watchSpecs.bezelWeight },
-                      { label: 'Original Bezel', value: watchSpecs.originalBezel },
-                      { label: 'Aftermarket Bezel', value: watchSpecs.aftermarketBezel },
-                    ],
-                    'DIAL SPECIFICATIONS': [
-                      { label: 'Dial Material', value: watchSpecs.dialMaterial },
-                      { label: 'Dial Color', value: watchSpecs.dialColor },
-                      { label: 'Dial Style', value: watchSpecs.dialStyle },
-                      { label: 'Dial Type', value: watchSpecs.dialType },
-                      { label: 'Hour Markers', value: watchSpecs.dialHourMarkers },
-                      { label: 'Original Dial', value: watchSpecs.originalDial },
-                      { label: 'Aftermarket Dial', value: watchSpecs.aftermarketDial },
-                    ],
-                    'BAND/BRACELET': [
-                      { label: 'Band Material', value: watchSpecs.bandMaterial },
-                      { label: 'Band Link Type', value: watchSpecs.bandLink },
-                      { label: 'Band Style', value: watchSpecs.bandStyle },
-                      { label: 'Band Size', value: watchSpecs.bandSize },
-                      { label: 'Band Length', value: watchSpecs.bandLength },
-                      { label: 'Band Size (inches)', value: watchSpecs.bandSizeInches },
-                      { label: 'Lug Width', value: watchSpecs.lugWidth },
-                      { label: 'Buckle Width', value: watchSpecs.buckleWidth },
-                      { label: 'Lug to Lug Length', value: watchSpecs.lugToLugLength },
-                      { label: 'Clasp Type', value: watchSpecs.claspType },
-                    ],
-                    'MOVEMENT & FEATURES': [
-                      { label: 'Movement Type', value: watchSpecs.movementType },
-                      { label: 'Water Resistance', value: watchSpecs.waterResistance },
-                      { label: 'Features', value: watchSpecs.selectedFeatures?.join(', ') },
-                      { label: 'Skeletal Back', value: watchSpecs.skeletalBack },
-                      { label: 'Flip Skeletal Back', value: watchSpecs.flipSkeletalBack },
-                      { label: 'Full Skeletal Watch', value: watchSpecs.fullSkeletalWatch },
-                    ],
-                    'AUTHENTICITY & EXTRAS': [
-                      { label: 'Country of Origin', value: watchSpecs.countryOfOrigin },
-                      { label: 'Warranty', value: watchSpecs.warranty },
-                      { label: 'Original Packaging', value: watchSpecs.hasOriginalPackaging },
-                      { label: 'Diamonds', value: watchSpecs.hasDiamonds },
-                    ],
-                  };
+                  // BASIC DESCRIPTION - Always visible at the top
+                  const basicInfo = [
+                    { label: 'Brand', value: brand },
+                    { label: 'Model', value: model },
+                    { label: 'Model Number', value: watchSpecs.modelNumber },
+                    { label: 'Year of Manufacture', value: watchSpecs.yearOfManufacture },
+                    { label: 'Condition', value: watchSpecs.condition },
+                  ].filter(spec => formatValue(spec.value) !== null);
 
-                  const hasAnySpecs = Object.values(specsCategories).some(specs =>
-                    specs.some(spec => formatValue(spec.value) !== null)
-                  );
+                  // COLLAPSIBLE GROUPS
+                  const movementSpecs = [
+                    { label: 'Movement Type', value: watchSpecs.movementType },
+                    { label: 'Water Resistance', value: watchSpecs.waterResistance },
+                    { label: 'Features', value: watchSpecs.selectedFeatures?.join(', ') },
+                  ].filter(spec => formatValue(spec.value) !== null);
 
-                  // If no specs at all, show basic watch info only
-                  if (!hasAnySpecs) {
-                    return (
-                      <>
-                        {brand && (
-                          <View style={styles.aboutRow}>
-                            <Text style={styles.aboutLabel}>Brand</Text>
-                            <Text style={styles.aboutValue}>{brand}</Text>
-                          </View>
-                        )}
-                        {model && (
-                          <View style={styles.aboutRow}>
-                            <Text style={styles.aboutLabel}>Model</Text>
-                            <Text style={styles.aboutValue}>{model}</Text>
-                          </View>
-                        )}
-                        {item.rarity && (
-                          <View style={styles.aboutRow}>
-                            <Text style={styles.aboutLabel}>Rarity</Text>
-                            <Text style={styles.aboutValue}>{item.rarity}</Text>
-                          </View>
-                        )}
-                      </>
-                    );
-                  }
+                  const caseSpecs = [
+                    { label: 'Case Material', value: watchSpecs.caseMaterial },
+                    { label: 'Case Shape', value: watchSpecs.caseShape },
+                    { label: 'Case Thickness', value: watchSpecs.caseThickness },
+                    { label: 'Watch Size', value: watchSpecs.watchSize },
+                    { label: 'Bezel Material', value: watchSpecs.bezelMaterial },
+                    { label: 'Bezel Type', value: watchSpecs.bezelType },
+                    { label: 'Bezel Style', value: watchSpecs.bezelStyle },
+                    { label: 'Bezel Weight (carats)', value: watchSpecs.bezelWeight },
+                    { label: 'Original Bezel', value: watchSpecs.originalBezel },
+                    { label: 'Aftermarket Bezel', value: watchSpecs.aftermarketBezel },
+                    { label: 'Dial Material', value: watchSpecs.dialMaterial },
+                    { label: 'Dial Color', value: watchSpecs.dialColor },
+                    { label: 'Dial Style', value: watchSpecs.dialStyle },
+                    { label: 'Dial Type', value: watchSpecs.dialType },
+                    { label: 'Hour Markers', value: watchSpecs.dialHourMarkers },
+                    { label: 'Original Dial', value: watchSpecs.originalDial },
+                    { label: 'Aftermarket Dial', value: watchSpecs.aftermarketDial },
+                    { label: 'Skeletal Back', value: watchSpecs.skeletalBack },
+                    { label: 'Flip Skeletal Back', value: watchSpecs.flipSkeletalBack },
+                    { label: 'Full Skeletal Watch', value: watchSpecs.fullSkeletalWatch },
+                  ].filter(spec => formatValue(spec.value) !== null);
+
+                  const bandSpecs = [
+                    { label: 'Band Material', value: watchSpecs.bandMaterial },
+                    { label: 'Band Link Type', value: watchSpecs.bandLink },
+                    { label: 'Band Style', value: watchSpecs.bandStyle },
+                    { label: 'Band Size', value: watchSpecs.bandSize },
+                    { label: 'Band Length', value: watchSpecs.bandLength },
+                    { label: 'Band Size (inches)', value: watchSpecs.bandSizeInches },
+                    { label: 'Lug Width', value: watchSpecs.lugWidth },
+                    { label: 'Buckle Width', value: watchSpecs.buckleWidth },
+                    { label: 'Lug to Lug Length', value: watchSpecs.lugToLugLength },
+                    { label: 'Clasp Type', value: watchSpecs.claspType },
+                  ].filter(spec => formatValue(spec.value) !== null);
+
+                  const otherSpecs = [
+                    { label: 'Gender', value: watchSpecs.gender },
+                    { label: 'New/Pre-Owned', value: watchSpecs.isNew ? 'New' : 'Pre-Owned' },
+                    { label: 'Rarity', value: watchSpecs.rarity || item.rarity },
+                    { label: 'Country of Origin', value: watchSpecs.countryOfOrigin },
+                    { label: 'Warranty', value: watchSpecs.warranty },
+                    { label: 'Original Packaging', value: watchSpecs.hasOriginalPackaging },
+                    { label: 'Diamonds', value: watchSpecs.hasDiamonds },
+                  ].filter(spec => formatValue(spec.value) !== null);
 
                   return (
-                    <WatchSpecsAccordion
-                      specsCategories={specsCategories}
-                      formatValue={formatValue}
-                    />
+                    <View>
+                      {/* BASIC DESCRIPTION - Always visible */}
+                      {basicInfo.length > 0 && (
+                        <View style={styles.basicDescriptionSection}>
+                          <Text style={styles.basicDescriptionTitle}>Basic Description</Text>
+                          {basicInfo.map((spec, index) => (
+                            <View key={`basic-${index}`} style={styles.aboutRow}>
+                              <Text style={styles.aboutLabel}>{spec.label}</Text>
+                              <Text style={styles.aboutValue}>{formatValue(spec.value)}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+
+                      {/* COLLAPSIBLE GROUP: Movement */}
+                      {movementSpecs.length > 0 && (
+                        <View style={styles.collapsibleGroup}>
+                          <TouchableOpacity
+                            style={styles.groupHeader}
+                            onPress={() => setMovementExpanded(!movementExpanded)}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={styles.groupHeaderText}>Movement</Text>
+                            <Ionicons
+                              name={movementExpanded ? "remove" : "add"}
+                              size={20}
+                              color="#6A0DAD"
+                            />
+                          </TouchableOpacity>
+                          {movementExpanded && (
+                            <View style={styles.groupContent}>
+                              {movementSpecs.map((spec, index) => (
+                                <View key={`movement-${index}`} style={styles.aboutRow}>
+                                  <Text style={styles.aboutLabel}>{spec.label}</Text>
+                                  <Text style={styles.aboutValue}>{formatValue(spec.value)}</Text>
+                                </View>
+                              ))}
+                            </View>
+                          )}
+                        </View>
+                      )}
+
+                      {/* COLLAPSIBLE GROUP: The Case */}
+                      {caseSpecs.length > 0 && (
+                        <View style={styles.collapsibleGroup}>
+                          <TouchableOpacity
+                            style={styles.groupHeader}
+                            onPress={() => setCaseExpanded(!caseExpanded)}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={styles.groupHeaderText}>The Case</Text>
+                            <Ionicons
+                              name={caseExpanded ? "remove" : "add"}
+                              size={20}
+                              color="#6A0DAD"
+                            />
+                          </TouchableOpacity>
+                          {caseExpanded && (
+                            <View style={styles.groupContent}>
+                              {caseSpecs.map((spec, index) => (
+                                <View key={`case-${index}`} style={styles.aboutRow}>
+                                  <Text style={styles.aboutLabel}>{spec.label}</Text>
+                                  <Text style={styles.aboutValue}>{formatValue(spec.value)}</Text>
+                                </View>
+                              ))}
+                            </View>
+                          )}
+                        </View>
+                      )}
+
+                      {/* COLLAPSIBLE GROUP: Band */}
+                      {bandSpecs.length > 0 && (
+                        <View style={styles.collapsibleGroup}>
+                          <TouchableOpacity
+                            style={styles.groupHeader}
+                            onPress={() => setBandExpanded(!bandExpanded)}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={styles.groupHeaderText}>Band</Text>
+                            <Ionicons
+                              name={bandExpanded ? "remove" : "add"}
+                              size={20}
+                              color="#6A0DAD"
+                            />
+                          </TouchableOpacity>
+                          {bandExpanded && (
+                            <View style={styles.groupContent}>
+                              {bandSpecs.map((spec, index) => (
+                                <View key={`band-${index}`} style={styles.aboutRow}>
+                                  <Text style={styles.aboutLabel}>{spec.label}</Text>
+                                  <Text style={styles.aboutValue}>{formatValue(spec.value)}</Text>
+                                </View>
+                              ))}
+                            </View>
+                          )}
+                        </View>
+                      )}
+
+                      {/* COLLAPSIBLE GROUP: Other */}
+                      {otherSpecs.length > 0 && (
+                        <View style={styles.collapsibleGroup}>
+                          <TouchableOpacity
+                            style={styles.groupHeader}
+                            onPress={() => setOtherExpanded(!otherExpanded)}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={styles.groupHeaderText}>Other</Text>
+                            <Ionicons
+                              name={otherExpanded ? "remove" : "add"}
+                              size={20}
+                              color="#6A0DAD"
+                            />
+                          </TouchableOpacity>
+                          {otherExpanded && (
+                            <View style={styles.groupContent}>
+                              {otherSpecs.map((spec, index) => (
+                                <View key={`other-${index}`} style={styles.aboutRow}>
+                                  <Text style={styles.aboutLabel}>{spec.label}</Text>
+                                  <Text style={styles.aboutValue}>{formatValue(spec.value)}</Text>
+                                </View>
+                              ))}
+                            </View>
+                          )}
+                        </View>
+                      )}
+                    </View>
                   );
                 })()}
 
-                {/* Non-watch items: show basic details */}
-                {!(item.category === 2 || item.category === '2' || item.tags?.toLowerCase().includes('watch')) && (
+                {/* Non-watch items with diamond specifications */}
+                {!(item.category === '2' || item.tags?.toLowerCase().includes('watch')) && item.diamond_specifications && (() => {
+                  try {
+                    const diamondSpecs = JSON.parse(item.diamond_specifications);
+
+                    // Helper to format values
+                    const formatValue = (value: any) => {
+                      if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+                      if (!value || value === '') return null;
+                      return String(value);
+                    };
+
+                    // BASIC DESCRIPTION - Always visible at top
+                    const basicInfo = [
+                      { label: 'Category', value: item.category || 'Not specified' },
+                      { label: 'Rarity', value: item.rarity || 'common' },
+                      { label: 'Cut', value: diamondSpecs.cut },
+                      { label: 'Carat Weight', value: diamondSpecs.carat ? `${diamondSpecs.carat} ct` : null },
+                      { label: 'Color', value: diamondSpecs.color },
+                      { label: 'Clarity', value: diamondSpecs.clarity },
+                    ].filter(spec => formatValue(spec.value) !== null);
+
+                    // COLLAPSIBLE GROUPS
+                    const certSourcingSpecs = [
+                      { label: 'Certification', value: diamondSpecs.certification },
+                      { label: 'Certification Lab', value: diamondSpecs.certificationLab },
+                      { label: 'Certification Number', value: diamondSpecs.certificationNumber },
+                      { label: 'Ethically Sourced', value: diamondSpecs.ethicallySourced || diamondSpecs.ethically_sourced },
+                    ].filter(spec => formatValue(spec.value) !== null);
+
+                    const shippingDetailsSpecs = [
+                      { label: 'Shipping Weight', value: item.weight_lbs ? `${item.weight_lbs} lbs` : null },
+                      { label: 'Tags', value: item.tags },
+                      { label: 'Item Number', value: `#${item.id}` },
+                    ].filter(spec => formatValue(spec.value) !== null);
+
+                    return (
+                      <View>
+                        {/* BASIC DESCRIPTION - Always visible */}
+                        {basicInfo.length > 0 && (
+                          <View style={styles.basicDescriptionSection}>
+                            <Text style={styles.basicDescriptionTitle}>Basic Description</Text>
+                            {basicInfo.map((spec, index) => (
+                              <View key={`basic-${index}`} style={styles.aboutRow}>
+                                <Text style={styles.aboutLabel}>{spec.label}</Text>
+                                <Text style={styles.aboutValue}>{formatValue(spec.value)}</Text>
+                              </View>
+                            ))}
+                          </View>
+                        )}
+
+                        {/* COLLAPSIBLE GROUP: Certification & Sourcing */}
+                        {certSourcingSpecs.length > 0 && (
+                          <View style={styles.collapsibleGroup}>
+                            <TouchableOpacity
+                              style={styles.groupHeader}
+                              onPress={() => setDiamondCertExpanded(!diamondCertExpanded)}
+                              activeOpacity={0.7}
+                            >
+                              <Text style={styles.groupHeaderText}>Certification & Sourcing</Text>
+                              <Ionicons
+                                name={diamondCertExpanded ? "remove" : "add"}
+                                size={20}
+                                color="#6A0DAD"
+                              />
+                            </TouchableOpacity>
+                            {diamondCertExpanded && (
+                              <View style={styles.groupContent}>
+                                {certSourcingSpecs.map((spec, index) => (
+                                  <View key={`cert-${index}`} style={styles.aboutRow}>
+                                    <Text style={styles.aboutLabel}>{spec.label}</Text>
+                                    <Text style={styles.aboutValue}>{formatValue(spec.value)}</Text>
+                                  </View>
+                                ))}
+                              </View>
+                            )}
+                          </View>
+                        )}
+
+                        {/* COLLAPSIBLE GROUP: Shipping & Details */}
+                        {shippingDetailsSpecs.length > 0 && (
+                          <View style={styles.collapsibleGroup}>
+                            <TouchableOpacity
+                              style={styles.groupHeader}
+                              onPress={() => setDiamondShippingExpanded(!diamondShippingExpanded)}
+                              activeOpacity={0.7}
+                            >
+                              <Text style={styles.groupHeaderText}>Shipping & Details</Text>
+                              <Ionicons
+                                name={diamondShippingExpanded ? "remove" : "add"}
+                                size={20}
+                                color="#6A0DAD"
+                              />
+                            </TouchableOpacity>
+                            {diamondShippingExpanded && (
+                              <View style={styles.groupContent}>
+                                {shippingDetailsSpecs.map((spec, index) => (
+                                  <View key={`shipping-${index}`} style={styles.aboutRow}>
+                                    <Text style={styles.aboutLabel}>{spec.label}</Text>
+                                    <Text style={styles.aboutValue}>{formatValue(spec.value)}</Text>
+                                  </View>
+                                ))}
+                              </View>
+                            )}
+                          </View>
+                        )}
+                      </View>
+                    );
+                  } catch {
+                    return null;
+                  }
+                })()}
+
+                {/* Non-diamond items: show basic details only */}
+                {!(item.category === '2' || item.tags?.toLowerCase().includes('watch')) && !item.diamond_specifications && (
                   <>
                     <View style={styles.aboutRow}>
                       <Text style={styles.aboutLabel}>Category</Text>
                       <Text style={styles.aboutValue}>{item.category || 'Not specified'}</Text>
                     </View>
-
-                    {item.rarity && (
+                    <View style={styles.aboutRow}>
+                      <Text style={styles.aboutLabel}>Rarity</Text>
+                      <Text style={styles.aboutValue}>{item.rarity || 'common'}</Text>
+                    </View>
+                    {!!item.weight_lbs && (
                       <View style={styles.aboutRow}>
-                        <Text style={styles.aboutLabel}>Rarity</Text>
-                        <Text style={styles.aboutValue}>{item.rarity}</Text>
-                      </View>
-                    )}
-
-                    {item.weight_lbs && (
-                      <View style={styles.aboutRow}>
-                        <Text style={styles.aboutLabel}>Weight</Text>
+                        <Text style={styles.aboutLabel}>Shipping Weight</Text>
                         <Text style={styles.aboutValue}>{item.weight_lbs} lbs</Text>
                       </View>
                     )}
-
-                    {item.tags && (
+                    {!!item.tags && (
                       <View style={styles.aboutRow}>
                         <Text style={styles.aboutLabel}>Tags</Text>
                         <Text style={styles.aboutValue}>{item.tags}</Text>
@@ -1346,8 +1852,8 @@ const handleAddToCart = async () => {
                   </>
                 )}
 
-                {/* Common fields for all items */}
-                {item.listedAt && (
+                {/* Common fields for all items (only show Item Number if no diamond specs) */}
+                {!!item.listedAt && (
                   <View style={styles.aboutRow}>
                     <Text style={styles.aboutLabel}>Listed</Text>
                     <Text style={styles.aboutValue}>
@@ -1360,17 +1866,21 @@ const handleAddToCart = async () => {
                   </View>
                 )}
 
-                {item.relist_count > 0 && (
+                {/* Only show relist count if NOT a price drop conversion */}
+                {(item.relist_count ?? 0) > 0 && !(item.original_price && item.buy_it_now && item.original_price > item.buy_it_now) && (
                   <View style={styles.aboutRow}>
                     <Text style={styles.aboutLabel}>Times Relisted</Text>
                     <Text style={styles.aboutValue}>{item.relist_count}</Text>
                   </View>
                 )}
 
-                <View style={styles.aboutRow}>
-                  <Text style={styles.aboutLabel}>Item Number</Text>
-                  <Text style={styles.aboutValue}>#{item.id}</Text>
-                </View>
+                {/* Only show Item Number here if NOT a diamond (diamonds have it in their collapsible group) */}
+                {!item.diamond_specifications && (
+                  <View style={styles.aboutRow}>
+                    <Text style={styles.aboutLabel}>Item Number</Text>
+                    <Text style={styles.aboutValue}>#{item.id}</Text>
+                  </View>
+                )}
               </View>
             ) : (
               <Text style={styles.seeMoreText}>See product details</Text>
@@ -1380,7 +1890,7 @@ const handleAddToCart = async () => {
           {/* Sell a Similar Item Link */}
           <TouchableOpacity
             style={styles.sellSimilarCard}
-            onPress={() => router.push(`/watch-appraisal`)}
+            onPress={handleSellSimilar}
             activeOpacity={0.7}
           >
             <Ionicons name="pricetag-outline" size={20} color="#FF6B35" />
@@ -1397,31 +1907,44 @@ const handleAddToCart = async () => {
 )}
 
 
-          {/* Recent Bids */}
+          {/* Recent Bids / Bid History */}
           {item.recent_bids && item.recent_bids.length > 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Recent Bids</Text>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionTitle}>
+                  {isAuctionEnded() ? 'Bid History' : 'Recent Bids'}
+                </Text>
+                <TouchableOpacity onPress={() => setShowRecentBidsHelp(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Ionicons name="help-circle" size={20} color="#6A0DAD" />
+                </TouchableOpacity>
+              </View>
               {item.recent_bids.map((bid, index) => (
-                <Text key={`${bid.user_id}-${bid.timestamp}-${index}`} style={styles.bidRow}>
-                  🏷️ ${bid.amount} by {bid.username} — {formatDistanceToNow(new Date(bid.timestamp), { addSuffix: true })}
+                <Text key={`${bid.user_id}-${bid.timestamp}-${index}`} style={isAuctionEnded() ? styles.bidRowEnded : styles.bidRow}>
+                  🏷️ ${bid.amount} by {bid.username || `User #${bid.user_id}`} — {formatDistanceToNow(new Date(bid.timestamp), { addSuffix: true })}
                 </Text>
               ))}
             </View>
           )}
 
-          {item.is_highest_bidder && (
-            <Text style={styles.badge}>🥇 You're winning!</Text>
+          {/* Only show "You're winning!" badge for active auctions */}
+          {item.is_highest_bidder && !isAuctionEnded() && (
+            <Text style={styles.badge}>🥇 You&apos;re winning!</Text>
           )}
 
-          {/* Enhanced Bid Input - Only show for auction items */}
-          {!item.buy_it_now && (
+          {/* Enhanced Bid Input - Only show for auction items and if auction hasn't ended */}
+          {!item.buy_it_now && !isAuctionEnded() && (
             <View style={styles.bidCard}>
               <View style={styles.bidCardHeader}>
-                <Ionicons name="hammer" size={20} color="#6A0DAD" />
-                <Text style={styles.bidCardTitle}>Place Your Bid</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Ionicons name="hammer" size={20} color="#6A0DAD" />
+                  <Text style={styles.bidCardTitle}>Place Your Bid</Text>
+                </View>
+                <TouchableOpacity onPress={() => setShowBiddingHelp(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Ionicons name="help-circle" size={20} color="#6A0DAD" />
+                </TouchableOpacity>
               </View>
-              
-              {item.min_next_bid && (
+
+              {!!item.min_next_bid && (
                 <Text style={styles.minBidInfo}>
                   Minimum bid: <Text style={styles.minBidAmount}>${item.min_next_bid.toLocaleString()}</Text>
                 </Text>
@@ -1438,51 +1961,53 @@ const handleAddToCart = async () => {
                     setBidAmount(text);
                   }}
                 />
-                {bidAmount && item.min_next_bid && (
-                  <Ionicons 
-                    name={parseFloat(bidAmount) >= item.min_next_bid ? "checkmark-circle" : "close-circle"} 
-                    size={24} 
-                    color={parseFloat(bidAmount) >= item.min_next_bid ? "#2E7D32" : "#D32F2F"} 
+                {!!bidAmount && !!item.min_next_bid && (
+                  <Ionicons
+                    name={Number.parseFloat(bidAmount) >= item.min_next_bid ? "checkmark-circle" : "close-circle"}
+                    size={24}
+                    color={Number.parseFloat(bidAmount) >= item.min_next_bid ? "#2E7D32" : "#D32F2F"}
                   />
                 )}
               </View>
 
-              {bidAmount && item.min_next_bid && parseFloat(bidAmount) < item.min_next_bid && (
+              {!!bidAmount && !!item.min_next_bid && Number.parseFloat(bidAmount) < item.min_next_bid && (
                 <Text style={styles.bidError}>
                   ⚠️ Bid must be at least ${item.min_next_bid.toLocaleString()}
                 </Text>
               )}
 
               {/* Quick Bid Buttons */}
-              {item.min_next_bid && (
+              {!!item.min_next_bid && (
                 <View style={styles.quickBidRow}>
                   <Text style={styles.quickBidLabel}>Quick bid:</Text>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.quickBidButton}
-                    onPress={() => setBidAmount(item.min_next_bid.toString())}
+                    onPress={() => setBidAmount((item.min_next_bid ?? 0).toString())}
                   >
-                    <Text style={styles.quickBidText}>${item.min_next_bid.toLocaleString()}</Text>
+                    <Text style={styles.quickBidText}>${(item.min_next_bid ?? 0).toLocaleString()}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.quickBidButton}
                     onPress={() => {
-                      const increment = item.min_next_bid < 1000 ? 100 : 1000;
-                      setBidAmount((item.min_next_bid + increment).toString());
+                      const minBid = item.min_next_bid ?? 0;
+                      const increment = minBid < 1000 ? 100 : 1000;
+                      setBidAmount((minBid + increment).toString());
                     }}
                   >
                     <Text style={styles.quickBidText}>
-                      +{item.min_next_bid < 1000 ? '$100' : '$1K'}
+                      +{(item.min_next_bid ?? 0) < 1000 ? '$100' : '$1K'}
                     </Text>
                   </TouchableOpacity>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.quickBidButton}
                     onPress={() => {
-                      const increment = item.min_next_bid < 1000 ? 500 : 5000;
-                      setBidAmount((item.min_next_bid + increment).toString());
+                      const minBid = item.min_next_bid ?? 0;
+                      const increment = minBid < 1000 ? 500 : 5000;
+                      setBidAmount((minBid + increment).toString());
                     }}
                   >
                     <Text style={styles.quickBidText}>
-                      +{item.min_next_bid < 1000 ? '$500' : '$5K'}
+                      +{(item.min_next_bid ?? 0) < 1000 ? '$500' : '$5K'}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -1491,35 +2016,36 @@ const handleAddToCart = async () => {
           )}
 
           {/* Action Buttons - Redesigned Full Width */}
-          <View style={styles.actionButtonsContainer}>
-            {/* Primary Action - Place Bid OR Buy It Now */}
-            {!item.buy_it_now ? (
-              <TouchableOpacity 
-                style={styles.primaryActionButton}
-                onPress={handleBidSubmit}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="hammer" size={20} color="#FFF" />
-                <Text style={styles.primaryActionText}>Place Bid</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity 
-                style={styles.buyNowButton}
-                onPress={handleBuyNow}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="cart" size={20} color="#FFF" />
-                <Text style={styles.primaryActionText}>Buy It Now</Text>
-              </TouchableOpacity>
-            )}
+          {!isAuctionEnded() && !item.is_sold && item.status !== 'sold' ? (
+            <View style={styles.actionButtonsContainer}>
+              {/* Primary Action - Place Bid OR Buy It Now */}
+              {!item.buy_it_now ? (
+                <TouchableOpacity
+                  style={styles.primaryActionButton}
+                  onPress={handleBidSubmit}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="hammer" size={20} color="#FFF" />
+                  <Text style={styles.primaryActionText}>Place Bid</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.buyNowButton}
+                  onPress={handleBuyNow}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="cart" size={20} color="#FFF" />
+                  <Text style={styles.primaryActionText}>Buy It Now</Text>
+                </TouchableOpacity>
+              )}
 
-            {/* Add to Cart - Only for Buy It Now items */}
-            {item.buy_it_now && (
-              <TouchableOpacity 
-                style={styles.secondaryActionButton}
-                onPress={handleAddToCart}
-                activeOpacity={0.8}
-              >
+              {/* Add to Cart - Only for Buy It Now items */}
+              {!!item.buy_it_now && (
+                <TouchableOpacity
+                  style={styles.secondaryActionButton}
+                  onPress={handleAddToCart}
+                  activeOpacity={0.8}
+                >
                 <Ionicons name="bag-add-outline" size={20} color="#6A0DAD" />
                 <Text style={styles.secondaryActionText}>Add to Cart</Text>
               </TouchableOpacity>
@@ -1540,7 +2066,7 @@ const handleAddToCart = async () => {
               )}
 
               {/* Share */}
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.iconActionButton}
                 onPress={handleShare}
                 activeOpacity={0.8}
@@ -1550,6 +2076,63 @@ const handleAddToCart = async () => {
               </TouchableOpacity>
             </View>
           </View>
+          ) : (
+            <View style={styles.auctionEndedContainer}>
+              {/* Show winner celebration if user won */}
+              {item.is_highest_bidder ? (
+                <>
+                  <Ionicons name="trophy" size={56} color="#FFD700" />
+                  <Text style={styles.winnerTitle}>🎉 Congratulations! You Won! 🎉</Text>
+                  <View style={styles.finalBidSection}>
+                    <Text style={styles.finalBidLabel}>Winning Bid</Text>
+                    <Text style={styles.finalBidValue}>${item.highest_bid?.toLocaleString()}</Text>
+                    {(!item.reserve_price || (item.highest_bid && item.highest_bid >= item.reserve_price)) && (
+                      <View style={styles.soldBadge}>
+                        <Text style={styles.soldBadgeText}>SOLD</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.winnerMessage}>
+                    The seller will contact you shortly to arrange payment and shipping.
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={56} color="#718096" />
+                  <Text style={styles.auctionEndedTitle}>Auction Ended</Text>
+
+                  {/* Show final bid result */}
+                  {item.highest_bid && item.highest_bid > 0 ? (
+                    <View style={styles.finalBidSection}>
+                      <Text style={styles.finalBidLabel}>Final Bid</Text>
+                      <Text style={styles.finalBidValue}>${item.highest_bid.toLocaleString()}</Text>
+                      {item.reserve_price && item.highest_bid >= item.reserve_price ? (
+                        <View style={styles.soldBadge}>
+                          <Text style={styles.soldBadgeText}>SOLD</Text>
+                        </View>
+                      ) : item.reserve_price && item.highest_bid < item.reserve_price ? (
+                        <View style={styles.reserveNotMetBadge}>
+                          <Text style={styles.reserveNotMetText}>RESERVE NOT MET</Text>
+                        </View>
+                      ) : (
+                        <View style={styles.soldBadge}>
+                          <Text style={styles.soldBadgeText}>SOLD</Text>
+                        </View>
+                      )}
+                    </View>
+                  ) : (
+                    <Text style={styles.auctionEndedText}>
+                      No bids were placed on this auction.
+                    </Text>
+                  )}
+
+                  <Text style={styles.auctionEndedSubtext}>
+                    This auction is no longer available for bidding.
+                  </Text>
+                </>
+              )}
+            </View>
+          )}
 
         </View>
         {/* End contentContainer */}
@@ -1600,7 +2183,7 @@ const handleAddToCart = async () => {
       </TouchableOpacity>
 
       {/* Item Condition */}
-      {item.condition && item.condition !== 'Not specified' && (
+      {!!item.condition && item.condition !== 'Not specified' && (
         <View style={styles.conditionCard}>
           <Text style={styles.conditionLabel}>Condition</Text>
           <Text style={styles.conditionValue}>{item.condition}</Text>
@@ -1628,7 +2211,7 @@ const handleAddToCart = async () => {
   <View style={styles.similarHeader}>
     <View style={styles.similarTitleRow}>
       <Ionicons name="sparkles" size={24} color="#6A0DAD" />
-      <Text style={styles.similarSectionTitle}>Similar Items You'll Love</Text>
+      <Text style={styles.similarSectionTitle}>Similar Items You&apos;ll Love</Text>
     </View>
     <Text style={styles.similarSubtitle}>
       {similarItems.length > 0 ? `${similarItems.length} items` : 'Curated just for you'}
@@ -1917,6 +2500,321 @@ const handleAddToCart = async () => {
           </View>
         </Modal>
 
+        {/* Bidding Help Modal */}
+        <Modal
+          visible={showBiddingHelp}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowBiddingHelp(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>🔨 How Bidding Works</Text>
+                <TouchableOpacity onPress={() => setShowBiddingHelp(false)}>
+                  <Ionicons name="close" size={24} color="#666" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>Minimum Bid</Text>
+                  <Text style={styles.modalDescription}>
+                    You must bid at least the minimum shown. This ensures fair increments between bids.
+                  </Text>
+                </View>
+
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>Winning</Text>
+                  <Text style={styles.modalDescription}>
+                    The highest bidder when the auction ends wins the item. You will be notified if someone outbids you.
+                  </Text>
+                </View>
+
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>Payment</Text>
+                  <Text style={styles.modalDescription}>
+                    If you win, you will receive payment instructions via email. Complete payment within 48 hours to secure your item.
+                  </Text>
+                </View>
+
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>Bid Increments</Text>
+                  <Text style={styles.modalDescription}>
+                    Bids increase automatically based on the current price. This keeps auctions competitive and fair for all bidders.
+                  </Text>
+                </View>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Recent Bids Help Modal */}
+        <Modal
+          visible={showRecentBidsHelp}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowRecentBidsHelp(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>📊 Recent Bids</Text>
+                <TouchableOpacity onPress={() => setShowRecentBidsHelp(false)}>
+                  <Ionicons name="close" size={24} color="#666" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>What You See</Text>
+                  <Text style={styles.modalDescription}>
+                    This shows the most recent bids on this item, including the bid amount, username, and when the bid was placed.
+                  </Text>
+                </View>
+
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>Your Bids</Text>
+                  <Text style={styles.modalDescription}>
+                    If you see your username here, you&#39;ve placed a bid. The top bid is currently winning.
+                  </Text>
+                </View>
+
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>Staying Informed</Text>
+                  <Text style={styles.modalDescription}>
+                    Watch this list to see bidding activity. If you are outbid, you will receive a notification and can place a higher bid.
+                  </Text>
+                </View>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Listing Type Selection Modal */}
+        <Modal
+          visible={showListingTypeModal}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowListingTypeModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>How would you like to list it?</Text>
+                <TouchableOpacity onPress={() => setShowListingTypeModal(false)}>
+                  <Ionicons name="close" size={24} color="#666" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.listingTypeContainer}>
+                {/* Classic Auction */}
+                <TouchableOpacity
+                  style={styles.listingTypeOption}
+                  onPress={() => {
+                    setShowListingTypeModal(false);
+                    routeToListingScreen('auction');
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.listingTypeContent}>
+                    <Ionicons name="hammer" size={28} color="#6A0DAD" />
+                    <Text style={styles.listingTypeTitle}>Create a Classic Auction</Text>
+                    <Text style={styles.listingTypeDescription}>
+                      Start bidding at your price. Highest bid wins when auction ends.
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setShowAuctionHelp(true)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Ionicons name="help-circle" size={24} color="#6A0DAD" />
+                  </TouchableOpacity>
+                </TouchableOpacity>
+
+                {/* Buy It Now */}
+                <TouchableOpacity
+                  style={styles.listingTypeOption}
+                  onPress={() => {
+                    setShowListingTypeModal(false);
+                    routeToListingScreen('buy_it_now');
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.listingTypeContent}>
+                    <Ionicons name="cart" size={28} color="#FF6B35" />
+                    <Text style={styles.listingTypeTitle}>Buy It Now</Text>
+                    <Text style={styles.listingTypeDescription}>
+                      Set a fixed price. Buyers can purchase instantly without bidding.
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setShowBuyItNowHelp(true)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Ionicons name="help-circle" size={24} color="#FF6B35" />
+                  </TouchableOpacity>
+                </TouchableOpacity>
+
+                {/* Must Sell */}
+                <TouchableOpacity
+                  style={styles.listingTypeOption}
+                  onPress={() => {
+                    setShowListingTypeModal(false);
+                    routeToListingScreen('must_sell');
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.listingTypeContent}>
+                    <Ionicons name="flash" size={28} color="#E53E3E" />
+                    <Text style={styles.listingTypeTitle}>Must Sell</Text>
+                    <Text style={styles.listingTypeDescription}>
+                      No reserve price. Highest bid wins regardless of amount.
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setShowMustSellHelp(true)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Ionicons name="help-circle" size={24} color="#E53E3E" />
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Auction Help Modal */}
+        <Modal
+          visible={showAuctionHelp}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowAuctionHelp(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>🔨 Classic Auction</Text>
+                <TouchableOpacity onPress={() => setShowAuctionHelp(false)}>
+                  <Ionicons name="close" size={24} color="#666" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>How It Works</Text>
+                  <Text style={styles.modalDescription}>
+                    Set a starting bid price and auction duration. Buyers compete by placing higher bids. The highest bidder when the auction ends wins the item.
+                  </Text>
+                </View>
+
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>Reserve Price (Optional)</Text>
+                  <Text style={styles.modalDescription}>
+                    Set a minimum price you are willing to accept. If bids don&#39;t reach this amount, you are not obligated to sell.
+                  </Text>
+                </View>
+
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>Best For</Text>
+                  <Text style={styles.modalDescription}>
+                    Rare or unique items where competitive bidding may drive the price higher than a fixed price.
+                  </Text>
+                </View>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Buy It Now Help Modal */}
+        <Modal
+          visible={showBuyItNowHelp}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowBuyItNowHelp(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>⚡ Buy It Now</Text>
+                <TouchableOpacity onPress={() => setShowBuyItNowHelp(false)}>
+                  <Ionicons name="close" size={24} color="#666" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>How It Works</Text>
+                  <Text style={styles.modalDescription}>
+                    Set a fixed price and buyers can purchase instantly without waiting for an auction to end. No bidding wars - immediate sale.
+                  </Text>
+                </View>
+
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>Advantages</Text>
+                  <Text style={styles.modalDescription}>
+                    • Faster sales - no waiting for auction to end{'\n'}
+                    • Predictable pricing{'\n'}
+                    • Attracts buyers who want immediate purchase
+                  </Text>
+                </View>
+
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>Best For</Text>
+                  <Text style={styles.modalDescription}>
+                    Items with established market values where you know exactly what price you want.
+                  </Text>
+                </View>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Must Sell Help Modal */}
+        <Modal
+          visible={showMustSellHelp}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowMustSellHelp(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>🔥 Must Sell</Text>
+                <TouchableOpacity onPress={() => setShowMustSellHelp(false)}>
+                  <Ionicons name="close" size={24} color="#666" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>How It Works</Text>
+                  <Text style={styles.modalDescription}>
+                    No reserve price means you MUST sell to the highest bidder, regardless of the final bid amount. This creates urgency and attracts more bidders.
+                  </Text>
+                </View>
+
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>Benefits</Text>
+                  <Text style={styles.modalDescription}>
+                    • Attracts more bidders (no risk of reserve not met){'\n'}
+                    • Creates excitement and urgency{'\n'}
+                    • Guaranteed sale{'\n'}
+                    • Often results in competitive bidding
+                  </Text>
+                </View>
+
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>Caution</Text>
+                  <Text style={styles.modalDescription}>
+                    You must honor the sale even if the winning bid is lower than expected. Only use this if you&#39;re willing to accept any final price.
+                  </Text>
+                </View>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
       </View>
 
 
@@ -2021,6 +2919,12 @@ carouselImage: {
     marginBottom: 4,
     marginVertical: 2,
   },
+  bidRowEnded: {
+    fontSize: 14,
+    color: '#A0AEC0', // lighter gray for historical bids
+    marginBottom: 4,
+    marginVertical: 2,
+  },
   badge: {
     backgroundColor: '#ecc94b', // gold-ish
     padding: 6,
@@ -2038,6 +2942,12 @@ carouselImage: {
     borderRadius: 8,
     borderColor: '#e2e8f0',
     borderWidth: 1,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   sectionTitle: {
     fontSize: 18,
@@ -2187,6 +3097,40 @@ mainImage: {
   height: 400,
   resizeMode: 'cover',
 },
+soldBannerOverlay: {
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  justifyContent: 'center',
+  alignItems: 'center',
+  backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  pointerEvents: 'none',
+},
+soldBannerDiagonal: {
+  transform: [{ rotate: '-15deg' }],
+  backgroundColor: '#48BB78',
+  paddingHorizontal: 60,
+  paddingVertical: 20,
+  borderRadius: 8,
+  borderWidth: 4,
+  borderColor: '#FFF',
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.5,
+  shadowRadius: 8,
+  elevation: 10,
+},
+soldBannerText: {
+  fontSize: 42,
+  fontWeight: '900',
+  color: '#FFF',
+  letterSpacing: 4,
+  textShadowColor: 'rgba(0, 0, 0, 0.5)',
+  textShadowOffset: { width: 2, height: 2 },
+  textShadowRadius: 4,
+},
 thumbnailScroll: {
   backgroundColor: '#fff',
   paddingVertical: 12,
@@ -2295,6 +3239,118 @@ priceValue: {
 buyNowPrice: {
   color: '#6A0DAD',
 },
+originalPrice: {
+  fontSize: 14,
+  color: '#999',
+  textDecorationLine: 'line-through',
+  marginTop: 8,
+},
+// Price Drop Deal Card
+priceDropDealCard: {
+  backgroundColor: '#FFF5F0',
+  padding: 20,
+  borderRadius: 12,
+  marginBottom: 16,
+  borderWidth: 2,
+  borderColor: '#FF6B35',
+  gap: 16,
+},
+dealCardHeader: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 12,
+},
+dealCardTitle: {
+  fontSize: 20,
+  fontWeight: '700',
+  color: '#FF6B35',
+},
+dealCardText: {
+  fontSize: 15,
+  color: '#4A5568',
+  lineHeight: 22,
+},
+priceComparison: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-around',
+  backgroundColor: '#FFF',
+  padding: 16,
+  borderRadius: 10,
+  gap: 16,
+},
+comparisonColumn: {
+  alignItems: 'center',
+  gap: 4,
+},
+comparisonLabel: {
+  fontSize: 12,
+  color: '#718096',
+  fontWeight: '600',
+  textTransform: 'uppercase',
+},
+comparisonOld: {
+  fontSize: 20,
+  fontWeight: '600',
+  color: '#999',
+  textDecorationLine: 'line-through',
+},
+comparisonNew: {
+  fontSize: 24,
+  fontWeight: '700',
+  color: '#48BB78',
+},
+savingsBadgeLarge: {
+  backgroundColor: '#48BB78',
+  paddingHorizontal: 20,
+  paddingVertical: 12,
+  borderRadius: 8,
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+savingsBadgeText: {
+  color: '#FFF',
+  fontSize: 16,
+  fontWeight: '700',
+  letterSpacing: 1,
+},
+urgencyRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 6,
+},
+urgencyText: {
+  fontSize: 14,
+  color: '#E65100',
+  fontWeight: '600',
+  fontStyle: 'italic',
+},
+// Price Drop Badge - Bottom Left
+priceDropBadge: {
+  position: 'absolute',
+  bottom: 12,
+  left: 12,
+  backgroundColor: '#FF6B35',
+  flexDirection: 'row',
+  alignItems: 'center',
+  paddingHorizontal: 10,
+  paddingVertical: 6,
+  borderRadius: 6,
+  gap: 4,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.3,
+  shadowRadius: 4,
+  elevation: 6,
+},
+priceDropBadgeText: {
+  fontSize: 11,
+  fontWeight: '800',
+  color: '#FFF',
+  letterSpacing: 0.5,
+},
 auctionInfoCard: {
   backgroundColor: '#fff',
   padding: 16,
@@ -2321,6 +3377,11 @@ infoValue: {
 },
 endTimeText: {
   color: '#c53030',
+},
+urgentTimeText: {
+  color: '#E53E3E',
+  fontWeight: 'bold',
+  fontSize: 15,
 },
 highestBidText: {
   color: '#2f855a',
@@ -2427,6 +3488,59 @@ specCategoryTitle: {
   marginBottom: 8,
   marginTop: 4,
 },
+specsCategorySection: {
+  marginBottom: 16,
+},
+specsCategoryTitle: {
+  fontSize: 13,
+  color: '#6A0DAD',
+  fontWeight: '700',
+  letterSpacing: 0.8,
+  marginBottom: 10,
+  marginTop: 8,
+  textTransform: 'uppercase',
+},
+// New collapsible group styles for watch specs
+basicDescriptionSection: {
+  marginBottom: 20,
+  paddingBottom: 16,
+  borderBottomWidth: 1,
+  borderBottomColor: '#E2E8F0',
+},
+basicDescriptionTitle: {
+  fontSize: 14,
+  color: '#2D3748',
+  fontWeight: '600',
+  marginBottom: 12,
+  textTransform: 'uppercase',
+  letterSpacing: 0.5,
+},
+collapsibleGroup: {
+  marginBottom: 12,
+  borderRadius: 8,
+  backgroundColor: '#F7FAFC',
+  overflow: 'hidden',
+},
+groupHeader: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  padding: 14,
+  backgroundColor: '#EDF2F7',
+  borderBottomWidth: 1,
+  borderBottomColor: '#E2E8F0',
+},
+groupHeaderText: {
+  fontSize: 15,
+  fontWeight: '600',
+  color: '#6A0DAD',
+  textTransform: 'uppercase',
+  letterSpacing: 0.5,
+},
+groupContent: {
+  padding: 12,
+  backgroundColor: '#FFFFFF',
+},
 buyNowInputContainer: {
   backgroundColor: '#f0e6ff',
   borderRadius: 12,
@@ -2478,6 +3592,55 @@ similarSubtitle: {
   fontSize: 13,
   color: '#718096',
 },
+// Seller Success Card for SOLD relisted items
+sellerSuccessCard: {
+  backgroundColor: '#F0FDF4',
+  padding: 20,
+  borderRadius: 12,
+  marginTop: 12,
+  borderLeftWidth: 4,
+  borderLeftColor: '#22C55E',
+  gap: 16,
+},
+successHeader: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 12,
+},
+successTitle: {
+  fontSize: 20,
+  fontWeight: '700',
+  color: '#15803D',
+},
+successText: {
+  fontSize: 15,
+  color: '#166534',
+  lineHeight: 22,
+},
+successStats: {
+  flexDirection: 'row',
+  justifyContent: 'space-around',
+  backgroundColor: '#FFF',
+  padding: 16,
+  borderRadius: 10,
+  gap: 16,
+},
+successStatItem: {
+  alignItems: 'center',
+  gap: 4,
+},
+successStatLabel: {
+  fontSize: 12,
+  color: '#6B7280',
+  fontWeight: '600',
+  textTransform: 'uppercase',
+},
+successStatValue: {
+  fontSize: 24,
+  fontWeight: '700',
+  color: '#22C55E',
+},
+// Seller Recommendation Card for UNSOLD relisted items
 sellerRecommendationCard: {
   backgroundColor: '#eff6ff',
   padding: 16,
@@ -2744,6 +3907,15 @@ activityStatsBar: {
   marginBottom: 12,
   gap: 20,
 },
+endedStatsBar: {
+  flexDirection: 'row',
+  backgroundColor: '#F7FAFC',
+  padding: 12,
+  borderRadius: 8,
+  marginBottom: 12,
+  borderWidth: 1,
+  borderColor: '#E2E8F0',
+},
 statItem: {
   flexDirection: 'row',
   alignItems: 'center',
@@ -2753,6 +3925,11 @@ statText: {
   fontSize: 14,
   fontWeight: '600',
   color: '#333',
+},
+endedStatText: {
+  fontSize: 14,
+  fontWeight: '600',
+  color: '#718096',
 },
 // Countdown Timer
 countdownCard: {
@@ -3247,6 +4424,95 @@ actionButtonsContainer: {
   marginBottom: 20,
   gap: 12,
 },
+auctionEndedContainer: {
+  width: '100%',
+  marginTop: 20,
+  marginBottom: 20,
+  padding: 32,
+  backgroundColor: '#f8f9fa',
+  borderRadius: 12,
+  alignItems: 'center',
+  borderWidth: 1,
+  borderColor: '#e0e0e0',
+  gap: 12,
+},
+auctionEndedTitle: {
+  fontSize: 22,
+  fontWeight: '700',
+  color: '#4A5568',
+  marginTop: 12,
+},
+auctionEndedText: {
+  fontSize: 14,
+  color: '#718096',
+  textAlign: 'center',
+  lineHeight: 20,
+},
+auctionEndedSubtext: {
+  fontSize: 13,
+  color: '#A0AEC0',
+  textAlign: 'center',
+  marginTop: 8,
+},
+finalBidSection: {
+  alignItems: 'center',
+  marginVertical: 16,
+  gap: 8,
+},
+finalBidLabel: {
+  fontSize: 14,
+  fontWeight: '600',
+  color: '#718096',
+  textTransform: 'uppercase',
+  letterSpacing: 0.5,
+},
+finalBidValue: {
+  fontSize: 32,
+  fontWeight: '700',
+  color: '#2D3748',
+},
+soldBadge: {
+  backgroundColor: '#48BB78',
+  paddingHorizontal: 16,
+  paddingVertical: 8,
+  borderRadius: 20,
+  marginTop: 8,
+},
+soldBadgeText: {
+  color: '#FFF',
+  fontSize: 14,
+  fontWeight: '700',
+  letterSpacing: 1,
+},
+reserveNotMetBadge: {
+  backgroundColor: '#FC8181',
+  paddingHorizontal: 16,
+  paddingVertical: 8,
+  borderRadius: 20,
+  marginTop: 8,
+},
+reserveNotMetText: {
+  color: '#FFF',
+  fontSize: 13,
+  fontWeight: '700',
+  letterSpacing: 0.5,
+},
+winnerTitle: {
+  fontSize: 24,
+  fontWeight: '700',
+  color: '#2F855A',
+  marginTop: 12,
+  textAlign: 'center',
+},
+winnerMessage: {
+  fontSize: 15,
+  color: '#2D3748',
+  textAlign: 'center',
+  lineHeight: 22,
+  marginTop: 16,
+  paddingHorizontal: 16,
+  fontWeight: '500',
+},
 primaryActionButton: {
   backgroundColor: '#6A0DAD',
   flexDirection: 'row',
@@ -3318,6 +4584,37 @@ iconActionText: {
   fontSize: 14,
   fontWeight: '600',
   color: '#4A5568',
+},
+// Listing Type Modal Styles
+listingTypeContainer: {
+  marginTop: 16,
+  gap: 16,
+},
+listingTypeOption: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  backgroundColor: '#F7FAFC',
+  padding: 16,
+  borderRadius: 12,
+  borderWidth: 2,
+  borderColor: '#E2E8F0',
+  gap: 12,
+},
+listingTypeContent: {
+  flex: 1,
+  gap: 6,
+},
+listingTypeTitle: {
+  fontSize: 16,
+  fontWeight: '700',
+  color: '#1A202C',
+  marginTop: 4,
+},
+listingTypeDescription: {
+  fontSize: 13,
+  color: '#718096',
+  lineHeight: 18,
 },
 
 });

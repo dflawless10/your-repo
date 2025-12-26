@@ -3,6 +3,7 @@ import React, {
   useContext,
   useEffect,
   useState,
+  useMemo,
   ReactNode,
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -38,8 +39,10 @@ export const OnboardingProvider: React.FC<Props> = ({ children }) => {
     setSeenWelcome(val);
   };
 
+  const value = useMemo(() => ({ seenWelcome, setSeenWelcome: update }), [seenWelcome]);
+
   return (
-    <OnboardingContext.Provider value={{ seenWelcome, setSeenWelcome: update }}>
+    <OnboardingContext.Provider value={value}>
       {children}
     </OnboardingContext.Provider>
   );

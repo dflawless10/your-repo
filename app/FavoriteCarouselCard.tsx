@@ -86,6 +86,19 @@ function FavoriteCarouselCard({
     }
   };
 
+  const getCountdownColor = (endTime: string): { color: string; fontWeight: '600' | 'bold' } => {
+    const now = Date.now();
+    const end = new Date(endTime).getTime();
+    const diffHours = (end - now) / (1000 * 60 * 60);
+
+    if (diffHours <= 2) {
+      return { color: '#E53E3E', fontWeight: 'bold' }; // Bright red + bold if ≤2h
+    } else if (diffHours <= 24) {
+      return { color: '#c53030', fontWeight: '600' }; // Red if ≤24h
+    }
+    return { color: '#38a169', fontWeight: '600' }; // Green otherwise
+  };
+
   return (
     <TouchableOpacity onPress={handleCardPress} activeOpacity={0.9}>
       <Animated.View entering={FadeInDown} style={styles.carouselCard}>
@@ -112,7 +125,10 @@ function FavoriteCarouselCard({
         <View style={styles.infoContainer}>
         <Text style={styles.title}>{item.name ?? 'Unnamed Item'}</Text>
         <Text style={styles.description}>{item.description ?? 'No description available.'}</Text>
-        <Text style={styles.timeLeft}>
+        <Text style={[
+          styles.timeLeft,
+          item.auction_ends_at ? getCountdownColor(item.auction_ends_at) : {}
+        ]}>
           ⏰ {formatTimeWithSeconds(item.auction_ends_at ?? '', Date.now())}
         </Text>
 

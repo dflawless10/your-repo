@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, TouchableOpacity, Animated } from 'react-native';
+import { View, Text, TextInput, StyleSheet, ScrollView, TouchableOpacity, Animated, Image, Alert } from 'react-native';
 import {useLocalSearchParams, useRouter} from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
 import WatchListingCard from '@/components/WatchListingCard';
 import AutocompleteInput from '@/components/AutocompleteInput';
@@ -12,11 +13,11 @@ import watchPricesData from '@/assets/data/watchPrices.json';
 import watchBrandsData from '@/assets/data/watchBrands.json';
 import { API_URL } from '@/constants/api';
 import { validateContentQuick } from 'app/utils/contentModeration';
+import GlobalFooter from "@/app/components/GlobalFooter";
 
 type Country = 'switzerland' | 'germany' | 'japan' | 'usa' | 'france' | 'italy';
-type Warranty = 'none' | '1year' | '2years' | '3years' | '5years';
+type Warranty = 'none' | 'factory' | 'aftermarket';
 type ClaspType = 'deployable' | 'folding' | 'velcro';
-type WatchSize = '20mm' | '28-34' | '35-38' | '39-42' | '43-46' | '47+';
 type CaseShape = 'round' | 'square' | 'rectangle' | 'cushion' | 'tonneau' | 'oval';
 type BezelMaterial = '' | 'ceramic' | 'stainlessSteel' | 'gold' | 'platinum' | 'aluminum' | 'titanium';
 type DialHourMarkers = '' | 'arabic' | 'roman' | 'baton' | 'diamond' | 'mixed' | 'none';
@@ -37,9 +38,10 @@ buyItNowPrice: string;
 type Condition = 'poor' | 'fair' | 'good' | 'excellent';
 type CaseMaterial = '' | '23ktGold' | '22ktGold' | '18ktGold' | '14ktGold' | '10ktGold' | 'whiteGold' | 'yellowGold' | 'roseGold' | 'platinum' | 'silver' | 'titanium' | 'plastic';
 type BandMaterial = '' | 'gold' | 'platinum' | 'metal' | 'rubber' | 'silver' | 'fabric' | 'leather';
-type MovementType = '' | 'automatic' | 'winder' | 'battery' | 'solar' | 'tourbillon';
+type MovementType = '' | 'automatic' | 'winder' | 'battery' | 'solar' | 'tourbillon' | 'subSeconds';
 type Rarity = '' | 'common' | 'uncommon' | 'rare' | 'veryRare' | 'extremelyRare';
 type WaterResistance = '' | 'none' | 'splashProof' | 'waterResistant' | 'diver';
+type CaseBackMaterial = '' | 'stainlessSteel' | 'titanium' | 'ceramic' | 'sapphire' | 'mineral' | 'plastic';
 
 export function useAutocompleteField<T extends string>(initialOptions: { label: string; value: T }[], initialValue: T) {
   const [options, setOptions] = useState(initialOptions);
@@ -48,7 +50,7 @@ export function useAutocompleteField<T extends string>(initialOptions: { label: 
    const addCustomOption = async (field: string, newValue: T, label: string) => {
     const newOption = { label, value: newValue };
     setOptions(prev => [...prev, newOption]);
-    setValue(newValue); // auto-select new option
+    setValue(newValue); // auto-select a new option
 
     try {
       await fetch(`${API_URL}/api/watch-options/add`, {
@@ -97,7 +99,7 @@ export default function WatchAppraisalScreen() {
   const [countryOfOrigin, setCountryOfOrigin] = useState<Country | ''>('');
   const [warranty, setWarranty] = useState<Warranty | ''>('');
   const [claspType, setClaspType] = useState<ClaspType | ''>('');
-  const [watchSize, setWatchSize] = useState<WatchSize | ''>('');
+  const [watchSize, setWatchSize] = useState(''); // Changed to string for text input
   const [skeletalBack, setSkeletalBack] = useState(false);
   const [flipSkeletalBack, setFlipSkeletalBack] = useState(false);
   const [fullSkeletalWatch, setFullSkeletalWatch] = useState(false);
@@ -105,6 +107,9 @@ export default function WatchAppraisalScreen() {
   const [imageUris, setImageUris] = useState<string[]>([]);
   const [priceHistory, setPriceHistory] = useState<{year: string, price: number}[]>([]);
   const [priceSource, setPriceSource] = useState('');
+  const [bandColor, setBandColor] = useState('');
+  const [caseBackMaterial, setCaseBackMaterial] = useState<CaseBackMaterial>('');
+  const [serialNumber, setSerialNumber] = useState('');
 // Country
   const countryField = useAutocompleteField<Country>(
   [
@@ -124,10 +129,8 @@ const warrantyField = useAutocompleteField<Warranty>(
   [
     { label: 'Select warranty', value: '' as Warranty },
     { label: 'None', value: 'none' as Warranty },
-    { label: '1 Year', value: '1year' as Warranty },
-    { label: '2 Years', value: '2years' as Warranty },
-    { label: '3 Years', value: '3years' as Warranty },
-    { label: '5 Years', value: '5years' as Warranty },
+    { label: 'Factory Warranty', value: 'factory' as Warranty },
+    { label: 'After-market Warranty', value: 'aftermarket' as Warranty },
   ],
   '' as Warranty
 );
@@ -249,7 +252,75 @@ const warrantyField = useAutocompleteField<Warranty>(
       // Continue with appraisal if moderation fails
     }
 
-    // Step 1: Try local JSON pricing first
+    // Step 1: Try aggregated pricing from multiple sources
+    try {
+      console.log('🔍 Fetching aggregated pricing from multiple sources...');
+
+      const aggregatedResponse = await fetch(`${API_URL}/api/appraise-aggregated`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brand: brandName,
+          model: modelName,
+          modelNumber,
+          yearOfManufacture,
+          condition,
+          caseMaterial,
+          bandMaterial,
+          movementType,
+          hasOriginalPackaging,
+          hasDiamonds,
+          countryOfOrigin,
+          warranty,
+          waterResistance,
+          rarity,
+        }),
+      });
+
+      if (aggregatedResponse.ok) {
+        const aggregatedResult = await aggregatedResponse.json();
+
+        if (aggregatedResult.success && aggregatedResult.estimated_price) {
+          console.log('✅ Aggregated pricing successful:', aggregatedResult);
+
+          setPrice(Math.round(aggregatedResult.estimated_price).toString());
+
+          // Build detailed source information
+          let sourceDetails = `📊 ${aggregatedResult.confidence.toUpperCase()} confidence\n`;
+          sourceDetails += `📈 Price range: $${aggregatedResult.price_range.min.toLocaleString()} - $${aggregatedResult.price_range.max.toLocaleString()}\n`;
+          sourceDetails += `🔍 Sources: ${aggregatedResult.sources_used.join(', ')}\n`;
+          sourceDetails += `📦 Data points: ${aggregatedResult.data_points}\n\n`;
+
+          if (aggregatedResult.source_prices) {
+            sourceDetails += 'Source Breakdown:\n';
+            Object.entries(aggregatedResult.source_prices).forEach(([source, price]) => {
+              sourceDetails += `  • ${source}: $${(price as number).toLocaleString()}\n`;
+            });
+          }
+
+          setPriceSource(sourceDetails);
+
+          alert(
+            `💰 Watch appraised at $${Math.round(aggregatedResult.estimated_price).toLocaleString()}\n\n` +
+            `📊 Confidence: ${aggregatedResult.confidence.toUpperCase()}\n` +
+            `📈 Range: $${aggregatedResult.price_range.min.toLocaleString()} - $${aggregatedResult.price_range.max.toLocaleString()}\n` +
+            `🔍 Sources: ${aggregatedResult.sources_used.join(', ')}\n` +
+            `🔧 Condition: ${condition}\n` +
+            `${isNew ? '✨ New' : '📦 Pre-owned'}`
+          );
+
+          console.log('✅ Aggregated appraisal complete');
+          return;
+        }
+      }
+
+      console.log('⚠️ Aggregated pricing not available, falling back to local JSON...');
+    } catch (error) {
+      console.error('Aggregated pricing error:', error);
+      console.log('⚠️ Falling back to local JSON pricing...');
+    }
+
+    // Step 2: Fallback to local JSON pricing
     const brandKey = brandName.toLowerCase().replace(/\s+/g, '');
     const modelKey = modelName.toLowerCase().replace(/\s+/g, '');
 
@@ -496,13 +567,43 @@ const toggleFeature = (feature: string) => {
       : [...prev, feature]
   );
 };
+
+  const pickImages = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Please allow access to your photos to upload watch images');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.8,
+      allowsMultipleSelection: true,
+    });
+
+    if (!result.canceled && result.assets?.length) {
+      const uris = result.assets.map(asset => asset.uri);
+      setImageUris(prev => [...prev, ...uris]);
+    }
+  };
+
+  const removeImage = (index: number) => {
+    setImageUris(prev => prev.filter((_, i) => i !== index));
+  };
   return (
     <View style={{ flex: 1 }}>
       <EnhancedHeader scrollY={scrollY} />
 
       <View style={styles.headerTitleContainer}>
-        <Text style={styles.headerTitleText}>⌚ Watch Price Calculator</Text>
-        <Text style={styles.headerSubtitle}>Calculate your watch's market value</Text>
+        <View style={styles.titleWithArrow}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
+            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+          </TouchableOpacity>
+          <View>
+            <Text style={styles.headerTitleText}>Watch Price Calculator</Text>
+            <Text style={styles.headerSubtitle}>Calculate your watch&apos;s market value</Text>
+          </View>
+        </View>
       </View>
 
       <Animated.ScrollView
@@ -521,9 +622,10 @@ const toggleFeature = (feature: string) => {
         <AutocompleteInput
   label="Country of Origin"
   value={countryField.value}
-  onValueChange={(v: string) => countryField.setValue(v as Country)} // ✅ cast string to Country
+  onValueChange={(v: string) => countryField.setValue(v as Country)}
   options={countryField.options}
   allowCustom={true}
+  fieldName="country"
   onAddCustom={(value, label) =>
     countryField.addCustomOption('country', value as Country, label)
   }
@@ -533,9 +635,10 @@ const toggleFeature = (feature: string) => {
         <AutocompleteInput
   label="Warranty"
   value={warrantyField.value}
-  onValueChange={(v: string) => warrantyField.setValue(v as Warranty)} // ✅ cast
+  onValueChange={(v: string) => warrantyField.setValue(v as Warranty)}
   options={warrantyField.options}
   allowCustom={true}
+  fieldName="warranty"
   onAddCustom={(value, label) =>
     warrantyField.addCustomOption('warranty', value as Warranty, label)
   }
@@ -693,6 +796,7 @@ const toggleFeature = (feature: string) => {
           label="Condition"
           value={condition}
           onValueChange={(v) => setCondition(v as Condition)}
+          fieldName="condition"
           options={[
             {label: 'Poor', value: 'poor'},
             {label: 'Fair', value: 'fair'},
@@ -731,6 +835,7 @@ const toggleFeature = (feature: string) => {
             label="Case Material"
             value={caseMaterial}
             onValueChange={(v) => setCaseMaterial(v as CaseMaterial)}
+            fieldName="caseMaterial"
             options={[
               {label: 'Select case material', value: ''},
               {label: 'Platinum', value: 'platinum'},
@@ -752,6 +857,7 @@ const toggleFeature = (feature: string) => {
   label="Band Material"
   value={bandMaterial}
   onValueChange={(v) => setBandMaterial(v as BandMaterial)}
+  fieldName="bandMaterial"
   options={[
     { label: 'Select band material', value: '' },
     { label: 'Platinum', value: 'platinum' },
@@ -844,6 +950,51 @@ const toggleFeature = (feature: string) => {
     value={lugToLugLength}
     onChangeText={setLugToLugLength}
   />
+
+  <Text style={styles.label}>Band Color</Text>
+  <TextInput
+    style={styles.input}
+    placeholder="e.g., Black, Silver, Blue"
+    value={bandColor}
+    onChangeText={setBandColor}
+  />
+</View>
+
+<View style={styles.section}>
+  <Text style={styles.sectionTitle}>Case Details</Text>
+
+  <AutocompleteInput
+    label="Case Back Material"
+    value={caseBackMaterial}
+    onValueChange={(v) => setCaseBackMaterial(v as CaseBackMaterial)}
+    fieldName="caseBackMaterial"
+    options={[
+      { label: 'Select case back material', value: '' },
+      { label: 'Stainless Steel', value: 'stainlessSteel' },
+      { label: 'Titanium', value: 'titanium' },
+      { label: 'Ceramic', value: 'ceramic' },
+      { label: 'Sapphire Crystal', value: 'sapphire' },
+      { label: 'Mineral Glass', value: 'mineral' },
+      { label: 'Plastic', value: 'plastic' },
+    ]}
+  />
+
+  <Text style={styles.label}>Serial Number</Text>
+  <TextInput
+    style={styles.input}
+    placeholder="Enter serial number"
+    value={serialNumber}
+    onChangeText={(text) => {
+      // Mask last 7-8 digits for display
+      setSerialNumber(text);
+    }}
+    secureTextEntry={serialNumber.length > 8}
+  />
+  {serialNumber.length > 8 && (
+    <Text style={styles.label}>
+      Serial (masked): {serialNumber.substring(0, serialNumber.length - 8)}{'*'.repeat(8)}
+    </Text>
+  )}
 </View>
 
 <View style={styles.section}>
@@ -853,6 +1004,7 @@ const toggleFeature = (feature: string) => {
     label="Movement Type"
     value={movementType}
     onValueChange={(v) => setMovementType(v as MovementType)}
+    fieldName="movementType"
     options={[
       { label: 'Select movement type', value: '' },
       { label: 'Automatic', value: 'automatic' },
@@ -860,6 +1012,7 @@ const toggleFeature = (feature: string) => {
       { label: 'Battery', value: 'battery' },
       { label: 'Solar', value: 'solar' },
       { label: 'Tourbillon', value: 'tourbillon' },
+      { label: 'Sub-Seconds', value: 'subSeconds' },
       { label: 'Power Reserve', value: 'powerReserve' },
       { label: 'Quartz', value: 'quartz' },
       { label: 'Digital', value: 'digital' },
@@ -899,19 +1052,13 @@ const toggleFeature = (feature: string) => {
   </Picker>
 
   <Text style={styles.fieldLabel}>📏 Watch Size (mm)</Text>
-  <Picker
-    selectedValue={watchSize}
-    onValueChange={setWatchSize}
-    style={styles.picker}
-  >
-    <Picker.Item label="Select watch size" value="" />
-    <Picker.Item label="20mm" value="20mm" />
-    <Picker.Item label="28-34mm (Extra Small)" value="28-34" />
-    <Picker.Item label="35-38mm (Small)" value="35-38" />
-    <Picker.Item label="39-42mm (Medium)" value="39-42" />
-    <Picker.Item label="43-46mm (Large)" value="43-46" />
-    <Picker.Item label="47mm+ (Extra Large)" value="47+" />
-  </Picker>
+  <TextInput
+    style={styles.input}
+    placeholder="e.g., 40, 42, 44"
+    keyboardType="decimal-pad"
+    value={watchSize}
+    onChangeText={setWatchSize}
+  />
 
   <Text style={styles.fieldLabel}>⬛ Case Shape</Text>
   <Picker
@@ -972,6 +1119,7 @@ const toggleFeature = (feature: string) => {
     label="Water Resistance"
     value={waterResistance}
     onValueChange={(v) => setWaterResistance(v as WaterResistance)}
+    fieldName="waterResistance"
     options={[
       { label: 'Select water resistance', value: '' },
       { label: 'None', value: 'none' },
@@ -985,6 +1133,7 @@ const toggleFeature = (feature: string) => {
     label="Rarity"
     value={rarity}
     onValueChange={(v) => setRarity(v as Rarity)}
+    fieldName="rarity"
     options={[
       { label: 'Select rarity', value: '' },
       { label: 'Common', value: 'common' },
@@ -1224,6 +1373,9 @@ const toggleFeature = (feature: string) => {
     year={yearOfManufacture}
     isNew={isNew}
     watchSpecs={{
+      modelNumber,
+      yearOfManufacture,
+      isNew,
       caseMaterial,
       bandMaterial,
       movementType,
@@ -1270,6 +1422,7 @@ const toggleFeature = (feature: string) => {
 
 
       </Animated.ScrollView>
+       <GlobalFooter />
     </View>
   );
 }
@@ -1299,20 +1452,28 @@ export const themedStyles = (scheme: 'light' | 'dark') => {
       backgroundColor: palette.background,
     },
     contentContainer: {
-      paddingTop: 140,
+      paddingTop: 240,
       paddingBottom: 40,
     },
     headerTitleContainer: {
       position: 'absolute',
-      top: HEADER_MAX_HEIGHT,
+      top: HEADER_MAX_HEIGHT + 48,
       left: 0,
       right: 0,
       paddingHorizontal: 16,
-      paddingVertical: 12,
+      paddingVertical: 16,
       backgroundColor: palette.cardBackground,
       borderBottomWidth: 1,
       borderBottomColor: palette.border,
-      zIndex: 10,
+      zIndex: 100,
+    },
+    titleWithArrow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    backArrow: {
+      marginRight: 12,
+      padding: 4,
     },
     headerTitleText: {
       fontSize: 20,

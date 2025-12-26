@@ -7,6 +7,7 @@ import { User } from "@/types";
 import { Link, router } from 'expo-router';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import GlobalFooter from "@/app/components/GlobalFooter";
 
 const UserProfileScreen: FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -118,7 +119,9 @@ const UserProfileScreen: FC = () => {
           </TouchableOpacity>
         </>
       )}
+       <GlobalFooter />
     </ScrollView>
+
   );
 };
 

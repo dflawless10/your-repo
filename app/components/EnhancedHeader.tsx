@@ -20,9 +20,13 @@ import {Link, useRouter} from 'expo-router';
 import { Avatar } from 'app/components/Avatar'
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCartBackend } from 'hooks/usecartBackend';
-
+import GiftDiscoveryModal from '@/app/components/GiftDiscoveryModal';
+import { BidGoatMenuModal } from './BidGoatMenuModal';
+import { SharedValue } from 'react-native-reanimated';
 interface HeaderProps {
   scrollY: Animated.Value;
+  title?: string;
+  subtitle?: string;
   username?: string | null;
   avatarUrl?: string | null;
   onSearch?: (text: string) => void;
@@ -34,7 +38,8 @@ interface HeaderProps {
 interface SearchResult {
   label: string;
   value: string | number;
-  type: 'user' | 'item' | string;   // ❌ problem here
+  type: 'user' | 'item' | (string & {});
+  // ❌ problem here
   extra?: {
     price?: number;
     image?: string;
@@ -330,11 +335,13 @@ const EnhancedHeader: React.FC<HeaderProps> = ({
   }, [showMenu]);
 
   useEffect(() => {
+  if (!scrollY || !scrollY.addListener) return;
+
   const listener = scrollY.addListener(({ value }) => {
     console.log('🐐 scrollY:', value);
   });
   return () => scrollY.removeListener(listener);
-}, []);
+}, [scrollY]);
 
   // Use avatar from state (which loads from AsyncStorage) or prop, fallback to default
   const img = avatarUrl?.startsWith('http')
@@ -342,6 +349,12 @@ const EnhancedHeader: React.FC<HeaderProps> = ({
     : avatar.startsWith('http')
     ? avatar
     : 'https://i.pravatar.cc/80';
+
+  // Refresh key ONLY when the menu opens (prevents constant reload flicker)
+  const avatarCacheKey = useMemo(() => {
+    if (!showMenu) return 'closed';
+    return `open:${img}`;
+  }, [showMenu, img]);
 
   const { cartItems } = useCartBackend();
 
@@ -362,10 +375,21 @@ const EnhancedHeader: React.FC<HeaderProps> = ({
     <Animated.View style={[styles.header, { height: headerHeight }]}>
       {/* Icons Row - Above Search */}
       <View style={styles.iconsRow}>
+        {/* BidGoat Logo Text */}
+        <TouchableOpacity onPress={() => router.push('/(tabs)')} style={styles.logoContainer}>
+          <Text style={styles.logoText}>
+            <Text style={styles.logoBid}>Bid</Text>
+            <Text style={styles.logoGoat}>Goat</Text>
+          </Text>
+        </TouchableOpacity>
+
+        {/* Spacer to push icons to the right */}
+        <View style={{ flex: 1 }} />
+
         {/* Cart Icon with Badge */}
         <TouchableOpacity onPress={() => router.push('/cart')} style={styles.iconButton}>
           <View style={styles.cartContainer}>
-            <Image source={require('app/components/assets/goat-cart.png')} style={styles.cartIcon} />
+            <Ionicons name="cart" size={24} color="#333" />
             {cartItems.length > 0 && (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>{cartItems.length}</Text>
@@ -374,21 +398,26 @@ const EnhancedHeader: React.FC<HeaderProps> = ({
           </View>
         </TouchableOpacity>
 
+        {/* Notification Bell Icon */}
+        <TouchableOpacity onPress={() => router.push('/notifications')} style={styles.iconButton}>
+          <Ionicons name="notifications-outline" size={26} color="#444" />
+        </TouchableOpacity>
+
         {/* Profile Icon */}
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={() => {
             if (username) {
               router.push('/(tabs)/profile');
             } else {
               router.push('/sign-in');
             }
-          }} 
+          }}
           style={styles.iconButton}
         >
-          <Ionicons 
-            name={username ? "person" : "person-outline"} 
-            size={28} 
-            color={username ? "#6A0DAD" : "#444"} 
+          <Ionicons
+            name={username ? "person" : "person-outline"}
+            size={28}
+            color={username ? "#6A0DAD" : "#444"}
           />
         </TouchableOpacity>
 
@@ -477,9 +506,11 @@ const EnhancedHeader: React.FC<HeaderProps> = ({
               onSelect?.(item);
             }}
           >
-            {item.extra?.image && (
-              <Image source={{ uri: item.extra.image }} style={styles.resultImage} />
-            )}
+            <Image
+              source={item.extra?.image ? { uri: item.extra.image } : require('@/assets/images/partial-react-logo.png')}
+              style={styles.resultImage}
+              onError={() => console.log('Failed to load image:', item.extra?.image)}
+            />
             <View style={styles.resultContent}>
               <Text style={styles.resultLabel} numberOfLines={1}>{item.label || 'Unknown'}</Text>
 
@@ -509,190 +540,26 @@ const EnhancedHeader: React.FC<HeaderProps> = ({
 
     </Animated.View>
 
-    {/* Main Menu Modal */}
-    <Modal visible={showMenu} transparent animationType="slide" onRequestClose={() => setShowMenu(false)}>
-  <View style={styles.modalOverlay}>
-    <Pressable style={styles.modalBackdrop} onPress={() => setShowMenu(false)} />
-    <View style={styles.modalContent}>
-      <ScrollView contentContainerStyle={styles.modalScroll} bounces={false}>
-        {/* User Profile Section */}
-        <View style={styles.menuProfileSection}>
-          <TouchableOpacity
-            onPress={() => {
-              router.push('/(tabs)/profile');
-              setShowMenu(false);
-            }}
-            style={styles.menuProfileButton}
-          >
-            <Avatar uri={`${img}${img.includes('?') ? '&' : '?'}v=${Date.now()}`} />
-            <View style={styles.menuProfileInfo}>
-              <Text style={styles.menuProfileName}>{username || 'Guest'}</Text>
-              <Text style={styles.menuProfileLink}>View Profile →</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
+    {/* Main Menu Modal - New BidGoatMenuModal */}
+    <BidGoatMenuModal
+      visible={showMenu}
+      onClose={() => setShowMenu(false)}
+      username={username}
+      avatarUrl={img}
+      onGiftFinderPress={() => setShowGiftModal(true)}
+    />
 
-        {/* Header */}
-        <Text style={[styles.modalHeader, { fontSize: 20, marginBottom: 20, marginTop: 16 }]}>🐐 BidGoat Menu</Text>
-
-        {/* Shop Section */}
-        <Text style={styles.sectionHeader}>Shop</Text>
-        {/* New Sub‑Category: Relisted Discounts */}
-        <TouchableOpacity style={styles.modalItem} onPress={() => { router.push('/relisted-discounts'); setShowMenu(false); }}>
-          <Ionicons name="pricetag" size={20} color="#FF6B35" />
-          <Link href="/relisted-discounts" style={styles.modalItem}>
-          <Text style={styles.modalText}>Relisted Item Discounts</Text>
-          </Link>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.modalItem} onPress={() => { router.push('/discover'); setShowMenu(false); }}>
-          <Ionicons name="search" size={20} color="#FF6B35" />
-          <Text style={styles.modalText}>Discover Items</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.modalItem} onPress={() => { router.push('/wishlist'); setShowMenu(false); }}>
-          <Ionicons name="heart" size={20} color="#FF6B35" />
-          <Text style={styles.modalText}>Wishlist</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.modalItem} onPress={() => { router.push('/cart'); setShowMenu(false); }}>
-          <Ionicons name="cart" size={20} color="#FF6B35" />
-          <Text style={styles.modalText}>Shopping Cart</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.modalItem} onPress={() => { setShowGiftModal(true); setShowMenu(false); }}>
-          <Ionicons name="gift" size={20} color="#FF6B35" />
-          <Text style={styles.modalText}>Gift Finder</Text>
-        </TouchableOpacity>
-
-        {/* Buying Section */}
-        <Text style={styles.sectionHeader}>Buying</Text>
-        <TouchableOpacity style={styles.modalItem} onPress={() => { router.push('/orders'); setShowMenu(false); }}>
-          <Ionicons name="receipt" size={20} color="#FF6B35" />
-          <Text style={styles.modalText}>My Orders</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.modalItem} onPress={() => { router.push('/(tabs)/MyBidsScreen'); setShowMenu(false); }}>
-          <Ionicons name="time" size={20} color="#FF6B35" />
-          <Text style={styles.modalText}>My Bids</Text>
-        </TouchableOpacity>
-
-        {/* Selling Section */}
-        <Text style={styles.sectionHeader}>Selling</Text>
-        <TouchableOpacity style={styles.modalItem} onPress={() => { router.push('/seller/dashboard'); setShowMenu(false); }}>
-          <Ionicons name="analytics" size={20} color="#FF6B35" />
-          <Text style={styles.modalText}>Seller Dashboard</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.modalItem} onPress={() => { router.push('/seller/orders'); setShowMenu(false); }}>
-          <Ionicons name="cube" size={20} color="#FF6B35" />
-          <Text style={styles.modalText}>Orders to Ship</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.modalItem} onPress={() => { router.push('/seller/revenue'); setShowMenu(false); }}>
-          <Ionicons name="cash" size={20} color="#FF6B35" />
-          <Text style={styles.modalText}>Revenue</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.modalItem} onPress={() => { router.push('/CreateAuctionScreen'); setShowMenu(false); }}>
-          <Ionicons name="hammer" size={20} color="#FF6B35" />
-          <Text style={styles.modalText}>Create Auction</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.modalItem} onPress={() => { router.push('/(tabs)/list-item'); setShowMenu(false); }}>
-          <Ionicons name="pricetag" size={20} color="#FF6B35" />
-          <Text style={styles.modalText}>Buy It Now</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.modalItem} onPress={() => { router.push('/MustSellScreen'); setShowMenu(false); }}>
-          <Ionicons name="flash" size={20} color="#FF6B35" />
-          <Text style={styles.modalText}>Must Sell</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.modalItem} onPress={() => { router.push('/watch-appraisal'); setShowMenu(false); }}>
-          <Ionicons name="watch" size={20} color="#FF6B35" />
-          <Text style={styles.modalText}>List My Watch</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.modalItem} onPress={() => { router.push('/diamond-appraisal'); setShowMenu(false); }}>
-          <Ionicons name="diamond" size={20} color="#FF6B35" />
-          <Text style={styles.modalText}>List My Diamond</Text>
-        </TouchableOpacity>
-
-        {/* Account Section */}
-        <Text style={styles.sectionHeader}>Account</Text>
-        {username ? (
-          <>
-            <TouchableOpacity style={styles.modalItem} onPress={() => { router.push('/(tabs)/profile'); setShowMenu(false); }}>
-              <Ionicons name="person" size={20} color="#FF6B35" />
-              <Text style={styles.modalText}>Profile</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.modalItem} onPress={() => { router.push('/jewelry-box'); setShowMenu(false); }}>
-              <Ionicons name="diamond" size={20} color="#FF6B35" />
-              <Text style={styles.modalText}>My Jewelry Box</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.modalItem}
-              onPress={async () => {
-                await AsyncStorage.multiRemove(['username', 'jwtToken', 'avatar_url']);
-                setShowMenu(false);
-                router.push('/sign-in');
-              }}
-            >
-              <Ionicons name="log-out" size={20} color="#FF6B35" />
-              <Text style={styles.modalText}>Sign Out</Text>
-            </TouchableOpacity>
-          </>
-        ) : (
-          <>
-            <TouchableOpacity style={styles.modalItem} onPress={() => { router.push('/sign-in'); setShowMenu(false); }}>
-              <Ionicons name="log-in" size={20} color="#FF6B35" />
-              <Text style={styles.modalText}>Sign In</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.modalItem} onPress={() => { router.push('/register'); setShowMenu(false); }}>
-              <Ionicons name="person-add" size={20} color="#FF6B35" />
-              <Text style={styles.modalText}>Register</Text>
-            </TouchableOpacity>
-          </>
-        )}
-
-        {/* Help Section */}
-        <Text style={styles.sectionHeader}>Help & Info</Text>
-        <TouchableOpacity style={styles.modalItem} onPress={() => { router.push('/about'); setShowMenu(false); }}>
-          <Ionicons name="information-circle" size={20} color="#FF6B35" />
-          <Text style={styles.modalText}>About BidGoat</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.modalItem} onPress={() => { router.push('/help'); setShowMenu(false); }}>
-          <Ionicons name="help-circle" size={20} color="#FF6B35" />
-          <Text style={styles.modalText}>Help Center</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => setShowMenu(false)} style={{ marginTop: 20 }}>
-          <Text style={styles.closeText}>Close Menu</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </View>
-  </View>
-</Modal>
-
-    {/* Gift Discovery Modal */}
-    <Modal visible={showGiftModal} transparent animationType="fade" onRequestClose={() => setShowGiftModal(false)}>
-  <Pressable style={styles.modalOverlay} onPress={() => setShowGiftModal(false)}>
-    <View style={styles.modalContent} pointerEvents="box-none">
-      <Text style={styles.modalHeader}>🎁 Discover Gift Ideas</Text>
-      {['birthday', 'anniversary', 'halloween', 'wedding', 'thank-you', 'just-because'].map((occasion) => (
-        <TouchableOpacity
-          key={occasion}
-          style={styles.modalItem}
-          onPress={() => handleGiftNavigation(occasion)}
-        >
-          <Text style={styles.modalText}>🎀 {occasion.replace('-', ' ')} Gifts</Text>
-        </TouchableOpacity>
-      ))}
-      <TouchableOpacity onPress={() => setShowGiftModal(false)}>
-        <Text style={styles.closeText}>Close</Text>
-      </TouchableOpacity>
-    </View>
-  </Pressable>
-
-</Modal>
+    {/* Gift Discovery Modal - New Enhanced Version */}
+    <GiftDiscoveryModal visible={showGiftModal} onClose={() => setShowGiftModal(false)} />
 
 
-    {/* Category Selection Modal - eBay Style */}
+    {/* Category Selection Modal - eBay/Amazon Style */}
     <Modal visible={showCategoryModal} transparent animationType="slide" onRequestClose={() => setShowCategoryModal(false)}>
       <View style={styles.modalOverlay}>
         <Pressable style={styles.modalBackdrop} onPress={() => setShowCategoryModal(false)} />
         <View style={styles.categoryModalContent}>
           <View style={styles.categoryModalHeaderRow}>
-            <Text style={styles.modalHeader}>Add To My Jewelry Box</Text>
+            <Text style={styles.modalHeader}>Shop by Category</Text>
             {username ? (
               <Text style={styles.signInText}>✅ {username}</Text>
             ) : (
@@ -711,14 +578,17 @@ const EnhancedHeader: React.FC<HeaderProps> = ({
           <ScrollView>
             {[
               'All Categories',
-              '⌚ Bracelets & Watches',
-              '🎀 Brooches',
-              '👂 Earrings',
-              '💎 Loose Gems',
-              '📿 Necklaces',
-              '💍 Rings',
-              '👑 Tiaras & Hair',
-              '✨ Vintage'
+              'Accessories',
+              'Bracelets',
+              'Charms',
+              'Coins',
+              'Earrings',
+              'Fancy Color Gems',
+              'Necklaces',
+              'Pendants',
+              'Rings',
+              'Vintage',
+              'Watches',
             ].map((category) => (
               <TouchableOpacity
                 key={category}
@@ -841,7 +711,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-
+    height: HEADER_MAX_HEIGHT,
     backgroundColor: '#fff',
     zIndex: 1000,
     elevation: 10,
@@ -851,7 +721,7 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     borderBottomWidth: 1,
     borderColor: '#ddd',
-
+    overflow: 'visible',
   },
   modalScroll: {
   paddingBottom: 32,
@@ -882,6 +752,21 @@ const styles = StyleSheet.create({
     gap: 8,
     minHeight: 48,
     flexShrink: 0,
+  },
+  logoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  logoText: {
+    fontSize: 24,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  logoBid: {
+    color: '#6A0DAD', // Purple
+  },
+  logoGoat: {
+    color: '#FFD700', // Gold
   },
   searchRow: {
     paddingHorizontal: 16,

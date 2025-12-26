@@ -111,6 +111,7 @@ export type ListedItem = {
     }
   formatAuctionEnd?: string
   auction_ends_at: string;
+    watching_count?: number;
   bid_count?: number; // <- make optional to match SparkleItemCard
   bidCount: number;
 wishlistItem?: boolean;
@@ -166,6 +167,7 @@ export type ItemDetails = {
   price: number;
   highest_bid?: number;
   reserve_price?: number;
+  has_reserve?: boolean;
   buy_it_now?: number;
   must_sell_duration?: number;
   seller_username: string;
@@ -182,11 +184,17 @@ export type ItemDetails = {
     timestamp: string;
   }[];
   is_highest_bidder?: number;
+  is_favorited?: boolean;
   type?: string;
   item_media?: string[];
   rarity?: string;
   auction_ends_at?: string;
   weight_lbs?: number;
+  watching_count?: number;
+  bid_count?: number;
+  min_next_bid?: number;
+  relist_count?: number;
+  watch_specifications?: string;
   seller?: {
     id?: number;
     email?: string;
@@ -194,6 +202,11 @@ export type ItemDetails = {
     items_sold: number;
     joined: string;
     is_premium?: boolean;
+    rating?: {
+      avg_rating: number;
+      review_count: number;
+      positive_percent: number;
+    };
   };
 };
 

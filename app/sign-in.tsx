@@ -61,6 +61,12 @@ const LoginScreen = () => {
           // Use AuthContext login to schedule token refresh
           await authLogin(token, userProfile.username);
 
+          // Save userId to AsyncStorage
+          if (userProfile.id) {
+            await AsyncStorage.setItem('userId', userProfile.id.toString());
+            console.log('🐐 UserId saved:', userProfile.id);
+          }
+
           // Save avatar_url to AsyncStorage if available
           if (userProfile.avatar_url) {
             await AsyncStorage.setItem('avatar_url', userProfile.avatar_url);

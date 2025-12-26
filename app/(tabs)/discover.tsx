@@ -61,6 +61,7 @@ interface AuctionItem {
   is_sold_out_at_formatted_timestamp: string;
   preview: string;
   recent_bids: string;
+  buy_it_now: string;
   photo_url: string;
   auction_ends_at: string;
   registration_time: string;
@@ -112,12 +113,16 @@ const fetchItems = async () => {
   try {
     const res = await fetch('http://10.0.0.170:5000/items/discover');
     data = await res.json();
+    console.log('🔍 Raw discover data:', data);
+    console.log('🔍 First item buy_it_now:', data[0]?.buy_it_now);
     const normalized = data.map((item: AuctionItem) => ({
       ...item,
       title: item.title || item.name || "",
       auction_ends_at: normalizeAuctionEndsAt(item),
       bid_count: item.bidCount,
+      buy_it_now: item.buy_it_now, // Explicitly preserve buy_it_now
     }));
+    console.log('🔍 Normalized first item buy_it_now:', normalized[0]?.buy_it_now);
     setItems(normalized);
   } catch (err) {
     console.error('Discover fetch error:', err);
@@ -174,7 +179,7 @@ const handleAddToWishlist = async (item: AuctionItem) => {
   console.log('🐐 Discover: Adding item to wishlist:', itemId, item.name);
   
   try {
-    // Add to backend first
+    // Add to the backend first
     await addToWishlistBackend(itemId);
     console.log('🐐 Discover: Added to backend successfully');
     
@@ -201,6 +206,12 @@ const backgroundColor = useThemeColor({}, 'background');
     const isAuctionEnded = new Date(item.auction_ends_at).getTime() <= Date.now();
     const timeLeftMs = new Date(item.auction_ends_at).getTime() - Date.now();
     const isUrgent = timeLeftMs > 1 && timeLeftMs <= 7200000; // Less than 2 hours
+
+    // Debug: Log buy_it_now value for each item
+    if (item.buy_it_now) {
+      console.log(`🏷️ Item ${item.id} has buy_it_now:`, item.buy_it_now);
+    }
+
     return (
 
          <TouchableOpacity
@@ -210,6 +221,13 @@ const backgroundColor = useThemeColor({}, 'background');
         >
          <View style={styles.imageContainer}>
   <Image source={{ uri: item.photo_url }} style={styles.image} />
+
+  {/* Buy It Now Badge */}
+  {item.buy_it_now && (
+    <View style={styles.buyItNowBadge}>
+      <Text style={styles.buyItNowText}>BUY NOW</Text>
+    </View>
+  )}
   </View>
 
           <View style={styles.priceRow}>
@@ -267,7 +285,7 @@ const backgroundColor = useThemeColor({}, 'background');
 
       ListHeaderComponent={
         <View style={{ backgroundColor }}>
-          <View style={{ padding: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: '#eee' }}>
+          <View style={{ padding: 16, paddingTop: 32, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: '#eee' }}>
             <Text style={{ fontSize: 24, fontWeight: '700' }}>Discover Treasures</Text>
             <Text style={{ fontSize: 14, color: '#666' }}>Find unique pieces from verified sellers</Text>
           </View>
@@ -281,7 +299,7 @@ const backgroundColor = useThemeColor({}, 'background');
           {loading ? (
             <ActivityIndicator size="large" style={styles.loader} />
           ) : (
-            <Text style={{ color: '#666' }}>You've reached the end 🐐</Text>
+            <Text style={{ color: '#666' }}>You&#39;ve reached the end 🐐</Text>
           )}
         </View>
       }
@@ -346,7 +364,24 @@ const styles = StyleSheet.create({
     position: 'relative',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
-    overflow: 'hidden',
+    overflow: 'visible', // Changed to visible so badge isn't clipped
+  },
+  buyItNowBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: '#10B981',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    zIndex: 10, // Higher z-index to show above wishlist badge
+    elevation: 10, // Android elevation
+  },
+  buyItNowText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   image: {
     width: '100%',

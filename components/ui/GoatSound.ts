@@ -5,7 +5,7 @@ import { Audio } from 'expo-av';
 export const playGoatSound = async () => {
   try {
     const { sound } = await Audio.Sound.createAsync(
-      require('../../assets/sounds/bid-goat-sound.wav/Goat-sound.wav'),
+      require('../../assets/sounds/bleat.mp3'),
       { shouldPlay: true }
     );
     await sound.playAsync();

@@ -10,13 +10,16 @@ import Animated, {
 import { ThemedView } from '@/components/ThemedView';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
 import  useColorScheme  from '@/hooks/useColorScheme';
-
+import { Animated as RNAnimated } from 'react-native';
 const HEADER_HEIGHT = 120; // Reduced from 250
 
 type Props = PropsWithChildren<{
-  headerImage: ReactElement;
+  headerImage?: ReactElement; // now optional
   headerBackgroundColor: { dark: string; light: string };
+  scrollY: RNAnimated.Value;
+    // now supported
 }>;
+
 
 function ParallaxScrollView({ children, headerImage, headerBackgroundColor }: Props) {
   const colorScheme = useColorScheme() ?? 'light';

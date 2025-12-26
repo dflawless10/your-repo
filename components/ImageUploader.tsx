@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ type ImageUploaderProps = {
   onImagesChange: (uris: string[]) => void;
   title?: string;
   subtitle?: string;
+  imageUris?: string[]; // Accept external image URIs
 };
 
 export default function ImageUploader({
@@ -25,10 +26,18 @@ export default function ImageUploader({
   onImagesChange,
   title = 'Upload Photos',
   subtitle = `Add up to ${5} photos`,
+  imageUris: externalImageUris,
 }: ImageUploaderProps) {
-  const [imageUris, setImageUris] = useState<string[]>([]);
+  const [imageUris, setImageUris] = useState<string[]>(externalImageUris || []);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0);
+
+  // Sync external imageUris with internal state
+  useEffect(() => {
+    if (externalImageUris !== undefined) {
+      setImageUris(externalImageUris);
+    }
+  }, [externalImageUris]);
 
   const pickImages = async () => {
     if (imageUris.length >= maxImages) {

@@ -17,7 +17,7 @@ import { Image } from 'expo-image';
 
 const API_URL = 'http://10.0.0.170:5000';
 
-type GenderFilter = 'all' | 'women' | 'men';
+type GenderFilter = 'all' | 'women' | 'men' | 'unisex' | 'kids' | 'pets';
 
 interface Item {
   id: number;
@@ -41,20 +41,23 @@ export default function CategoryScreen() {
 
   // Map category names to display format and backend categories
   const categoryDisplayName = typeof name === 'string'
-    ? name.replace(/⌚|🎀|👂|💎|📿|💍|👑|✨/g, '').trim()
+    ? name
     : 'Category';
 
-  // Map frontend categories to backend category values
+  // Map frontend categories to backend category values - Updated alphabetically
   const getCategoryParams = (displayName: string): string[] => {
     const categoryMap: Record<string, string[]> = {
-      'Bracelets & Watches': ['bracelet', 'bracelets', 'watch', 'watches'],
-      'Brooches': ['brooch', 'brooches'],
+      'Accessories': ['accessory', 'accessories'],
+      'Bracelets': ['bracelet', 'bracelets'],
+      'Charms': ['charm', 'charms'],
+      'Coins': ['coin', 'coins'],
       'Earrings': ['earring', 'earrings'],
-      'Loose Gems': ['loose gem', 'loose gems', 'gem', 'gems'],
+      'Fancy Color Gems': ['fancy color gem', 'fancy color gems', 'colored gem', 'colored gems'],
       'Necklaces': ['necklace', 'necklaces'],
+      'Pendants': ['pendant', 'pendants'],
       'Rings': ['ring', 'rings'],
-      'Tiaras & Hair': ['tiara', 'tiaras', 'hair', 'hair accessory'],
       'Vintage': ['vintage'],
+      'Watches': ['watch', 'watches'],
     };
     return categoryMap[displayName] || [displayName.toLowerCase()];
   };
@@ -135,7 +138,7 @@ export default function CategoryScreen() {
         source={{ uri: item.image_url }}
         style={styles.itemImage}
         contentFit="cover"
-        placeholder={require('../components/assets/placeholder.svg.png')}
+        placeholder={require('../../assets/goat-icon.png')}
       />
       <View style={styles.itemInfo}>
         <Text style={styles.itemName} numberOfLines={2}>
@@ -187,6 +190,9 @@ export default function CategoryScreen() {
           {renderFilterChip('all', 'All')}
           {renderFilterChip('women', "Women's", '👩')}
           {renderFilterChip('men', "Men's", '👨')}
+          {renderFilterChip('unisex', 'Unisex', '⚥')}
+          {renderFilterChip('kids', 'Kids/Teens', '👶')}
+          {renderFilterChip('pets', 'Pets', '🐾')}
         </ScrollView>
       </View>
 

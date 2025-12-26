@@ -35,6 +35,7 @@ const SearchScreen = () => {
   }
 };
 
+// eslint-disable-next-line react-hooks/exhaustive-deps
 const debouncedSearch = useCallback(debounce((query) => {
   console.log("Searching for:", query);
   // trigger search logic here
@@ -58,7 +59,7 @@ const debouncedSearch = useCallback(debounce((query) => {
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <AuctionPreviewCard preview={item} />
 }
-        ListEmptyComponent={<Text>No results for "{query}"</Text>}
+        ListEmptyComponent={<Text>No results for &#34;{query}&#34;</Text>}
       />
     </View>
   );

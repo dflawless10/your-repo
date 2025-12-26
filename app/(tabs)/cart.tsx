@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useState } from 'react';
+import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  ActivityIndicator,
+  Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -18,6 +20,7 @@ import { API_BASE_URL } from '@/config';
 
 import { useAppDispatch, useAppSelector } from '@/hooks/reduxHooks';
 import { setCartItems, removeItem } from '@/utils/cartSlice';
+import { calculateBuyerTotal, type BuyerTotalBreakdown } from '@/api/revenue';
 
 function getUrgencyColor(hoursLeft: number): string {
   if (hoursLeft > 48) return 'green';
@@ -29,6 +32,9 @@ export default function CartScreen() {
   const dispatch = useAppDispatch();
   const cartItems = useAppSelector((state) => state.cart.items);
   const [loading, setLoading] = useState(false);
+  const [includeInsurance, setIncludeInsurance] = useState(false);
+  const [costBreakdowns, setCostBreakdowns] = useState<Record<number, BuyerTotalBreakdown>>({});
+  const [calculatingCosts, setCalculatingCosts] = useState(false);
 
   // Fetch cart from backend API
   const fetchCart = useCallback(async () => {
@@ -89,9 +95,56 @@ export default function CartScreen() {
     }
   };
 
+  // Calculate costs for all items when cart changes
+  useEffect(() => {
+    const fetchCostBreakdowns = async () => {
+      if (cartItems.length === 0) {
+        setCostBreakdowns({});
+        return;
+      }
+
+      setCalculatingCosts(true);
+      const breakdowns: Record<number, BuyerTotalBreakdown> = {};
+
+      try {
+        await Promise.all(
+          cartItems.map(async (item) => {
+            try {
+              const itemId = Number(item.id);
+              const response = await calculateBuyerTotal(itemId, includeInsurance);
+              breakdowns[itemId] = response.breakdown;
+            } catch (error) {
+              console.error(`Failed to calculate costs for item ${item.id}:`, error);
+            }
+          })
+        );
+
+        setCostBreakdowns(breakdowns);
+      } catch (error) {
+        console.error('Error calculating cost breakdowns:', error);
+      } finally {
+        setCalculatingCosts(false);
+      }
+    };
+
+    fetchCostBreakdowns();
+  }, [cartItems, includeInsurance]);
+
   const subtotal = useMemo(() => {
     return cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
   }, [cartItems]);
+
+  const totalShipping = useMemo(() => {
+    return Object.values(costBreakdowns).reduce((sum, breakdown) => sum + breakdown.shipping_cost, 0);
+  }, [costBreakdowns]);
+
+  const totalInsurance = useMemo(() => {
+    return Object.values(costBreakdowns).reduce((sum, breakdown) => sum + breakdown.insurance_cost, 0);
+  }, [costBreakdowns]);
+
+  const grandTotal = useMemo(() => {
+    return Object.values(costBreakdowns).reduce((sum, breakdown) => sum + breakdown.total, 0);
+  }, [costBreakdowns]);
 
   const renderRecommendations = (recs: any[]) => (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.recoScroll}>
@@ -159,18 +212,62 @@ export default function CartScreen() {
               contentContainerStyle={{ paddingBottom: 120 }}
             />
             <View style={styles.summary}>
-              <Text style={styles.subtotal}>Subtotal: ${subtotal.toFixed(2)}</Text>
+              <View style={styles.costBreakdown}>
+                <View style={styles.costRow}>
+                  <Text style={styles.costLabel}>Subtotal:</Text>
+                  <Text style={styles.costValue}>${subtotal.toFixed(2)}</Text>
+                </View>
+
+                {calculatingCosts ? (
+                  <ActivityIndicator size="small" color="#6A0DAD" />
+                ) : (
+                  <>
+                    <View style={styles.costRow}>
+                      <Text style={styles.costLabel}>Shipping:</Text>
+                      <Text style={styles.costValue}>${totalShipping.toFixed(2)}</Text>
+                    </View>
+
+                    <View style={styles.insuranceRow}>
+                      <View style={styles.insuranceToggle}>
+                        <Text style={styles.costLabel}>Insurance:</Text>
+                        <Switch
+                          value={includeInsurance}
+                          onValueChange={setIncludeInsurance}
+                          trackColor={{ false: '#ccc', true: '#6A0DAD' }}
+                          thumbColor={includeInsurance ? '#fff' : '#f4f3f4'}
+                        />
+                      </View>
+                      <Text style={styles.costValue}>
+                        {includeInsurance ? `$${totalInsurance.toFixed(2)}` : 'Not included'}
+                      </Text>
+                    </View>
+
+                    <View style={[styles.costRow, styles.totalRow]}>
+                      <Text style={styles.totalLabel}>Total:</Text>
+                      <Text style={styles.totalValue}>${grandTotal.toFixed(2)}</Text>
+                    </View>
+                  </>
+                )}
+              </View>
+
               <Button
                 title="Proceed to Checkout"
                 onPress={() => router.push('/checkout')}
                 color="#6A0DAD"
+                disabled={calculatingCosts}
               />
             </View>
           </>
         ) : (
           <View style={styles.emptyWrap}>
-            <Text style={styles.empty}>
-              🐐 Your cart is empty. The goat awaits your next treasure.
+            <Image
+              source={require('@/assets/images/goat-cart.png')}
+              style={styles.emptyCartImage}
+              resizeMode="contain"
+            />
+            <Text style={styles.emptyTitle}>Your Cart is Empty</Text>
+            <Text style={styles.emptySubtitle}>
+              The goat awaits your next treasure
             </Text>
             <Button title="Explore Auctions" onPress={() => router.push('/explore')} />
           </View>
@@ -191,7 +288,26 @@ export default function CartScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
   header: { fontSize: 24, fontWeight: 'bold', marginBottom: 16 },
-  emptyWrap: { alignItems: 'center', marginTop: 40 },
+  emptyWrap: { alignItems: 'center', marginTop: 40, paddingHorizontal: 20 },
+  emptyCartImage: {
+    width: 200,
+    height: 200,
+    marginBottom: 24,
+  },
+  emptyTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
   empty: { fontSize: 18, textAlign: 'center', marginBottom: 12 },
   card: { backgroundColor: '#f8f8f8', padding: 12, borderRadius: 8, marginBottom: 16 },
   itemContent: { flexDirection: 'row' },
@@ -215,6 +331,51 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopWidth: 1,
     borderColor: '#ccc',
+  },
+  costBreakdown: {
+    marginBottom: 12,
+    paddingVertical: 8,
+  },
+  costRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  costLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  costValue: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+  },
+  insuranceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  insuranceToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  totalRow: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#ddd',
+  },
+  totalLabel: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+  },
+  totalValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#6A0DAD',
   },
   floatingCart: {
     position: 'absolute',

@@ -5,7 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-
+  Alert,
 } from 'react-native';
 import { Image } from 'expo-image'; // 👈 use expo-image for reliable local file rendering
 import * as ImagePicker from 'expo-image-picker';
@@ -21,6 +21,9 @@ type Props = {
   isNew?: boolean;
   // All watch specifications
   watchSpecs?: {
+    modelNumber?: string;
+    yearOfManufacture?: string;
+    isNew?: boolean;
     caseMaterial?: string;
     bandMaterial?: string;
     movementType?: string;
@@ -74,25 +77,39 @@ const WatchListingCard = ({
   watchSpecs,
 }: Props) => {
   const [imageUris, setImageUris] = useState<string[]>([]);
+  const [coverIndex, setCoverIndex] = useState(0);
   const router = useRouter();
 
   const pickImage = async () => {
+    if (imageUris.length >= 5) {
+      Alert.alert('Maximum Images Reached', 'You can upload up to 5 images for your watch listing.');
+      return;
+    }
+
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      alert('Permission required to access photos');
+      Alert.alert('Permission Required', 'Please allow access to your photos to upload images.');
       return;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-  mediaTypes: ImagePicker.MediaTypeOptions.Images, // ✅ works with your installed version
-  quality: 1,
-});
-
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      quality: 1,
+    });
 
     if (!result.canceled) {
-      const uris = result.assets.map(asset => asset.uri);
-      setImageUris(uris);
-      console.log('Picked image URIs:', uris);
+      const newUris = result.assets.map(asset => asset.uri);
+      const remainingSlots = 5 - imageUris.length;
+      const urisToAdd = newUris.slice(0, remainingSlots);
+
+      setImageUris(prev => [...prev, ...urisToAdd]);
+      console.log('Added image URIs:', urisToAdd);
+      console.log('Total images now:', imageUris.length + urisToAdd.length);
+
+      if (newUris.length > remainingSlots) {
+        Alert.alert('Limit Reached', `Only ${remainingSlots} image(s) were added. Maximum is 5 images.`);
+      }
     }
   };
 
@@ -100,22 +117,42 @@ const WatchListingCard = ({
     console.log('Current imageUris state:', imageUris);
   }, [imageUris]);
 
+  const removeImage = (indexToRemove: number) => {
+    setImageUris(prev => prev.filter((_, index) => index !== indexToRemove));
+    // Adjust cover index if needed
+    if (coverIndex === indexToRemove) {
+      setCoverIndex(0);
+    } else if (coverIndex > indexToRemove) {
+      setCoverIndex(coverIndex - 1);
+    }
+  };
+
   const handleListWatch = () => {
-    const primaryImage = imageUris.length > 0 ? imageUris[0] : imageUrl;
-    const allImages = imageUris.length > 0 ? imageUris.join(',') : imageUrl;
+    const primaryImage = imageUris.length > 0 ? imageUris[coverIndex] : imageUrl;
+    const additionalImages = imageUris.filter((_, idx) => idx !== coverIndex);
+
+    console.log('🐐 Watch - Total images:', imageUris.length);
+    console.log('🐐 Watch - Cover image index:', coverIndex);
+    console.log('🐐 Watch - Primary image:', primaryImage);
+    console.log('🐐 Watch - Additional images count:', additionalImages.length);
+    console.log('🐐 Watch - Additional images:', additionalImages);
 
     // Serialize watch specs to JSON string
     const specsParam = watchSpecs ? encodeURIComponent(JSON.stringify(watchSpecs)) : '';
 
-    router.push(
-      `/watch-listing?brand=${encodeURIComponent(brand)}&model=${encodeURIComponent(
-        model
-      )}&price=${encodeURIComponent(price)}&year=${encodeURIComponent(
-        year || ''
-      )}&isNew=${encodeURIComponent(isNew ? 'true' : 'false')}&imageUrl=${encodeURIComponent(
-        primaryImage
-      )}&images=${encodeURIComponent(allImages)}&watchSpecs=${specsParam}`
-    );
+    router.push({
+      pathname: '/watch-listing',
+      params: {
+        brand,
+        model,
+        price,
+        year: year || '',
+        isNew: isNew ? 'true' : 'false',
+        imageUrl: primaryImage,
+        additionalImages: JSON.stringify(additionalImages),
+        watchSpecs: specsParam,
+      },
+    });
   };
 
   return (
@@ -129,7 +166,7 @@ const WatchListingCard = ({
         <View style={styles.specSection}>
           <Text style={styles.shapeIcons}>⌚</Text>
           <Text style={styles.title}>⌚ {brand} {model}</Text>
-          {year && <Text style={styles.specs}>📅 Year: {year}</Text>}
+          {!!(year) && <Text style={styles.specs}>📅 Year: {year}</Text>}
           {isNew !== undefined && (
             <Text style={styles.specs}>🏷️ Condition: {isNew ? 'New' : 'Used'}</Text>
           )}
@@ -142,16 +179,56 @@ const WatchListingCard = ({
             {imageUris.map((uri, index) => (
               <View key={index} style={styles.imageWrapper}>
                 <Image
-  source={{ uri }}
-  style={styles.image}
-  contentFit="cover"
-  onError={(error) => {
-    console.log('Image failed to load:', error);
-  }}
-/>
+                  source={{ uri }}
+                  style={styles.image}
+                  contentFit="cover"
+                  onError={(error) => {
+                    console.log('Image failed to load:', error);
+                  }}
+                />
 
+                {/* Delete Button */}
+                <TouchableOpacity
+                  style={styles.deleteButton}
+                  onPress={() => {
+                    Alert.alert(
+                      'Delete Image',
+                      'Are you sure you want to remove this image?',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Delete', style: 'destructive', onPress: () => removeImage(index) }
+                      ]
+                    );
+                  }}
+                >
+                  <Ionicons name="close-circle" size={24} color="#FF3B30" />
+                </TouchableOpacity>
+
+                {/* Cover Toggle Button */}
+                <TouchableOpacity
+                  style={[
+                    styles.coverToggle,
+                    coverIndex === index && styles.coverToggleActive,
+                  ]}
+                  onPress={() => {
+                    setCoverIndex(index);
+                    Alert.alert('Cover Image Set', `Image ${index + 1} is now your cover.`);
+                  }}
+                >
+                  <Text style={styles.coverToggleText}>
+                    {coverIndex === index ? '✅ Cover Image' : 'Set as Cover'}
+                  </Text>
+                </TouchableOpacity>
               </View>
             ))}
+
+            {/* Add More Button - Outside the map */}
+            {imageUris.length < 5 && (
+              <TouchableOpacity style={styles.addMoreImageCard} onPress={pickImage}>
+                <Ionicons name="add-circle-outline" size={48} color="#0077cc" />
+                <Text style={styles.addMoreCardText}>Add More</Text>
+              </TouchableOpacity>
+            )}
           </ScrollView>
         ) : (
           <View style={styles.placeholderImage}>
@@ -217,10 +294,59 @@ const styles = StyleSheet.create({
     backgroundColor: '#e0e0e0',
     marginRight: 12,
     overflow: 'hidden',
+    position: 'relative',
   },
   image: {
     width: '100%',
     height: '100%',
+  },
+  deleteButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#ffffffee',
+    borderRadius: 12,
+    padding: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  coverToggle: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    backgroundColor: '#ffffffcc',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+  },
+  coverToggleActive: {
+    backgroundColor: '#0077cc',
+  },
+  coverToggleText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#2c3e50',
+  },
+  addMoreImageCard: {
+    width: 220,
+    height: 220,
+    borderRadius: 16,
+    backgroundColor: '#F7FAFC',
+    borderWidth: 2,
+    borderColor: '#0077cc',
+    borderStyle: 'dashed',
+    marginRight: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addMoreCardText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0077cc',
+    marginTop: 8,
   },
   title: {
     fontSize: 20,

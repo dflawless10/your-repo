@@ -18,6 +18,7 @@ import { AuctionItem } from '@/types/items';
 import { ROUTES } from '@/types/routes';
 import { persistWishlist, loadWishlist } from '@/utils/persistWishlist';
 import { useWishlist } from '@/app/wishlistContext';
+import { getAuctionReminders, setAuctionReminders, formatReminderTime, getCommonReminderOptions } from '@/api/reminders';
 
 const { width } = Dimensions.get('window');
 
@@ -32,12 +33,16 @@ export default function WishlistScreen() {
   const [sortBy, setSortBy] = useState<SortOption>('recent');
   const [filterBy, setFilterBy] = useState<FilterOption>('all');
   const [showFilters, setShowFilters] = useState(false);
+  const [showControlPanel, setShowControlPanel] = useState(false);
   const [reminderModalVisible, setReminderModalVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState<AuctionItem | null>(null);
   const [selectedReminders, setSelectedReminders] = useState<number[]>([60, 30, 5]);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [comparisonMode, setComparisonMode] = useState(false);
   const [selectedForComparison, setSelectedForComparison] = useState<AuctionItem[]>([]);
+  const [showViewModeHelp, setShowViewModeHelp] = useState(false);
+  const [showSortHelp, setShowSortHelp] = useState(false);
+  const [showFilterHelp, setShowFilterHelp] = useState(false);
   const { removeFromWishlist: removeFromWishlistBackend } = useWishlist();
   const scrollY = useRef(new RNAnimated.Value(0)).current;
 
@@ -127,7 +132,7 @@ export default function WishlistScreen() {
           dispatch(setWishlistItems(allItems as AuctionItem[]));
           await persistWishlist(allItems);
         } else if (wishlistItems.length === 0) {
-          // Only clear if we also have nothing in state
+          // Only clear if we also have nothing in the state
           dispatch(setWishlistItems([]));
           await persistWishlist([]);
         } else {
@@ -175,35 +180,41 @@ export default function WishlistScreen() {
     }
   };
 
-  const handleSetReminder = (item: AuctionItem) => {
+  const handleSetReminder = async (item: AuctionItem) => {
     setSelectedItem(item);
+
+    // Fetch existing reminders for this item
+    const itemId = typeof item.id === 'string' ? parseInt(item.id) : item.id;
+    const existingReminders = await getAuctionReminders(itemId);
+    if (existingReminders.length > 0) {
+      const reminderMinutes = existingReminders.map(r => r.minutes_before);
+      setSelectedReminders(reminderMinutes);
+      console.log('🐐 Loaded existing reminders:', reminderMinutes);
+    } else {
+      // Default reminders if none exist
+      setSelectedReminders([60, 30, 5]);
+    }
+
     setReminderModalVisible(true);
   };
 
   const saveReminders = async () => {
     if (!selectedItem) return;
-    
+
     try {
-      const token = await AsyncStorage.getItem('jwtToken');
-      if (!token) return;
+      const itemId = typeof selectedItem.id === 'string' ? parseInt(selectedItem.id) : selectedItem.id;
+      const result = await setAuctionReminders(itemId, selectedReminders);
 
-      const response = await fetch(`http://10.0.0.170:5000/api/wishlist/${selectedItem.id}/reminder`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          reminder_times: selectedReminders
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        Alert.alert('✅ Reminders Set!', `You'll be notified before "${data.item_name}" ends`);
+      if (result.success) {
+        Alert.alert(
+          '✅ Reminders Set!',
+          result.item_name
+            ? `You'll be notified before "${result.item_name}" ends`
+            : 'Your reminders have been saved'
+        );
         setReminderModalVisible(false);
       } else {
-        Alert.alert('Error', 'Failed to set reminders');
+        Alert.alert('Error', result.message || 'Failed to set reminders');
       }
     } catch (error) {
       console.error('🐐 Error setting reminders:', error);
@@ -222,29 +233,53 @@ export default function WishlistScreen() {
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
       <LinearGradient
-        colors={['#FFE5E5', '#FFF5F5', '#FFFFFF']}
+        colors={['#F0E6FF', '#F7FAFC', '#FFFFFF']}
         style={styles.emptyGradient}
       >
+        {/* Goat Illustration */}
         <View style={styles.emptyIconContainer}>
-          <Ionicons name="gift-outline" size={80} color="#FF6B6B" />
+          <Text style={styles.goatEmoji}>🐐</Text>
         </View>
-        <Text style={styles.emptyTitle}>Your Wishlist is Empty</Text>
+
+        <Text style={styles.emptyTitle}>Start Your Collection</Text>
         <Text style={styles.emptySubtitle}>
-          Start adding items you love to keep track of them
+          Tap the ✨ on any item to save it here.{'\n'}
+          We&#39;ll notify you when auctions are ending soon!
         </Text>
-        <MascotOverlay
-          mood="Sad"
-          message="The goat is confused. What treasures do you desire?"
-        />
+
+        {/* Feature Benefits */}
+        <View style={styles.benefitsContainer}>
+          <View style={styles.benefitItem}>
+            <View style={styles.benefitIcon}>
+              <Ionicons name="notifications" size={24} color="#6A0DAD" />
+            </View>
+            <Text style={styles.benefitText}>Get ending soon alerts</Text>
+          </View>
+
+          <View style={styles.benefitItem}>
+            <View style={styles.benefitIcon}>
+              <Ionicons name="stats-chart" size={24} color="#6A0DAD" />
+            </View>
+            <Text style={styles.benefitText}>Track price changes</Text>
+          </View>
+
+          <View style={styles.benefitItem}>
+            <View style={styles.benefitIcon}>
+              <Ionicons name="heart" size={24} color="#6A0DAD" />
+            </View>
+            <Text style={styles.benefitText}>Save your favorites</Text>
+          </View>
+        </View>
+
         <TouchableOpacity style={styles.exploreButton} onPress={handleExplorePress}>
           <LinearGradient
-            colors={['#FF6B6B', '#FF8E8E']}
+            colors={['#6A0DAD', '#8B5CF6']}
             style={styles.buttonGradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
           >
-            <Ionicons name="compass-outline" size={20} color="#FFF" />
-            <Text style={styles.exploreButtonText}>Explore Items</Text>
+            <Ionicons name="sparkles" size={20} color="#FFF" />
+            <Text style={styles.exploreButtonText}>Explore Auctions</Text>
           </LinearGradient>
         </TouchableOpacity>
       </LinearGradient>
@@ -254,14 +289,14 @@ export default function WishlistScreen() {
   const renderHeader = () => (
     <View style={styles.headerContainer}>
       <LinearGradient
-        colors={['#FF6B6B', '#FF8E8E']}
+        colors={['#6A0DAD', '#8B5CF6']}
         style={styles.headerGradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
       >
         <View style={styles.headerContent}>
           <View style={styles.headerTitleContainer}>
-            <Ionicons name="gift" size={28} color="#FFF" />
+            <Ionicons name="star" size={28} color="#FFD700" />
             <Text style={styles.headerTitle}>My Wishlist</Text>
           </View>
           {wishlistItems.length > 0 && (
@@ -275,78 +310,106 @@ export default function WishlistScreen() {
       {/* Total Value Banner - Above Filters */}
       {wishlistItems.length > 0 && (
         <View style={styles.valueBannerAboveFilters}>
-          <MaterialCommunityIcons name="treasure-chest" size={20} color="#FF6B6B" />
+          <MaterialCommunityIcons name="treasure-chest" size={20} color="#6A0DAD" />
           <Text style={styles.valueTextAboveFilters}>
             Total Value: ${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </Text>
         </View>
       )}
 
-      {/* Filter & Sort Bar */}
+      {/* Floating Filter/Sort Button */}
       {wishlistItems.length > 0 && (
         <>
-          <View style={styles.filterBar}>
-            <TouchableOpacity 
-              style={styles.filterButton}
-              onPress={() => setShowFilters(!showFilters)}
+          {!showControlPanel ? (
+            <TouchableOpacity
+              style={styles.floatingControlButton}
+              onPress={() => setShowControlPanel(true)}
             >
-              <MaterialCommunityIcons name="filter-variant" size={20} color="#FF6B6B" />
-              <Text style={styles.filterButtonText}>
-                {filterBy === 'all' ? 'All' : filterBy === 'active' ? 'Active' : filterBy === 'ending-soon' ? 'Ending Soon' : 'Ended'}
-              </Text>
-              <Ionicons name={showFilters ? "chevron-up" : "chevron-down"} size={16} color="#666" />
+              <MaterialCommunityIcons name="tune" size={24} color="#FFF" />
             </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.sortButton}
-              onPress={() => {
-                const options: SortOption[] = ['recent', 'price-low', 'price-high', 'ending-soon'];
-                const currentIndex = options.indexOf(sortBy);
-                const nextIndex = (currentIndex + 1) % options.length;
-                setSortBy(options[nextIndex]);
-              }}
-            >
-              <MaterialCommunityIcons name="sort" size={20} color="#FF6B6B" />
-              <Text style={styles.sortButtonText}>
-                {sortBy === 'recent' ? 'Recent' : sortBy === 'price-low' ? 'Price: Low' : sortBy === 'price-high' ? 'Price: High' : 'Ending Soon'}
-              </Text>
+          ) : (
+            <View style={styles.expandedControlPanel}>
+              <View style={styles.controlPanelHeader}>
+                <Text style={styles.controlPanelTitle}>Filters & View</Text>
+                <TouchableOpacity onPress={() => setShowControlPanel(false)}>
+                  <Ionicons name="close" size={24} color="#666" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.controlRow}>
+                <Text style={styles.controlLabel}>Filter:</Text>
+                <TouchableOpacity
+                  style={styles.controlButton}
+                  onPress={() => setShowFilters(!showFilters)}
+                >
+                  <Text style={styles.controlButtonText}>
+                    {filterBy === 'all' ? 'All' : filterBy === 'active' ? 'Active' : filterBy === 'ending-soon' ? 'Soon' : 'Ended'}
+                  </Text>
+                  <Ionicons name={showFilters ? "chevron-up" : "chevron-down"} size={16} color="#6A0DAD" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.controlRow}>
+                <Text style={styles.controlLabel}>Sort:</Text>
+                <TouchableOpacity
+                  style={styles.controlButton}
+                  onPress={() => {
+                    const options: SortOption[] = ['recent', 'price-low', 'price-high', 'ending-soon'];
+                    const currentIndex = options.indexOf(sortBy);
+                    const nextIndex = (currentIndex + 1) % options.length;
+                    setSortBy(options[nextIndex]);
+                  }}
+                >
+                  <Text style={styles.controlButtonText}>
+                    {sortBy === 'recent' ? 'Recent' : sortBy === 'price-low' ? 'Low' : sortBy === 'price-high' ? 'High' : 'Soon'}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={16} color="#6A0DAD" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* View Mode Switcher - Hidden when a control panel is closed */}
+          {showControlPanel && (
+            <View style={styles.viewModeContainer}>
+            <View style={styles.viewModeSwitcher}>
+              <TouchableOpacity
+                style={[styles.viewModeButton, viewMode === 'list' && styles.viewModeButtonActive]}
+                onPress={() => setViewMode('list')}
+              >
+                <Ionicons name="list" size={20} color={viewMode === 'list' ? '#FFF' : '#6A0DAD'} />
+                <Text style={[styles.viewModeText, viewMode === 'list' && styles.viewModeTextActive]}>List</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.viewModeButton, viewMode === 'grid' && styles.viewModeButtonActive]}
+                onPress={() => setViewMode('grid')}
+              >
+                <Ionicons name="grid" size={20} color={viewMode === 'grid' ? '#FFF' : '#6A0DAD'} />
+                <Text style={[styles.viewModeText, viewMode === 'grid' && styles.viewModeTextActive]}>Grid</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.viewModeButton, viewMode === 'moodboard' && styles.viewModeButtonActive]}
+                onPress={() => setViewMode('moodboard')}
+              >
+                <MaterialCommunityIcons name="view-dashboard" size={20} color={viewMode === 'moodboard' ? '#FFF' : '#6A0DAD'} />
+                <Text style={[styles.viewModeText, viewMode === 'moodboard' && styles.viewModeTextActive]}>Board</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.viewModeButton, comparisonMode && styles.viewModeButtonActive]}
+                onPress={() => setComparisonMode(!comparisonMode)}
+              >
+                <MaterialCommunityIcons name="compare" size={20} color={comparisonMode ? '#FFF' : '#6A0DAD'} />
+                <Text style={[styles.viewModeText, comparisonMode && styles.viewModeTextActive]}>Compare</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity onPress={() => setShowViewModeHelp(true)} style={styles.viewModeHelpButton}>
+              <Ionicons name="help-circle" size={20} color="#6A0DAD" />
             </TouchableOpacity>
           </View>
-          
-          {/* View Mode Switcher */}
-          <View style={styles.viewModeSwitcher}>
-            <TouchableOpacity 
-              style={[styles.viewModeButton, viewMode === 'list' && styles.viewModeButtonActive]}
-              onPress={() => setViewMode('list')}
-            >
-              <Ionicons name="list" size={20} color={viewMode === 'list' ? '#FFF' : '#FF6B6B'} />
-              <Text style={[styles.viewModeText, viewMode === 'list' && styles.viewModeTextActive]}>List</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.viewModeButton, viewMode === 'grid' && styles.viewModeButtonActive]}
-              onPress={() => setViewMode('grid')}
-            >
-              <Ionicons name="grid" size={20} color={viewMode === 'grid' ? '#FFF' : '#FF6B6B'} />
-              <Text style={[styles.viewModeText, viewMode === 'grid' && styles.viewModeTextActive]}>Grid</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.viewModeButton, viewMode === 'moodboard' && styles.viewModeButtonActive]}
-              onPress={() => setViewMode('moodboard')}
-            >
-              <MaterialCommunityIcons name="view-dashboard" size={20} color={viewMode === 'moodboard' ? '#FFF' : '#FF6B6B'} />
-              <Text style={[styles.viewModeText, viewMode === 'moodboard' && styles.viewModeTextActive]}>Board</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.viewModeButton, comparisonMode && styles.viewModeButtonActive]}
-              onPress={() => setComparisonMode(!comparisonMode)}
-            >
-              <MaterialCommunityIcons name="compare" size={20} color={comparisonMode ? '#FFF' : '#FF6B6B'} />
-              <Text style={[styles.viewModeText, comparisonMode && styles.viewModeTextActive]}>Compare</Text>
-            </TouchableOpacity>
-          </View>
+          )}
         </>
       )}
       
@@ -372,55 +435,139 @@ export default function WishlistScreen() {
     </View>
   );
 
-  const renderGridItem = ({ item }: { item: AuctionItem }) => (
-    <TouchableOpacity 
-      style={styles.gridItem}
-      onPress={() => handleItemPress(item.id)}
-      activeOpacity={0.95}
-    >
-      <View style={styles.gridImageContainer}>
+  const renderGridItem = ({ item }: { item: AuctionItem }) => {
+    const isEnded = item.timeLeft === 'Ended';
+
+    return (
+      <TouchableOpacity
+        style={styles.gridItem}
+        onPress={() => handleItemPress(item.id)}
+        activeOpacity={0.95}
+      >
+        <View style={styles.gridCard}>
+          <View style={styles.gridImageContainer}>
+            <RNImage
+              source={{ uri: item.photo_url }}
+              style={styles.gridImage}
+              resizeMode="cover"
+            />
+
+            {/* Gradient Overlay */}
+            <LinearGradient
+              colors={['transparent', 'rgba(0,0,0,0.3)']}
+              style={styles.gridGradient}
+            />
+
+            {/* Action Buttons */}
+            <View style={styles.gridActions}>
+              <TouchableOpacity
+                style={styles.gridActionButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleDeleteItem(item.id);
+                }}
+              >
+                <Ionicons name="trash-outline" size={18} color="#FF4757" />
+              </TouchableOpacity>
+
+              {item.timeLeft && item.timeLeft !== 'Ended' && (
+                <TouchableOpacity
+                  style={styles.gridActionButton}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleSetReminder(item);
+                  }}
+                >
+                  <Ionicons name="notifications-outline" size={18} color="#4A90E2" />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          <View style={styles.gridContent}>
+            <Text style={styles.gridTitle} numberOfLines={2}>{item.name}</Text>
+
+            <View style={styles.gridPriceRow}>
+              <Text style={styles.gridPrice}>${item.price?.toLocaleString()}</Text>
+            </View>
+
+            {item.timeLeft && (
+              <View style={[styles.gridTimeRow, isEnded && styles.gridTimeRowEnded]}>
+                <Ionicons name="time-outline" size={12} color={isEnded ? '#999' : '#6A0DAD'} />
+                <Text style={[styles.gridTimeText, isEnded && styles.gridTimeTextEnded]}>
+                  {item.timeLeft}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderMoodboardItem = ({ item }: { item: AuctionItem }) => {
+    const isEnded = item.timeLeft === 'Ended';
+    const randomHeight = Math.floor(Math.random() * 100) + 200; // Random height between 200-300
+
+    return (
+      <TouchableOpacity
+        style={[styles.moodboardItem, { height: randomHeight }]}
+        onPress={() => handleItemPress(item.id)}
+        activeOpacity={0.95}
+      >
         <RNImage
           source={{ uri: item.photo_url }}
-          style={styles.gridImage}
+          style={styles.moodboardImage}
           resizeMode="cover"
         />
+
+        {/* Gradient Overlay */}
         <LinearGradient
           colors={['transparent', 'rgba(0,0,0,0.7)']}
-          style={styles.gridGradient}
+          style={styles.moodboardGradient}
         />
-        <View style={styles.gridPriceTag}>
-          <Text style={styles.gridPriceText}>${item.price?.toLocaleString()}</Text>
-        </View>
-      </View>
-      <View style={styles.gridInfo}>
-        <Text style={styles.gridTitle} numberOfLines={2}>{item.name}</Text>
-        {item.timeLeft && (
-          <View style={styles.gridTimeContainer}>
-            <Ionicons name="time-outline" size={14} color={item.timeLeft === 'Ended' ? '#999' : '#FF6B6B'} />
-            <Text style={styles.gridTimeText}>{item.timeLeft}</Text>
-          </View>
-        )}
-      </View>
-    </TouchableOpacity>
-  );
 
-  const renderMoodboardItem = ({ item }: { item: AuctionItem }) => (
-    <TouchableOpacity 
-      style={styles.moodboardItem}
-      onPress={() => handleItemPress(item.id)}
-      activeOpacity={0.95}
-    >
-      <RNImage
-        source={{ uri: item.photo_url }}
-        style={styles.moodboardImage}
-        resizeMode="cover"
-      />
-      <View style={styles.moodboardOverlay}>
-        <Text style={styles.moodboardTitle} numberOfLines={2}>{item.name}</Text>
-        <Text style={styles.moodboardPrice}>${item.price?.toLocaleString()}</Text>
-      </View>
-    </TouchableOpacity>
-  );
+        {/* Content Overlay */}
+        <View style={styles.moodboardOverlay}>
+          <Text style={styles.moodboardTitle} numberOfLines={2}>{item.name}</Text>
+          <View style={styles.moodboardBottom}>
+            <Text style={styles.moodboardPrice}>${item.price?.toLocaleString()}</Text>
+            {item.timeLeft && (
+              <View style={styles.moodboardTimeTag}>
+                <Ionicons name="time-outline" size={10} color="#FFF" />
+                <Text style={styles.moodboardTimeText}>{item.timeLeft}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Action Buttons */}
+        <View style={styles.moodboardActions}>
+          <TouchableOpacity
+            style={styles.moodboardActionButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleDeleteItem(item.id);
+            }}
+          >
+            <Ionicons name="trash-outline" size={16} color="#FFF" />
+          </TouchableOpacity>
+
+          {item.timeLeft && item.timeLeft !== 'Ended' && (
+            <TouchableOpacity
+              style={styles.moodboardActionButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleSetReminder(item);
+              }}
+            >
+              <Ionicons name="notifications-outline" size={16} color="#FFF" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -428,7 +575,7 @@ export default function WishlistScreen() {
       {renderHeader()}
       {isLoading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#FF6B6B" />
+          <ActivityIndicator size="large" color="#6A0DAD" />
           <Text style={styles.loadingText}>Loading your wishlist...</Text>
         </View>
       ) : viewMode === 'grid' ? (
@@ -491,7 +638,7 @@ export default function WishlistScreen() {
                   activeOpacity={0.7}
                 >
                   <LinearGradient
-                    colors={['#FF4757', '#FF6B6B']}
+                    colors={['#FF4757', '#6A0DAD']}
                     style={styles.deleteGradient}
                   >
                     <Ionicons name="trash-outline" size={20} color="#FFF" />
@@ -530,11 +677,13 @@ export default function WishlistScreen() {
             <Text style={styles.modalSubtitle}>
               {selectedItem?.name}
             </Text>
-            
+
             <Text style={styles.modalDescription}>
-              Get notified before this auction ends
+              {selectedReminders.length > 0
+                ? `${selectedReminders.length} reminder${selectedReminders.length !== 1 ? 's' : ''} selected`
+                : 'Get notified before this auction ends'}
             </Text>
-            
+
             <View style={styles.reminderOptions}>
               {[
                 { minutes: 60, label: '1 Hour Before', icon: 'time-outline' },
@@ -585,6 +734,153 @@ export default function WishlistScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* View Mode Help Modal */}
+      <Modal
+        visible={showViewModeHelp}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowViewModeHelp(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>👁️ View Modes</Text>
+              <TouchableOpacity onPress={() => setShowViewModeHelp(false)}>
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSectionTitle}>List View</Text>
+                <Text style={styles.modalDescription}>
+                  See all details at a glance - perfect for reviewing prices, bids, and time remaining in a detailed format.
+                </Text>
+              </View>
+
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSectionTitle}>Grid View</Text>
+                <Text style={styles.modalDescription}>
+                  Browse visually with beautiful card layouts - great for seeing more items at once.
+                </Text>
+              </View>
+
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSectionTitle}>Board View</Text>
+                <Text style={styles.modalDescription}>
+                  Moodboard-style masonry layout - perfect for visual browsing and getting inspired by your collection.
+                </Text>
+              </View>
+
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSectionTitle}>Compare Mode</Text>
+                <Text style={styles.modalDescription}>
+                  Select multiple items to compare them side by side - useful for deciding between similar pieces.
+                </Text>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Sort Help Modal */}
+      <Modal
+        visible={showSortHelp}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSortHelp(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>🔄 Sort Options</Text>
+              <TouchableOpacity onPress={() => setShowSortHelp(false)}>
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSectionTitle}>Recent</Text>
+                <Text style={styles.modalDescription}>
+                  Shows items in the order you added them, with most recent first.
+                </Text>
+              </View>
+
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSectionTitle}>Price: Low to High</Text>
+                <Text style={styles.modalDescription}>
+                  Find the best deals! Shows lowest-priced items at the top.
+                </Text>
+              </View>
+
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSectionTitle}>Price: High to Low</Text>
+                <Text style={styles.modalDescription}>
+                  Browse premium items first - highest prices shown at the top.
+                </Text>
+              </View>
+
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSectionTitle}>Ending Soon</Text>
+                <Text style={styles.modalDescription}>
+                  Don&#39;t miss out! Items ending soonest appear first so you can bid before it&#39;s too late.
+                </Text>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Filter Help Modal */}
+      <Modal
+        visible={showFilterHelp}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowFilterHelp(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>🔍 Filter Options</Text>
+              <TouchableOpacity onPress={() => setShowFilterHelp(false)}>
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSectionTitle}>All Items</Text>
+                <Text style={styles.modalDescription}>
+                  Shows everything in your wishlist, including active and ended auctions.
+                </Text>
+              </View>
+
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSectionTitle}>Active Auctions</Text>
+                <Text style={styles.modalDescription}>
+                  Only shows items that are still accepting bids - great for focusing on current opportunities.
+                </Text>
+              </View>
+
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSectionTitle}>Ending Soon (24h)</Text>
+                <Text style={styles.modalDescription}>
+                  Items ending within the next 24 hours - perfect for last-minute bidding.
+                </Text>
+              </View>
+
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSectionTitle}>Ended Auctions</Text>
+                <Text style={styles.modalDescription}>
+                  Shows completed auctions so you can see what you missed or track past items.
+                </Text>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -603,7 +899,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   headerGradient: {
-    paddingTop: 16,
+    paddingTop: 48,
     paddingBottom: 20,
     paddingHorizontal: 20,
   },
@@ -662,7 +958,7 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     position: 'absolute',
-    top: 8,
+    bottom: 8,
     right: 8,
     borderRadius: 20,
     overflow: 'hidden',
@@ -693,18 +989,21 @@ const styles = StyleSheet.create({
     padding: 32,
   },
   emptyIconContainer: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: 'rgba(106, 13, 173, 0.08)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
   },
+  goatEmoji: {
+    fontSize: 80,
+  },
   emptyTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '700',
-    color: '#333',
+    color: '#6A0DAD',
     marginBottom: 12,
     textAlign: 'center',
   },
@@ -714,13 +1013,37 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 32,
     lineHeight: 24,
-    maxWidth: width * 0.7,
+    maxWidth: width * 0.8,
+  },
+  benefitsContainer: {
+    width: '100%',
+    marginBottom: 32,
+    gap: 16,
+  },
+  benefitItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    paddingHorizontal: 20,
+  },
+  benefitIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(106, 13, 173, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  benefitText: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#555',
   },
   exploreButton: {
-    marginTop: 20,
     borderRadius: 30,
     overflow: 'hidden',
-    shadowColor: '#FF6B6B',
+    shadowColor: '#6A0DAD',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -767,17 +1090,92 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F0F0F0',
   },
   valueTextAboveFilters: {
-    color: '#FF6B6B',
+    color: '#6A0DAD',
     fontSize: 16,
     fontWeight: '700',
   },
-  filterBar: {
+  floatingControlButton: {
+    position: 'absolute',
+    top: 120,
+    right: 16,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#6A0DAD',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    zIndex: 100,
+  },
+  expandedControlPanel: {
+    position: 'absolute',
+    top: 80,
+    right: 16,
+    left: 16,
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 10,
+    zIndex: 100,
+  },
+  controlPanelHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  controlPanelTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1A1A1A',
+  },
+  controlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  controlLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+  },
+  controlButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#6A0DAD',
+  },
+  controlButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  filterBar: {
+    flexDirection: 'column',
     padding: 12,
     backgroundColor: '#FFF',
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
-    gap: 12,
+    gap: 8,
+  },
+  filterBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   filterButton: {
     flex: 1,
@@ -789,7 +1187,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
     borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: '#FF6B6B',
+    borderColor: '#6A0DAD',
   },
   filterButtonText: {
     flex: 1,
@@ -803,14 +1201,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     paddingVertical: 10,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     backgroundColor: '#FFF',
     borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: '#FF6B6B',
+    borderColor: '#6A0DAD',
+    overflow: 'visible',
   },
   sortButtonText: {
-    flex: 1,
     fontSize: 14,
     fontWeight: '600',
     color: '#333',
@@ -833,8 +1231,8 @@ const styles = StyleSheet.create({
     borderColor: '#E0E0E0',
   },
   filterChipActive: {
-    backgroundColor: '#FF6B6B',
-    borderColor: '#FF6B6B',
+    backgroundColor: '#6A0DAD',
+    borderColor: '#6A0DAD',
   },
   filterChipText: {
     fontSize: 13,
@@ -846,7 +1244,7 @@ const styles = StyleSheet.create({
   },
   reminderButton: {
     position: 'absolute',
-    top: 8,
+    bottom: 8,
     right: 58,
     borderRadius: 20,
     overflow: 'hidden',
@@ -894,11 +1292,7 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 8,
   },
-  modalDescription: {
-    fontSize: 14,
-    color: '#999',
-    marginBottom: 24,
-  },
+
   reminderOptions: {
     gap: 12,
     marginBottom: 24,
@@ -944,12 +1338,18 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
   },
-  viewModeSwitcher: {
+  viewModeContainer: {
     flexDirection: 'row',
+    alignItems: 'center',
     padding: 12,
     backgroundColor: '#FFF',
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
+    justifyContent: 'space-between',
+  },
+  viewModeSwitcher: {
+    flexDirection: 'row',
+    flex: 1,
     gap: 8,
   },
   viewModeButton: {
@@ -959,20 +1359,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     backgroundColor: '#FFF',
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#FF6B6B',
+    borderColor: '#6A0DAD',
   },
   viewModeButtonActive: {
-    backgroundColor: '#FF6B6B',
-    borderColor: '#FF6B6B',
+    backgroundColor: '#6A0DAD',
+    borderColor: '#6A0DAD',
   },
   viewModeText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
-    color: '#FF6B6B',
+    color: '#6A0DAD',
+    flexShrink: 0,
   },
   viewModeTextActive: {
     color: '#FFF',
@@ -986,20 +1387,23 @@ const styles = StyleSheet.create({
   },
   gridItem: {
     flex: 1,
+    marginBottom: 12,
+  },
+  gridCard: {
     backgroundColor: '#FFF',
     borderRadius: 16,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-    marginBottom: 12,
+    shadowRadius: 12,
+    elevation: 5,
   },
   gridImageContainer: {
     position: 'relative',
     width: '100%',
-    height: (width - 48) / 2,
+    height: (width - 48) / 2 * 1.25,
+    backgroundColor: '#F0F0F0',
   },
   gridImage: {
     width: '100%',
@@ -1010,39 +1414,59 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 80,
+    height: 60,
   },
-  gridPriceTag: {
+  gridActions: {
     position: 'absolute',
-    bottom: 8,
-    left: 8,
-    backgroundColor: 'rgba(255, 107, 107, 0.95)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    bottom: 10,
+    right: 10,
+    flexDirection: 'row',
+    gap: 8,
   },
-  gridPriceText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '700',
+  gridActionButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  gridInfo: {
-    padding: 12,
-  },
+
   gridTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#333',
+    color: '#2d3748',
+    marginBottom: 6,
+    lineHeight: 20,
+  },
+  gridPriceRow: {
     marginBottom: 6,
   },
-  gridTimeContainer: {
+  gridPrice: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#6A0DAD',
+  },
+  gridTimeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
+  gridTimeRowEnded: {
+    opacity: 0.6,
+  },
   gridTimeText: {
-    fontSize: 12,
-    color: '#666',
+    fontSize: 11,
+    color: '#6A0DAD',
+    fontWeight: '500',
+  },
+  gridTimeTextEnded: {
+    color: '#999',
   },
   moodboardContent: {
     padding: 8,
@@ -1053,8 +1477,7 @@ const styles = StyleSheet.create({
   },
   moodboardItem: {
     flex: 1,
-    aspectRatio: 0.75,
-    borderRadius: 12,
+    borderRadius: 16,
     overflow: 'hidden',
     marginBottom: 8,
     shadowColor: '#000',
@@ -1062,28 +1485,97 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 4,
+    position: 'relative',
   },
   moodboardImage: {
     width: '100%',
     height: '100%',
+  },
+  moodboardGradient: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '50%',
   },
   moodboardOverlay: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     padding: 12,
   },
   moodboardTitle: {
     color: '#FFF',
     fontSize: 13,
     fontWeight: '600',
-    marginBottom: 4,
+    marginBottom: 6,
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  moodboardBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   moodboardPrice: {
     color: '#FFF',
     fontSize: 16,
     fontWeight: '700',
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  moodboardTimeTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(106, 13, 173, 0.9)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  moodboardTimeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  moodboardActions: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  moodboardActionButton: {
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewModeHelpButton: {
+    padding: 8,
+  },
+  modalScrollView: {
+    padding: 20,
+  },
+  modalSection: {
+    marginBottom: 20,
+  },
+  modalSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#2d3748',
+    marginBottom: 8,
+  },
+  modalDescription: {
+    fontSize: 14,
+    color: '#4a5568',
+    lineHeight: 20,
   },
 });
+
+

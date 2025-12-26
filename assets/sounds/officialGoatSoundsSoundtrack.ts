@@ -31,11 +31,33 @@ export const goatSounds: GoatSound[] = [
 
 export async function playGoatSoundByIndex(index: number) {
   try {
-    const { sound } = await Audio.Sound.createAsync(goatSounds[index].file);
-    await sound.playAsync();
-    await sound.unloadAsync();
+    // Set audio mode for better compatibility
+    await Audio.setAudioModeAsync({
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: false,
+      shouldDuckAndroid: true,
+    });
+    
+    const { sound } = await Audio.Sound.createAsync(
+      goatSounds[index].file,
+      { shouldPlay: true },
+      null,
+      true
+    );
+    
+    // Auto-cleanup after 3 seconds
+    setTimeout(async () => {
+      try {
+        await sound.unloadAsync();
+      } catch (e) {
+        // Silently handle
+      }
+    }, 3000);
   } catch (error) {
-    console.warn(`Failed to play goat sound at index ${index}:`, error);
+    // Silently fail - audio is non-critical
+    if (__DEV__) {
+      console.log(`🐐 Audio playback skipped for index ${index}`);
+    }
   }
 }
 
@@ -46,11 +68,34 @@ export async function playGoatSoundByName(name: string) {
     return;
   }
   try {
-    const { sound } = await Audio.Sound.createAsync(soundObj.file);
-    await sound.playAsync();
-    await sound.unloadAsync();
+    // Set audio mode for better compatibility
+    await Audio.setAudioModeAsync({
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: false,
+      shouldDuckAndroid: true,
+    });
+    
+    const { sound } = await Audio.Sound.createAsync(
+      soundObj.file,
+      { shouldPlay: true },
+      null,
+      true // Download first (helps with certain formats)
+    );
+    
+    // Wait for sound to finish or timeout after 3 seconds
+    setTimeout(async () => {
+      try {
+        await sound.unloadAsync();
+      } catch (e) {
+        // Silently handle unload errors
+      }
+    }, 3000);
   } catch (error) {
-    console.warn(`Failed to play goat sound "${name}":`, error);
+    // Silently fail - audio is non-critical feature
+    // Only log in development
+    if (__DEV__) {
+      console.log(`🐐 Audio playback skipped for "${name}"`);
+    }
   }
 }
 

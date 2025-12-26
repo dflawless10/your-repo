@@ -42,7 +42,7 @@ import GoatGenieBadge from "@/app/GoatGenieBadge";
 import {ListedItem} from "@/types/items";
 
 import { GoatFlip } from '@/components/GoatAnimator/goatFlip';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 
 type ListedItemWithStatus = ListedItem & {
@@ -107,17 +107,14 @@ const JustListedCard = React.memo(
               )}
             </TouchableOpacity>
 
-            {/* Share Button - Bottom Right (where wishlist coin was) */}
-            <TouchableOpacity
-              style={styles.wishlistCoinOverlay}
-              onPress={(e) => {
-                e.stopPropagation();
-                onShare(item);
-              }}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="share-social-outline" size={24} color="#6A0DAD" />
-            </TouchableOpacity>
+            {/* GoatGenieBadge - Wishlist Badge */}
+            <View style={styles.wishlistCoinOverlay}>
+              <GoatGenieBadge
+                onWish={() => {
+                  onWishlistTap(item);
+                }}
+              />
+            </View>
 
             {/* Must Sell Badge - Top Left */}
             {(item.mustSell || item.is_super_deal) && (
@@ -149,6 +146,21 @@ const JustListedCard = React.memo(
               )}
             </View>
 
+            {item.auction_ends_at && (
+              <View style={styles.statsContainer}>
+                <MaterialCommunityIcons name="clock-outline" size={14} color="#666" />
+                <Text
+                  style={[
+                    styles.statsText,
+                    { color: isUrgent ? '#e53e3e' : '#38a169' },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {timeText}
+                </Text>
+              </View>
+            )}
+
             {item.seller && (
               <Text style={styles.productSeller} numberOfLines={1}>
                 by {item.seller.username}
@@ -160,6 +172,8 @@ const JustListedCard = React.memo(
     );
   }
 );
+
+JustListedCard.displayName = 'JustListedCard';
 
 export default function TabTwoScreen() {
   const [justListedItems, setJustListedItems] = useState<ListedItem[]>([]);
@@ -560,7 +574,7 @@ export default function TabTwoScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: '#fff' }}>
       <EnhancedHeader scrollY={scrollY} onSearch={() => {}} />
-      <ParallaxScrollView
+      <ParallaxScrollView scrollY={scrollY}
         headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
         headerImage={<></>}
       >
@@ -588,6 +602,7 @@ export default function TabTwoScreen() {
                 </TouchableOpacity>
               )}
             </View>
+
 
             {/* Filter Category Tabs */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterTabsRow}>
@@ -641,6 +656,7 @@ export default function TabTwoScreen() {
                 <Ionicons name="chevron-down" size={16} color={activeFilterTab === 'price' ? '#FFF' : '#666'} />
               </TouchableOpacity>
             </ScrollView>
+
 
             {/* Expanded Filter Options */}
             {activeFilterTab === 'sort' && (
@@ -762,14 +778,11 @@ export default function TabTwoScreen() {
             </ThemedView>
           )}
 
-          <Collapsible title="List Your Item">
-            <ItemScreen />
 
-                    </Collapsible>
-
-
-          <Collapsible title="Buy It Now">
-            <ThemedText style={styles.sectionSubtitle}>🛒 Shop instantly - no bidding required</ThemedText>
+          {/* Shop Instantly Section */}
+          <ThemedView style={styles.shopInstantlySection}>
+            <ThemedText style={styles.sectionTitle}>⚡ Shop Instantly</ThemedText>
+            <ThemedText style={styles.sectionSubtitle}>Skip the wait - buy your favorites now! 🛍️</ThemedText>
 
             {justListedItems.length > 0 ? (
               <FlatList
@@ -777,7 +790,7 @@ export default function TabTwoScreen() {
                 renderItem={({ item }) => {
                   const displayPrice = (item.highest_bid ?? item.price) ?? 0;
                   const isBid = item.highest_bid && item.highest_bid > item.price;
-                  const placeholder = require('app/components/assets/placeholder.svg.png');
+                  const placeholder = require('../../assets/goat-icon.png');
 
                   return (
                     <TouchableOpacity
@@ -816,19 +829,21 @@ export default function TabTwoScreen() {
                           </View>
                         )}
 
+                        {/* Buy It Now Badge */}
+                        {item.buy_it_now && (
+                          <View style={[styles.buyItNowBadge, (item.mustSell || item.is_super_deal) && { top: 40 }]}>
+                            <Text style={styles.buyItNowText}>BUY NOW</Text>
+                          </View>
+                        )}
+
                         {/* Wishlist Coin - Bottom Right */}
-                        <TouchableOpacity
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            handleWishlistTap(item);
-                          }}
-                          style={styles.wishlistCoinOverlay}
-                        >
-                          <Image
-                            source={require('app/components/assets/wishlist-coin.png')}
-                            style={styles.wishlistCoinImage}
+                        <View style={styles.wishlistCoinOverlay}>
+                          <GoatGenieBadge
+                            onWish={() => {
+                              handleWishlistTap(item);
+                            }}
                           />
-                        </TouchableOpacity>
+                        </View>
                       </View>
 
                       {/* Info Container */}
@@ -873,17 +888,17 @@ export default function TabTwoScreen() {
                 }}
                 keyExtractor={(item) => `buy-it-now-${item.id}`}
                 numColumns={2}
-                contentContainerStyle={styles.gridContainer}
-                columnWrapperStyle={styles.gridColumnWrapper}
+                contentContainerStyle={[styles.gridContainer, { paddingLeft: 1 }]}
+                columnWrapperStyle={[styles.gridColumnWrapper, { gap: 6 }]}
                 scrollEnabled={false}
                 style={{ marginHorizontal: -16 }}
               />
             ) : (
               <ThemedText style={{ textAlign: 'center', marginVertical: 16 }}>
-                No items listed yet.
+                No items available right now.
               </ThemedText>
             )}
-          </Collapsible>
+          </ThemedView>
 
           {/* Category Collections */}
           </View>
@@ -1098,6 +1113,17 @@ modalClose: {
     alignItems: 'center',
     gap: 12,
   },
+  statsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  statsText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 4,
+  },
   bidCount: {
     fontSize: 12,
     color: '#666',
@@ -1272,6 +1298,14 @@ modalClose: {
     fontSize: 18,
   },
   // Category Collections
+  shopInstantlySection: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
   sectionSubtitle: {
     fontSize: 14,
     color: '#666',
@@ -1286,6 +1320,7 @@ modalClose: {
   },
   gridColumnWrapper: {
     gap: COLUMN_GAP,
+    justifyContent: 'flex-start',
   },
   productCard: {
     width: ITEM_WIDTH,

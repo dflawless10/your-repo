@@ -11,6 +11,7 @@ import {
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import GlobalFooter from "@/app/components/GlobalFooter";
 
 const API_URL = 'http://10.0.0.170:5000';
 
@@ -156,7 +157,7 @@ export default function PremiumSellerScreen() {
 
         <View style={styles.savingsBox}>
           <Text style={styles.savingsText}>
-            💰 Save 3% on every sale! On $1,000 in sales, that's $30 saved.
+            💰 Save 3% on every sale! On $1,000 in sales, that&#39;s $30 saved.
           </Text>
         </View>
       </View>
@@ -238,6 +239,7 @@ export default function PremiumSellerScreen() {
       <Text style={styles.footerText}>
         Cancel anytime. No commitments. Start saving on fees today! 🐐
       </Text>
+       <GlobalFooter />
     </ScrollView>
   );
 }

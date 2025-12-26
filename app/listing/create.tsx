@@ -1,17 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View, Text, TextInput, Button, StyleSheet,
-  Alert, ScrollView, Image,  TouchableOpacity, ActivityIndicator
+  Alert, ScrollView, Image,  TouchableOpacity, ActivityIndicator, Animated
 } from 'react-native';
-import Animated from 'react-native-reanimated';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Picker } from "@react-native-picker/picker";
+import { Ionicons } from '@expo/vector-icons';
 import { useGoatBid } from "@/hooks/useGoatBid";
 import { GoatFlip } from "@/components/GoatAnimator/goatFlip";
 import { useRouter } from 'expo-router';
 import { validateContentQuick } from 'app/utils/contentModeration';
+import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
 
 
 const guessMime = (uri: string): string => {
@@ -81,6 +82,7 @@ const onPickResult = (newUri: string) => {
 
 const { goatTrigger, lastBidAmount, triggerGoat } = useGoatBid();
   const router = useRouter();
+  const scrollY = useRef(new Animated.Value(0)).current;
   
   
   
@@ -229,9 +231,28 @@ if (!token) {
 };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <View style={{ flex: 1 }}>
+      <EnhancedHeader scrollY={scrollY} onSearch={() => {}} />
+      
+      {/* Title with Back Arrow */}
+      <View style={styles.headerTitleContainer}>
+        <View style={styles.titleWithArrow}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
+            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Buy It Now Listing</Text>
+        </View>
+      </View>
 
-      <Text style={styles.label}>Select Category</Text>
+      <Animated.ScrollView
+        contentContainerStyle={styles.container}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
+        scrollEventThrottle={16}
+      >
+        <Text style={styles.label}>Select Category</Text>
       <Picker
         selectedValue={category}
         onValueChange={(value) => setCategory(value)}
@@ -347,12 +368,39 @@ if (!token) {
     <Button title="Cancel" color="#999" onPress={() => { setChooseVisible(false); setPendingUri(null); }} />
   </View>
 )}
-    </ScrollView>
+      </Animated.ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 16 },
+  container: { padding: 16, paddingTop: 260 },
+  headerTitleContainer: {
+    position: 'absolute',
+    top: HEADER_MAX_HEIGHT + 70,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: '#FFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+    zIndex: 100,
+    elevation: 10,
+  },
+  titleWithArrow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backArrow: {
+    marginRight: 12,
+    padding: 4,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1A202C',
+  },
   label: { marginBottom: 4, fontWeight: '500' },
   picker: {
     borderWidth: 1,

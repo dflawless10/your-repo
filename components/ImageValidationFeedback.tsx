@@ -7,7 +7,7 @@ type Props = {
   visible?: boolean;
 };
 
-export default function ImageValidationFeedback({ validation, visible = true }: Props) {
+export default function ImageValidationFeedback({ validation, visible = true }: Readonly<Props>) {
   if (!visible) return null;
 
   const { isValid, errors, warnings, checks } = validation;

@@ -13,6 +13,7 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
+import GlobalFooter from "@/app/components/GlobalFooter";
 
 const API_URL = 'http://10.0.0.170:5000';
 
@@ -100,8 +101,19 @@ export default function RevenueScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FF6B35" />
-        <Text style={styles.loadingText}>Loading revenue data...</Text>
+        <EnhancedHeader scrollY={scrollY} />
+        <View style={styles.headerTitleContainer}>
+          <View style={styles.titleWithArrow}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
+              <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+            </TouchableOpacity>
+            <View>
+              <Text style={styles.headerTitleText}>Revenue</Text>
+              <Text style={styles.headerSubtitle}>Track your earnings</Text>
+            </View>
+          </View>
+        </View>
+        <ActivityIndicator size="large" color="#FF6B35" style={{ marginTop: 200 }} />
       </View>
     );
   }
@@ -109,6 +121,18 @@ export default function RevenueScreen() {
   if (!data) {
     return (
       <View style={styles.errorContainer}>
+        <EnhancedHeader scrollY={scrollY} />
+        <View style={styles.headerTitleContainer}>
+          <View style={styles.titleWithArrow}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
+              <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+            </TouchableOpacity>
+            <View>
+              <Text style={styles.headerTitleText}>Revenue</Text>
+              <Text style={styles.headerSubtitle}>Track your earnings</Text>
+            </View>
+          </View>
+        </View>
         <Text style={styles.errorText}>Failed to load revenue data</Text>
         <TouchableOpacity onPress={fetchRevenue} style={styles.retryButton}>
           <Text style={styles.retryButtonText}>Retry</Text>
@@ -124,8 +148,15 @@ export default function RevenueScreen() {
       <EnhancedHeader scrollY={scrollY} />
 
       <View style={styles.headerTitleContainer}>
-        <Text style={styles.headerTitleText}>Revenue Analytics</Text>
-        <Text style={styles.headerSubtitle}>Track your earnings and transactions</Text>
+        <View style={styles.titleWithArrow}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
+            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+          </TouchableOpacity>
+          <View>
+            <Text style={styles.headerTitleText}>Revenue</Text>
+            <Text style={styles.headerSubtitle}>Track your earnings</Text>
+          </View>
+        </View>
       </View>
 
       <Animated.ScrollView
@@ -260,6 +291,7 @@ export default function RevenueScreen() {
         )}
       </View>
       </Animated.ScrollView>
+       <GlobalFooter />
     </View>
   );
 }
@@ -304,15 +336,23 @@ const styles = StyleSheet.create({
   },
   headerTitleContainer: {
     position: 'absolute',
-    top: HEADER_MAX_HEIGHT,
+    top: HEADER_MAX_HEIGHT + 48,
     left: 0,
     right: 0,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 16,
     backgroundColor: '#FFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
-    zIndex: 10,
+    zIndex: 100,
+  },
+  titleWithArrow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backArrow: {
+    marginRight: 12,
+    padding: 4,
   },
   headerTitleText: {
     fontSize: 20,
@@ -325,7 +365,7 @@ const styles = StyleSheet.create({
     color: '#718096',
   },
   scrollContent: {
-    paddingTop: 140,
+    paddingTop: 240,
     paddingBottom: 20,
   },
   summaryContainer: {

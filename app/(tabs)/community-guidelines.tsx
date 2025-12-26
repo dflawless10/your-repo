@@ -1,23 +1,45 @@
 import React from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Linking } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Linking, Animated, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import EnhancedHeader from '../components/EnhancedHeader';
+import {HEADER_MAX_HEIGHT} from "@/components/EnhancedHeader";
+import GlobalFooter from "@/app/components/GlobalFooter";
 
 export default function CommunityGuidelinesScreen() {
   const router = useRouter();
+  const scrollY = new Animated.Value(0);
 
   const handleReportIssue = () => {
     Linking.openURL('mailto:support@bidgoat.com?subject=Community Guidelines Question');
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>🐐 BidGoat's Marketplace Standards</Text>
-        <Text style={styles.subtitle}>
-          We want BidGoat to be a safe, respectful marketplace for jewelry, watches, and diamonds.
-        </Text>
+    <View style={styles.wrapper}>
+      <EnhancedHeader scrollY={scrollY} />
+
+        {/* Title with Back Arrow */}
+      <View style={styles.headerTitleContainer}>
+        <View style={styles.titleWithArrow}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
+            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Community Guidlines</Text>
+
+        </View>
       </View>
+
+
+      <Animated.ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.contentContainer}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
+        scrollEventThrottle={16}
+      >
+
 
       {/* Do Section */}
       <View style={styles.section}>
@@ -42,7 +64,7 @@ export default function CommunityGuidelinesScreen() {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionIcon}>❌</Text>
-          <Text style={styles.sectionTitle}>Don't:</Text>
+          <Text style={styles.sectionTitle}>Don&apos;t:</Text>
         </View>
 
         <View style={styles.guidelinesList}>
@@ -168,7 +190,7 @@ export default function CommunityGuidelinesScreen() {
         </View>
 
         <Text style={styles.bodyText}>
-          You'll get instant feedback while creating your listing, so you can fix issues before submitting.
+          You&apos;ll get instant feedback while creating your listing, so you can fix issues before submitting.
         </Text>
       </View>
 
@@ -184,7 +206,7 @@ export default function CommunityGuidelinesScreen() {
         </Text>
 
         <Text style={styles.bodyText}>
-          On any listing, tap the "Report" button and select the reason. Our team will review within 24 hours.
+          On any listing, tap the &quot;Report&quot; button and select the reason. Our team will review within 24 hours.
         </Text>
 
         <TouchableOpacity style={styles.reportButton} onPress={handleReportIssue}>
@@ -201,7 +223,9 @@ export default function CommunityGuidelinesScreen() {
           Last updated: December 2024
         </Text>
       </View>
-    </ScrollView>
+      <View style={{ height: 40 }} />
+    </Animated.ScrollView>
+    </View>
   );
 }
 
@@ -211,7 +235,7 @@ interface GuidelineItemProps {
   severity?: 'low' | 'medium' | 'high';
 }
 
-function GuidelineItem({ text, severity }: GuidelineItemProps) {
+function GuidelineItem({ text, severity }: Readonly<GuidelineItemProps>) {
   const getSeverityColor = () => {
     if (severity === 'high') return '#DC2626';
     if (severity === 'medium') return '#F59E0B';
@@ -232,7 +256,7 @@ interface ConsequenceItemProps {
   description: string;
 }
 
-function ConsequenceItem({ offense, consequence, description }: ConsequenceItemProps) {
+function ConsequenceItem({ offense, consequence, description }: Readonly<ConsequenceItemProps>) {
   return (
     <View style={styles.consequenceItem}>
       <View style={styles.consequenceHeader}>
@@ -240,17 +264,66 @@ function ConsequenceItem({ offense, consequence, description }: ConsequenceItemP
         <Text style={styles.consequenceText}>{consequence}</Text>
       </View>
       <Text style={styles.consequenceDescription}>{description}</Text>
+       <GlobalFooter />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  wrapper: {
     flex: 1,
     backgroundColor: '#F9FAFB',
   },
+  headerContainer: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 110 : 110,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: '#FFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+    zIndex: 100,
+  },
+  headerTitleContainer: {
+    position: 'absolute',
+    top: HEADER_MAX_HEIGHT + 36,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    backgroundColor: '#FFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+    zIndex: 100,
+  },
+  titleWithArrow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backArrow: {
+    marginRight: 12,
+    padding: 8,
+  },
+
+  backButton: {
+    marginRight: 12,
+    padding: 4,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1A1A1A',
+  },
+  container: {
+    flex: 1,
+  },
   contentContainer: {
-    padding: 20,
+    paddingTop: Platform.OS === 'ios' ? 210 : 210,
+    paddingHorizontal: 20,
     paddingBottom: 40,
   },
   header: {

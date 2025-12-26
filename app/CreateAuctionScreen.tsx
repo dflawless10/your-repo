@@ -10,15 +10,21 @@ import {
   Animated,
   KeyboardAvoidingView,
   Platform,
+  TouchableOpacity,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { Picker } from '@react-native-picker/picker';
+import { Ionicons } from '@expo/vector-icons';
 import ImageUploader from '@/components/ImageUploader';
 import {triggerGoat} from "@/utils/goatFeedback";
 import { CharacterCounterInput, CHARACTER_LIMITS, validateCharacterCount } from 'app/components/CharacterCounterInput';
 import { handleListingSuccess } from 'app/utils/formHelpers';
 import { validateContentQuick } from 'app/utils/contentModeration';
+import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
+import { useImageValidation } from '@/hooks/useImageValidation';
+import ImageValidationFeedback from '@/app/components/ImageValidationFeedback';
+import GlobalFooter from "@/app/components/GlobalFooter";
 
 
 const API_URL = 'http://10.0.0.170:5000';
@@ -41,6 +47,9 @@ const API_URL = 'http://10.0.0.170:5000';
   const [categories, setCategories] = useState<
     { id: number; name: string; emoji: string }[]
   >([]);
+
+  // Image validation for first image
+  const imageValidation = useImageValidation(imageUris.length > 0 ? imageUris[0] : null);
 
   useEffect(() => {
     fetch(`${API_URL}/categories`)
@@ -141,7 +150,7 @@ const API_URL = 'http://10.0.0.170:5000';
         setCategory(null);
         setImageUris([]);
 
-        // Show success message and redirect to item detail
+        // Show a success message and redirect to item detail
         handleListingSuccess(itemId, router, 'auction');
       } else {
         const msg = await res.text();
@@ -154,22 +163,35 @@ const API_URL = 'http://10.0.0.170:5000';
   };
 
   return (
-  <KeyboardAvoidingView
-    style={{ flex: 1 }}
-    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    keyboardVerticalOffset={100}
-  >
-  <ScrollView
-  style={styles.container}
-  contentContainerStyle={{ paddingBottom: 200 }}
-  scrollEventThrottle={16}
-  keyboardShouldPersistTaps="handled"
-  showsVerticalScrollIndicator={true}
-  onScroll={Animated.event(
-    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-    { useNativeDriver: false }
-  )}
->
+  <View style={{ flex: 1 }}>
+    <EnhancedHeader scrollY={scrollY} onSearch={() => {}} />
+    
+    {/* Title with Back Arrow */}
+    <View style={styles.headerTitleContainer}>
+      <View style={styles.titleWithArrow}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
+          <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Create Auction</Text>
+      </View>
+    </View>
+
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={100}
+    >
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={{ paddingTop: 240, paddingBottom: 200 }}
+        scrollEventThrottle={16}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={true}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
+      >
         <Text style={styles.label}>Select Category</Text>
 
         <Picker
@@ -184,6 +206,7 @@ const API_URL = 'http://10.0.0.170:5000';
 
         <ImageUploader
           maxImages={5}
+          imageUris={imageUris}
           onImagesChange={(uris) => {
             setImageUris(uris);
             if (uris.length > 0) {
@@ -193,6 +216,11 @@ const API_URL = 'http://10.0.0.170:5000';
           title="Upload Auction Photos"
           subtitle="Add up to 5 photos"
         />
+
+        {/* Image Validation Feedback */}
+        {imageUris.length > 0 && (
+          <ImageValidationFeedback validation={imageValidation} />
+        )}
 
         <Text style={styles.sectionTitle}>🎯 Auction Details</Text>
 
@@ -245,6 +273,8 @@ const API_URL = 'http://10.0.0.170:5000';
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+     <GlobalFooter />
+  </View>
   );
 }
 
@@ -253,6 +283,31 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 20,
     backgroundColor: '#fff',
+  },
+  headerTitleContainer: {
+    position: 'absolute',
+    top: HEADER_MAX_HEIGHT + 48,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: '#FFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+    zIndex: 100,
+  },
+  titleWithArrow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backArrow: {
+    marginRight: 12,
+    padding: 4,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1A202C',
   },
   label: {
     marginBottom: 4,

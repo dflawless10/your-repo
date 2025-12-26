@@ -9,12 +9,14 @@ import {
   RefreshControl,
   Linking,
   Animated,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import EnhancedHeader from '@/app/components/EnhancedHeader';
+import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
+import GlobalFooter from "@/app/components/GlobalFooter";
 
 const API_URL = 'http://10.0.0.170:5000';
 
@@ -28,6 +30,7 @@ type Order = {
   insurance_cost: number;
   total_amount: number;
   seller: {
+    id: number;
     name: string;
     email: string;
   };
@@ -165,6 +168,7 @@ export default function BuyerOrdersScreen() {
       <EnhancedHeader scrollY={scrollY} username={username} onSearch={() => {}} />
       <Animated.ScrollView
         style={styles.container}
+        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20 }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
@@ -174,8 +178,14 @@ export default function BuyerOrdersScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Page Title */}
+        {/* Page Title with Back Button */}
         <View style={styles.pageHeader}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backButton}
+          >
+            <Ionicons name="arrow-back" size={24} color="#1a1a1a" />
+          </TouchableOpacity>
           <Text style={styles.pageTitle}>My Orders</Text>
         </View>
 
@@ -265,7 +275,22 @@ export default function BuyerOrdersScreen() {
 
               {/* Order Actions */}
               {order.status === 'delivered' && (
-                <TouchableOpacity style={styles.reviewButton}>
+                <TouchableOpacity 
+                  style={styles.reviewButton}
+                  onPress={() => {
+                    console.log('🐐 Review button pressed:', {
+                      sellerId: order.seller.id,
+                      itemId: order.item_id,
+                      orderId: order.id,
+                      sellerData: order.seller
+                    });
+                    if (!order.seller.id) {
+                      Alert.alert('Error', 'Seller ID is missing. Please try refreshing the orders.');
+                      return;
+                    }
+                    router.push(`/seller/${order.seller.id}?itemId=${order.item_id}&orderId=${order.id}`);
+                  }}
+                >
                   <Ionicons name="star-outline" size={18} color="#FF6B35" />
                   <Text style={styles.reviewButtonText}>Leave a Review</Text>
                 </TouchableOpacity>
@@ -275,6 +300,7 @@ export default function BuyerOrdersScreen() {
         </View>
       )}
       </Animated.ScrollView>
+       <GlobalFooter />
     </View>
   );
 }
@@ -296,10 +322,16 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   pageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 40,
     paddingBottom: 8,
     backgroundColor: '#F7FAFC',
+  },
+  backButton: {
+    marginRight: 12,
+    padding: 4,
   },
   pageTitle: {
     fontSize: 20,

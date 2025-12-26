@@ -3,18 +3,22 @@
  * View and manage flagged content
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Alert,
   RefreshControl,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
+import GlobalFooter from "@/app/components/GlobalFooter";
 
 const API_URL = 'http://10.0.0.170:5000';
 
@@ -31,6 +35,7 @@ interface FlaggedItem {
 }
 
 export default function ModerationPanel() {
+  const scrollY = useRef(new Animated.Value(0)).current;
   const [flaggedItems, setFlaggedItems] = useState<FlaggedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -123,14 +128,28 @@ export default function ModerationPanel() {
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>🛡️ Content Moderation</Text>
-        <Text style={styles.headerSubtitle}>Review flagged listings</Text>
-      </View>
+    <View style={{ flex: 1 }}>
+      <EnhancedHeader scrollY={scrollY} onSearch={() => {}} />
+      <Animated.ScrollView
+        style={styles.container}
+        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20 }}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
+        scrollEventThrottle={16}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={loadFlaggedItems} />}
+      >
+        {/* Page Header */}
+        <View style={styles.pageHeader}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.pageTitle}>Content Moderation</Text>
+        </View>
 
-      {/* Filter Buttons */}
-      <View style={styles.filterContainer}>
+        {/* Filter Buttons */}
+        <View style={styles.filterContainer}>
         <TouchableOpacity
           style={[styles.filterButton, filter === 'flagged' && styles.filterButtonActive]}
           onPress={() => setFilter('flagged')}
@@ -157,10 +176,6 @@ export default function ModerationPanel() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      >
         {flaggedItems.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateText}>✅ No items to review</Text>
@@ -223,7 +238,8 @@ export default function ModerationPanel() {
             </View>
           ))
         )}
-      </ScrollView>
+      </Animated.ScrollView>
+       <GlobalFooter />
     </View>
   );
 }
@@ -244,21 +260,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6B7280',
   },
-  header: {
-    backgroundColor: '#FFF',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+  pageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 40,
+    paddingBottom: 8,
+    backgroundColor: '#F9FAFB',
   },
-  headerTitle: {
-    fontSize: 24,
+  backButton: {
+    marginRight: 12,
+    padding: 4,
+  },
+  pageTitle: {
+    fontSize: 20,
     fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: 4,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
+    color: '#1A202C',
   },
   filterContainer: {
     flexDirection: 'row',

@@ -43,6 +43,15 @@ export async function completeUserProfile(payload: {
       return "FAIL";
     }
 
+    const data = await res.json();
+
+    // Save JWT token and username returned from backend
+    if (data.token) {
+      await AsyncStorage.setItem("jwtToken", data.token);
+      await AsyncStorage.setItem("username", data.username);
+      console.log("✅ Token saved after profile completion");
+    }
+
     return "OK";
   } catch (err) {
     console.error("Error completing profile:", err);
@@ -236,16 +245,78 @@ export const registerUser = async (
 
 export const logoutUser = async (): Promise<void> => {
   try {
+    // Clear all user-related data from AsyncStorage
     await AsyncStorage.multiRemove([
       "jwtToken",
       "username",
+      "email",
       "profile",
       "profileCache",
+      "avatar_url",
+      "pushToken",
+      "favoritedItems",
+      "jewelry_box_visited",
+      "cart",
+      "wishlist",
     ]);
-    router.replace("/");
+
+    console.log('🐐 Logout: All user data cleared from AsyncStorage');
+
+    // Navigate to sign-in screen
+    router.replace("/sign-in");
+
+    console.log('🐐 Logout: Navigated to sign-in screen');
   } catch (error) {
-    console.error("Logout error:", error);
+    console.error("❌ Logout error:", error);
     throw error;
+  }
+};
+
+export interface UpdateProfilePayload {
+  username?: string;
+  firstname?: string;
+  lastname?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  country?: string;
+  password?: string;
+}
+
+export const updateUserProfile = async (
+  payload: UpdateProfilePayload
+): Promise<User | null> => {
+  try {
+    const token = await AsyncStorage.getItem("jwtToken");
+    if (!token) throw new Error("No token found");
+
+    const result = await makeApiRequest("/api/update-profile", {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!result) return null;
+
+    const { response, data } = result;
+
+    if (response.ok && data.user) {
+      // Update cached username if it changed
+      if (payload.username) {
+        await AsyncStorage.setItem("username", payload.username);
+      }
+
+      return data.user;
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Update profile error:", error);
+    return null;
   }
 };
 

@@ -8,16 +8,16 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Provider } from 'react-redux';
 import store from '@/utils/filestore';
 import { useAppSelector } from '@/hooks/reduxHooks';
-
+import {addToWishlist} from "@/app/wishlistslice";
 import HomeScreen from '@/app/(tabs)';
 import DiscoverScreen from '../discover';
 import ExploreScreen from '@/app/(tabs)/explore';
-import Wishlist from 'app/wishlist';
+import Wishlist from '../wishlist';
 import FavoritesScreen from '../favorites';
 import MyAuctionsScreen from '../MyAuctionScreen';
 import ProfileScreen from '../profile';
 import  EnhancedHeader  from 'app/components/EnhancedHeader';
-import wishlistIcon from 'app/components/assets/wishlist-coin.png';
+import wishlistIcon from '../../../assets/goat-stamp-coin.png';
 
 const Tab = createBottomTabNavigator();
 

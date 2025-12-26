@@ -107,7 +107,24 @@ export const HybridAuctionCard: React.FC<Props> = ({
     legendary: '#ffd700',
   };
 
-  const timeColor = item.rarity ? rarityColorMap[item.rarity] : '#666';
+  // Dynamic time coloring based on urgency
+  const getTimeColor = (): string => {
+    if (!auctionEnds) return item.rarity ? rarityColorMap[item.rarity] : '#666';
+
+    const now = Date.now();
+    const end = new Date(auctionEnds).getTime();
+    const diffHours = (end - now) / (1000 * 60 * 60);
+
+    if (diffHours <= 2) {
+      return '#E53E3E'; // Bright red if ≤2h
+    } else if (diffHours <= 24) {
+      return '#c53030'; // Red if ≤24h
+    }
+    // Use rarity color for non-urgent items
+    return item.rarity ? rarityColorMap[item.rarity] : '#666';
+  };
+
+  const timeColor = getTimeColor();
 
   // Time remaining
   const timeLeft = auctionEnds

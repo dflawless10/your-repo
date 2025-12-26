@@ -26,7 +26,7 @@ type Props = {
 
 const SuperDealCard: React.FC<Props> = ({ item, favoritedItems, toggleFavorite, handleWishlistTap }) => {
   const router = useRouter();
-  const placeholder = require('app/components/assets/placeholder.svg.png');
+  const placeholder = require('../../assets/goat-icon.png');
 
   // robust id resolution
   const itemId = Number(item.id ?? item.item_id ?? 0);
@@ -64,7 +64,7 @@ const SuperDealCard: React.FC<Props> = ({ item, favoritedItems, toggleFavorite, 
         accessibilityLabel="Toggle favorite"
         activeOpacity={0.8}
       >
-        {favoritedItems[itemId] ? <TappedHeart width={26} height={26} /> : <UnTappedHeart width={26} height={26} />}
+        {favoritedItems[itemId] ? <TappedHeart width={24} height={24} /> : <UnTappedHeart width={24} height={24} />}
       </TouchableOpacity>
 
       <TouchableOpacity activeOpacity={0.9} onPress={() => router.push(`/item/${itemId}`)}>
@@ -89,7 +89,7 @@ const SuperDealCard: React.FC<Props> = ({ item, favoritedItems, toggleFavorite, 
       <View style={styles.wishlistRow}>
         <TouchableOpacity onPress={() => handleWishlistTap(item)}>
           <Image
-            source={require('app/components/assets/wishlist-coin.png')}
+            source={require('../../assets/goat-stamp-coin.png')}
             style={styles.wishlistIcon}
           />
         </TouchableOpacity>

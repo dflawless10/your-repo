@@ -7,7 +7,9 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from 'expo-router';
 import {playGoatSoundByName} from "@/assets/sounds/officialGoatSoundsSoundtrack";
-import EnhancedHeader from '@/app/components/EnhancedHeader';
+import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
+import { Ionicons } from '@expo/vector-icons';
+import GlobalFooter from "@/app/components/GlobalFooter";
 
 
 
@@ -18,6 +20,9 @@ type SellerItem = {
   price: number;
   photo_url: string;
   bid_count: number;
+  auction_ends_at?: string;
+  end_date?: string;
+  selling_strategy?: string;
 };
 
 const API_URL = 'http://10.0.0.170:5000';
@@ -69,32 +74,68 @@ useEffect(() => {
   };
 
   const handleDelete = async (itemId: number) => {
-  const token = await AsyncStorage.getItem('jwtToken');
+  // Find the item to check if it has bids
+  const item = items.find(i => i.id === itemId);
+  if (!item) return;
 
-  try {
-    const res = await fetch(`${API_URL}/item/${itemId}`, {
-      method: 'DELETE',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    if (res.ok) {
-      playGoatSoundByName('Bleat'); // 🐐✨ Bleat to delete!
-      Alert.alert('Deleted!', 'Item removed from your vault.');
-      setItems((prevItems) => prevItems.filter((item) => item.id !== itemId));
-    } else {
-      const message = await res.text();
-      Alert.alert('Error', message);
-    }
-  } catch (error) {
-    console.error('Delete error:', error);
-    Alert.alert('Error', 'Could not delete item.');
+  // SIMPLE RULE: Can only delete if no bids
+  if (item.bid_count > 0) {
+    Alert.alert(
+      '🚫 Cannot Remove Item',
+      `This item has ${item.bid_count} bid${item.bid_count > 1 ? 's' : ''}.\n\nOnce bidders have placed bids, items cannot be removed. This protects bidders who have made a commitment to purchase.`,
+      [{ text: 'OK', style: 'cancel' }]
+    );
+    return;
   }
+
+  // No bids = can delete at any time (even during review or active period)
+  Alert.alert(
+    'Remove Item?',
+    'Are you sure you want to remove this listing?',
+    [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          const token = await AsyncStorage.getItem('jwtToken');
+          try {
+            const res = await fetch(`${API_URL}/item/${itemId}`, {
+              method: 'DELETE',
+              headers: { Authorization: `Bearer ${token}` },
+            });
+
+            if (res.ok) {
+              playGoatSoundByName('Bleat'); // 🐐✨ Bleat to delete!
+              Alert.alert('Deleted!', 'Item removed from your vault.');
+              setItems((prevItems) => prevItems.filter((item) => item.id !== itemId));
+            } else {
+              const message = await res.text();
+              Alert.alert('Error', message);
+            }
+          } catch (error) {
+            console.error('Delete error:', error);
+            Alert.alert('Error', 'Could not delete item.');
+          }
+        },
+      },
+    ]
+  );
 };
 
 
-  if (loading) return <ActivityIndicator style={{ marginTop: 20 }} />;
+  if (loading) {
+    return (
+      <View style={{ flex: 1 }}>
+        <EnhancedHeader scrollY={scrollY} />
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.headerTitle}>Seller Dashboard</Text>
+        </View>
+        <ActivityIndicator size="large" color="#6A0DAD" style={{ marginTop: 20 }} />
+      </View>
+    );
+  }
+
   return (
     <View style={{ flex: 1 }}>
       <EnhancedHeader
@@ -104,23 +145,27 @@ useEffect(() => {
   onSearch={q => console.log('search', q)}
 />
 
-      {/* Page Title */}
-      <View style={styles.pageHeader}>
-        <Text style={styles.pageTitle}>Seller Dashboard</Text>
-        <View style={styles.headerButtons}>
+      {/* Title with Back Arrow */}
+      <View style={styles.headerTitleContainer}>
+        <View style={styles.titleWithArrow}>
           <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => router.push('/seller/orders' as any)}
+            onPress={() => router.back()}
+            style={styles.backArrow}
           >
-            <Text style={styles.headerButtonText}>📦 Orders</Text>
+            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => router.push('/seller/revenue' as any)}
-          >
-            <Text style={styles.headerButtonText}>💰 Revenue</Text>
-          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Seller Dashboard</Text>
         </View>
+      </View>
+
+      {/* Action Buttons */}
+      <View style={styles.actionButtonsContainer}>
+        <TouchableOpacity
+          style={styles.headerButton}
+          onPress={() => router.push('/seller/orders' as any)}
+        >
+          <Text style={styles.headerButtonText}>📦 Orders to Ship</Text>
+        </TouchableOpacity>
       </View>
 
       <Animated.FlatList
@@ -131,7 +176,7 @@ useEffect(() => {
         scrollEventThrottle={16}
         data={items}
         keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={{ paddingTop: 160 }}
+        contentContainerStyle={{ paddingTop: 320 }}
         renderItem={({ item }) => (
         <TouchableOpacity
           style={styles.card}
@@ -179,27 +224,51 @@ useEffect(() => {
         </TouchableOpacity>
       )}
     />
+       <GlobalFooter />
   </View>
+
   );
 }
 
 const styles = StyleSheet.create({
-  pageHeader: {
-    backgroundColor: '#fff',
+  headerTitleContainer: {
+    position: 'absolute',
+    top: HEADER_MAX_HEIGHT + 48,
+    left: 0,
+    right: 0,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 16,
+    backgroundColor: '#FFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: '#E0E0E0',
+    zIndex: 100,
   },
-  pageTitle: {
-    fontSize: 24,
+  titleWithArrow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backArrow: {
+    marginRight: 12,
+    padding: 4,
+  },
+  headerTitle: {
+    fontSize: 20,
     fontWeight: '700',
     color: '#1A202C',
-    marginBottom: 8,
   },
-  headerButtons: {
+  actionButtonsContainer: {
+    position: 'absolute',
+    top: HEADER_MAX_HEIGHT + 130,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
+    backgroundColor: '#FFF',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+    zIndex: 99,
   },
   headerButton: {
     backgroundColor: '#FF6B35',

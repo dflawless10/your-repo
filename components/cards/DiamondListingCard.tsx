@@ -20,6 +20,10 @@ type Props = {
   color: string;
   clarity: string;
   certified: string;
+  certificationLab?: string;
+  certificationNumber?: string;
+  ethicallySourced?: string;
+  rarity?: string;
   price: string;
 };
 
@@ -33,6 +37,10 @@ const DiamondListingCard = ({
   color,
   clarity,
   certified,
+  certificationLab,
+  certificationNumber,
+  ethicallySourced,
+  rarity,
   price,
 }: Props) => {
   const [imageUris, setImageUris] = useState<string[]>([]);
@@ -40,21 +48,35 @@ const DiamondListingCard = ({
   const [coverIndex, setCoverIndex] = useState(0);
 
   const pickImage = async () => {
+    if (imageUris.length >= 5) {
+      Alert.alert('Maximum Images Reached', 'You can upload up to 5 images for your diamond listing.');
+      return;
+    }
+
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      alert('Permission required to access photos');
+      Alert.alert('Permission Required', 'Please allow access to your photos to upload images.');
       return;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
       quality: 1,
     });
 
     if (!result.canceled) {
-      const uris = result.assets.map(asset => asset.uri);
-      setImageUris(uris);
-      console.log('Picked image URIs:', uris);
+      const newUris = result.assets.map(asset => asset.uri);
+      const remainingSlots = 5 - imageUris.length;
+      const urisToAdd = newUris.slice(0, remainingSlots);
+
+      setImageUris(prev => [...prev, ...urisToAdd]);
+      console.log('Added image URIs:', urisToAdd);
+      console.log('Total images now:', imageUris.length + urisToAdd.length);
+
+      if (newUris.length > remainingSlots) {
+        Alert.alert('Limit Reached', `Only ${remainingSlots} image(s) were added. Maximum is 5 images.`);
+      }
     }
   };
 
@@ -62,9 +84,25 @@ const DiamondListingCard = ({
     console.log('Current imageUris state:', imageUris);
   }, [imageUris]);
 
+  const removeImage = (indexToRemove: number) => {
+    setImageUris(prev => prev.filter((_, index) => index !== indexToRemove));
+    // Adjust cover index if needed
+    if (coverIndex === indexToRemove) {
+      setCoverIndex(0);
+    } else if (coverIndex > indexToRemove) {
+      setCoverIndex(coverIndex - 1);
+    }
+  };
+
   const handleListDiamond = () => {
   const primaryImage = imageUris.length > 0 ? imageUris[coverIndex] : imageUrl;
+  const additionalImages = imageUris.filter((_, idx) => idx !== coverIndex);
 
+  console.log('🐐 Total images:', imageUris.length);
+  console.log('🐐 Cover image index:', coverIndex);
+  console.log('🐐 Primary image:', primaryImage);
+  console.log('🐐 Additional images count:', additionalImages.length);
+  console.log('🐐 Additional images:', additionalImages);
 
   router.push({
     pathname: '/diamond-listing',
@@ -74,8 +112,13 @@ const DiamondListingCard = ({
       color,
       clarity,
       certified,
+      certificationLab: certificationLab || '',
+      certificationNumber: certificationNumber || '',
+      ethicallySourced: ethicallySourced || 'No',
+      rarity: rarity || 'rare',
       price,
       imageUrl: primaryImage,
+      additionalImages: JSON.stringify(additionalImages),
     },
   });
 };
@@ -99,27 +142,49 @@ const DiamondListingCard = ({
            {imageUris.map((uri, index) => (
         <View key={index} style={styles.imageWrapper}>
           <Image source={{ uri }} style={styles.image} contentFit="cover" />
-        <TouchableOpacity
-  style={[
-    styles.coverToggle,
-    coverIndex === index && styles.coverToggleActive,
-  ]}
-  onPress={() => {
-    setCoverIndex(index);
-    Alert.alert('Cover Image Set', `Image ${index + 1} is now your cover.`);
-  }}
->
-  <Text style={styles.coverToggleText}>
-    {coverIndex === index ? '✅ Cover Image' : 'Set as Cover'}
-  </Text>
-          <TouchableOpacity style={styles.addMoreButton} onPress={pickImage}>
-  <Text style={styles.addMoreText}>➕ Add More</Text>
-</TouchableOpacity>
 
-</TouchableOpacity>
+          {/* Delete Button */}
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={() => {
+              Alert.alert(
+                'Delete Image',
+                'Are you sure you want to remove this image?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Delete', style: 'destructive', onPress: () => removeImage(index) }
+                ]
+              );
+            }}
+          >
+            <Ionicons name="close-circle" size={24} color="#FF3B30" />
+          </TouchableOpacity>
 
+          {/* Cover Toggle Button */}
+          <TouchableOpacity
+            style={[
+              styles.coverToggle,
+              coverIndex === index && styles.coverToggleActive,
+            ]}
+            onPress={() => {
+              setCoverIndex(index);
+              Alert.alert('Cover Image Set', `Image ${index + 1} is now your cover.`);
+            }}
+          >
+            <Text style={styles.coverToggleText}>
+              {coverIndex === index ? '✅ Cover Image' : 'Set as Cover'}
+            </Text>
+          </TouchableOpacity>
       </View>
      ))}
+
+     {/* Add More Button - Outside the map */}
+     {imageUris.length < 5 && (
+       <TouchableOpacity style={styles.addMoreImageCard} onPress={pickImage}>
+         <Ionicons name="add-circle-outline" size={48} color="#6A0DAD" />
+         <Text style={styles.addMoreCardText}>Add More</Text>
+       </TouchableOpacity>
+     )}
 <TouchableOpacity
   style={styles.fullscreenButton}
   onPress={() =>
@@ -209,23 +274,54 @@ fullscreenText: {
   color: '#2D3748',
 },
 
+  deleteButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#ffffffee',
+    borderRadius: 12,
+    padding: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 3,
+  },
   coverToggle: {
-  position: 'absolute',
-  bottom: 8,
-  left: 8,
-  backgroundColor: '#ffffffcc',
-  paddingVertical: 4,
-  paddingHorizontal: 8,
-  borderRadius: 6,
-},
-coverToggleActive: {
-  backgroundColor: '#0077cc',
-},
-coverToggleText: {
-  fontSize: 12,
-  fontWeight: '600',
-  color: '#2c3e50',
-},
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    backgroundColor: '#ffffffcc',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+  },
+  coverToggleActive: {
+    backgroundColor: '#0077cc',
+  },
+  coverToggleText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#2c3e50',
+  },
+  addMoreImageCard: {
+    width: 220,
+    height: 220,
+    borderRadius: 16,
+    backgroundColor: '#F7FAFC',
+    borderWidth: 2,
+    borderColor: '#6A0DAD',
+    borderStyle: 'dashed',
+    marginRight: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addMoreCardText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6A0DAD',
+    marginTop: 8,
+  },
 
   placeholderText: {
     fontSize: 14,

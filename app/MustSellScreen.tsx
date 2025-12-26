@@ -7,6 +7,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   Animated,
+  Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
@@ -14,7 +16,10 @@ import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
 import ImageUploader from '@/components/ImageUploader';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
-import { validateContentQuick } from 'app/utils/contentModeration';
+import { CharacterCounterInput, CHARACTER_LIMITS, validateCharacterCount } from './components/CharacterCounterInput';
+import { useImageValidation } from '@/hooks/useImageValidation';
+import ImageValidationFeedback from '@/app/components/ImageValidationFeedback';
+import GlobalFooter from "@/app/components/GlobalFooter";
 
 const API_URL = 'http://10.0.0.170:5000';
 
@@ -33,6 +38,9 @@ export default function MustSellScreen() {
   const [gender, setGender] = useState<string>('unisex');
   const [categories, setCategories] = useState<{ id: number; name: string; emoji: string }[]>([]);
 
+  // Image validation for first image
+  const imageValidation = useImageValidation(imageUris.length > 0 ? imageUris[0] : null);
+
   useEffect(() => {
     fetch(`${API_URL}/categories`)
       .then((res) => res.json())
@@ -49,17 +57,17 @@ export default function MustSellScreen() {
       return;
     }
 
-    // Content Moderation
-    const nameModeration = validateContentQuick(name, 'Item name');
-    if (!nameModeration.isValid) {
-      Alert.alert('Content Policy Violation', nameModeration.errorMessage!);
+    // Character count validation with moderation
+    const nameValidation = validateCharacterCount(name, CHARACTER_LIMITS.NAME_MIN, CHARACTER_LIMITS.NAME_MAX, 'Item name');
+    if (!nameValidation.isValid) {
+      Alert.alert('Item Name Invalid', nameValidation.errorMessage!);
       return;
     }
 
     if (description) {
-      const descModeration = validateContentQuick(description, 'Description');
-      if (!descModeration.isValid) {
-        Alert.alert('Content Policy Violation', descModeration.errorMessage!);
+      const descValidation = validateCharacterCount(description, CHARACTER_LIMITS.DESCRIPTION_MIN, CHARACTER_LIMITS.DESCRIPTION_MAX, 'Description');
+      if (!descValidation.isValid) {
+        Alert.alert('Description Invalid', descValidation.errorMessage!);
         return;
       }
     }
@@ -122,15 +130,27 @@ export default function MustSellScreen() {
   };
 
   return (
-    <View style={{ flex: 1 }}>
-      <EnhancedHeader scrollY={scrollY} />
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
+      <View style={{ flex: 1 }}>
+        <EnhancedHeader scrollY={scrollY} />
 
-      <View style={styles.headerTitleContainer}>
-        <Text style={styles.headerTitleText}>⚡ Must Sell</Text>
-        <Text style={styles.headerSubtitle}>No reserve - highest bidder wins!</Text>
-      </View>
+        <View style={styles.headerTitleContainer}>
+          <View style={styles.titleWithArrow}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
+              <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+            </TouchableOpacity>
+            <View>
+              <Text style={styles.headerTitleText}>Must Sell</Text>
+              <Text style={styles.headerSubtitle}>No reserve - highest bidder wins!</Text>
+            </View>
+          </View>
+        </View>
 
-      <Animated.ScrollView
+        <Animated.ScrollView
         contentContainerStyle={styles.scrollContent}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -146,30 +166,42 @@ export default function MustSellScreen() {
           </Text>
         </View>
 
-        <Text style={styles.label}>Item Name *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g., Vintage Camera"
+        <CharacterCounterInput
+          label="Item Name"
+          placeholder="e.g., Vintage Camera, Designer Watch"
           value={name}
           onChangeText={setName}
+          minLength={CHARACTER_LIMITS.NAME_MIN}
+          maxLength={CHARACTER_LIMITS.NAME_MAX}
+          helpText="Give your item a clear, descriptive title"
         />
 
-        <Text style={styles.label}>Description</Text>
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          placeholder="Describe your item..."
+        <CharacterCounterInput
+          label="Description"
+          placeholder="e.g., Barely used vintage camera in excellent condition. Comes with original case and manual. Perfect for collectors or photography enthusiasts."
           value={description}
           onChangeText={setDescription}
+          minLength={CHARACTER_LIMITS.DESCRIPTION_MIN}
+          maxLength={CHARACTER_LIMITS.DESCRIPTION_MAX}
+          helpText="Provide detailed information about your item's condition, features, and history"
           multiline
-          numberOfLines={4}
+          numberOfLines={6}
+          style={styles.textArea}
+          enableModeration={false}
         />
 
         <ImageUploader
           maxImages={5}
+          imageUris={imageUris}
           onImagesChange={setImageUris}
           title="Upload Photos"
           subtitle="Add up to 5 photos"
         />
+
+        {/* Image Validation Feedback */}
+        {imageUris.length > 0 && (
+          <ImageValidationFeedback validation={imageValidation} />
+        )}
 
         <Text style={styles.label}>Category *</Text>
         <View style={styles.pickerContainer}>
@@ -177,6 +209,7 @@ export default function MustSellScreen() {
             selectedValue={category}
             onValueChange={(value) => setCategory(value)}
             style={styles.picker}
+            itemStyle={styles.pickerItem}
           >
             {categories.map((cat) => (
               <Picker.Item key={cat.id} label={`${cat.emoji} ${cat.name}`} value={cat.id} />
@@ -190,6 +223,7 @@ export default function MustSellScreen() {
             selectedValue={condition}
             onValueChange={(value) => setCondition(value)}
             style={styles.picker}
+            itemStyle={styles.pickerItem}
           >
             <Picker.Item label="New" value="new" />
             <Picker.Item label="Like New" value="like_new" />
@@ -205,6 +239,7 @@ export default function MustSellScreen() {
             selectedValue={durationHours}
             onValueChange={(value) => setDurationHours(value)}
             style={styles.picker}
+            itemStyle={styles.pickerItem}
           >
             <Picker.Item label="24 Hours (Fast Sale)" value="24" />
             <Picker.Item label="48 Hours" value="48" />
@@ -235,6 +270,7 @@ export default function MustSellScreen() {
             selectedValue={gender}
             onValueChange={(value) => setGender(value)}
             style={styles.picker}
+            itemStyle={styles.pickerItem}
           >
             <Picker.Item label="Unisex / Not Specified" value="unisex" />
             <Picker.Item label="👨 Men's" value="men" />
@@ -247,7 +283,10 @@ export default function MustSellScreen() {
           <Text style={styles.submitButtonText}>Create Must Sell</Text>
         </TouchableOpacity>
       </Animated.ScrollView>
-    </View>
+      </View>
+       <GlobalFooter />
+    </KeyboardAvoidingView>
+
   );
 }
 
@@ -258,15 +297,23 @@ const styles = StyleSheet.create({
   },
   headerTitleContainer: {
     position: 'absolute',
-    top: HEADER_MAX_HEIGHT,
+    top: HEADER_MAX_HEIGHT + 48,
     left: 0,
     right: 0,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 16,
     backgroundColor: '#FFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
-    zIndex: 10,
+    zIndex: 100,
+  },
+  titleWithArrow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backArrow: {
+    marginRight: 12,
+    padding: 4,
   },
   headerTitleText: {
     fontSize: 20,
@@ -279,7 +326,7 @@ const styles = StyleSheet.create({
     color: '#718096',
   },
   scrollContent: {
-    paddingTop: 140,
+    paddingTop: 240,
     padding: 16,
     paddingBottom: 40,
   },
@@ -328,10 +375,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E0E0E0',
     borderRadius: 8,
-    overflow: 'hidden',
+    justifyContent: 'center',
+    minHeight: 56,
   },
   picker: {
-    height: 50,
+    height: Platform.OS === 'ios' ? 180 : 56,
+    width: '100%',
+    fontSize: 16,
+    color: '#1A1A1A',
+  },
+  pickerItem: {
+    height: Platform.OS === 'ios' ? 180 : 56,
+    fontSize: 16,
+    color: '#1A1A1A',
   },
   submitButton: {
     backgroundColor: '#F44336',

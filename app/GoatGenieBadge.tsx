@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, TouchableOpacity, Image, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import { Image } from 'expo-image';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -9,11 +10,16 @@ import Animated, {
   FadeIn,
   FadeOut,
 } from 'react-native-reanimated';
-import genieSprite from 'app/components/assets/GoatGenieBadge.png'; // your genie image
-import wishlistCoin from 'app/components/assets/wishlist-coin.png'; // your badge image
+
+// Use require() for images with expo-image
+import genieSprite from '../assets/goat-icon.png'; // Using goat-icon.png
+import wishlistCoin from '../assets/goat-stamp.png';
+
+// Create an animated version of expo-image
+const AnimatedImage = Animated.createAnimatedComponent(Image);
 
 
-export default function GoatGenieBadge({ onWish }: { onWish: () => void }) {
+export default function GoatGenieBadge({ onWish, size = 48 }: { onWish: () => void; size?: number }) {
   const [showGenie, setShowGenie] = useState(false);
   const spin = useSharedValue(0);
   const scale = useSharedValue(1);
@@ -44,15 +50,16 @@ export default function GoatGenieBadge({ onWish }: { onWish: () => void }) {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { width: size, height: size }]}>
       <TouchableOpacity onPress={handlePress} style={styles.badge}>
-        <Image source={wishlistCoin} style={styles.badgeImage} />
+        <Image source={wishlistCoin} style={[styles.badgeImage, { width: size, height: size }]} />
       </TouchableOpacity>
 
       {showGenie && (
-        <Animated.Image
+        <AnimatedImage
           source={genieSprite}
-          style={[styles.genie, genieStyle]}
+          style={[styles.genie, genieStyle, { width: size * 1.67, height: size * 1.67, top: -size * 1.25, left: -size * 0.21 }]}
+          contentFit="contain"
           entering={FadeIn.duration(300)}
           exiting={FadeOut.duration(300)}
         />

@@ -19,7 +19,7 @@ export function GoatWiggle({ wiggle }: Readonly<{ wiggle?: boolean }>) {
 export function SparkleTrail() {
   return (
     <LottieView
-      source={require('../../sparkletrail/sparkle.animations.json')}
+      source={require('../../../assets/animations/sparkle-trail.json')}
       autoPlay
       loop={false}
       style={{ width: 120, height: 120 }}

@@ -75,7 +75,24 @@ export const AuctionCard: React.FC<Props> = ({ preview, onGoatTap, Item, rarity 
     legendary: '#ffd700',
   };
 
-  const timeColor = rarityColorMap[itemRarity ?? 'common'];
+  // Dynamic time coloring based on urgency
+  const getTimeColor = (): string => {
+    if (!preview?.auction_ends_at) return rarityColorMap[itemRarity ?? 'common'];
+
+    const now = Date.now();
+    const end = new Date(preview.auction_ends_at).getTime();
+    const diffHours = (end - now) / (1000 * 60 * 60);
+
+    if (diffHours <= 2) {
+      return '#E53E3E'; // Bright red if ≤2h
+    } else if (diffHours <= 24) {
+      return '#c53030'; // Red if ≤24h
+    }
+    // Use rarity color for non-urgent items
+    return rarityColorMap[itemRarity ?? 'common'];
+  };
+
+  const timeColor = getTimeColor();
 
   const timeLeft = preview?.auction_ends_at
     ? formatDistanceToNow(new Date(preview.auction_ends_at), { addSuffix: true })

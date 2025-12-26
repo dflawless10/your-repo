@@ -16,44 +16,42 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/hooks/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
+import ElasticsearchResultCard from './components/ElasticsearchResultCard';
+import { API_URL } from '@/constants/api';
 
 
 
-// Base type for shared fields
-interface BaseResult {
-  id: string;
-  result_type: 'help' | 'category' | 'item'; // strict union
-  title?: string;
+// Elasticsearch search result type
+interface ElasticsearchItem {
+  item_id: number;
+  name: string;
   description?: string;
-}
-
-// Help/FAQ result
-interface HelpResult extends BaseResult {
-  result_type: 'help' | 'category';
-  details?: string;
-}
-
-// Marketplace item result
-interface MarketplaceResult extends BaseResult {
-  result_type: 'item';
-  item_id?: string;
-  name?: string;
-  price?: number;
   photo_url?: string;
+  price: number;
+  highest_bid?: number;
   bid_count?: number;
-  tags?: string;
-  score?: number;
+  category?: string;
+  rarity?: 'common' | 'rare' | 'legendary';
+  auction_ends_at?: string;
+  selling_strategy?: string;
+  buy_it_now?: number;
+  is_must_sell?: number;
+  _score?: number;
 }
 
-// Union type (this replaces the old interface SearchResult)
-type SearchResult = HelpResult | MarketplaceResult;
+// Help result from old API
+interface HelpResult {
+  label: string;
+  value: string;
+  type: string;
+  extra?: {
+    description?: string;
+  };
+}
 
 
 
 const { width } = Dimensions.get('window');
-const COLUMN_GAP = 12;
-const NUM_COLUMNS = 2;
-const ITEM_WIDTH = (width - 32 - COLUMN_GAP) / NUM_COLUMNS;
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -63,10 +61,13 @@ export default function SearchScreen() {
   const router = useRouter();
   const { q } = useLocalSearchParams<{ q: string }>();
   const { token } = useAuth();
-  const [results, setResults] = useState<SearchResult[]>([]);
+  const [items, setItems] = useState<ElasticsearchItem[]>([]);
+  const [helpResults, setHelpResults] = useState<HelpResult[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [favorites, setFavorites] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     const searchItems = async () => {
@@ -79,27 +80,29 @@ export default function SearchScreen() {
         setLoading(true);
         setError(null);
 
-        const response = await fetch(
-          `http://10.0.0.170:5000/api/v1/search?q=${encodeURIComponent(q)}&limit=50`,
-          {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
+        // Use new Elasticsearch endpoint
+        const response = await fetch(`${API_URL}/api/search`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            query: q,
+            size: 50,
+          }),
+        });
 
         if (!response.ok) {
           throw new Error(`Search failed: ${response.status}`);
         }
 
         const data = await response.json();
+        console.log('🔍 Elasticsearch search results:', data);
 
-        if (data.status === 'success') {
-          setResults(data.data.items || []);
-        } else {
-          throw new Error(data.message || 'Search failed');
-        }
+        setItems(data.hits || []);
+        setHelpResults(data.help || []);
+        setTotal(data.total || 0);
       } catch (err) {
         console.error('🔍 Search error:', err);
         setError(err instanceof Error ? err.message : 'Search failed');
@@ -111,32 +114,33 @@ export default function SearchScreen() {
     searchItems();
   }, [q, token]);
 
-  const renderItem = ({ item }: { item: SearchResult }) => {
-  const isHelp = item.result_type === 'help' || item.result_type === 'category';
- const itemId: string | null =
-  item.result_type === 'item'
-    ? item.item_id ?? item.id
-    : item.id;
+  const handleHeartPress = async (itemId: number) => {
+    // Toggle favorite state
+    setFavorites(prev => ({ ...prev, [itemId]: !prev[itemId] }));
 
+    // TODO: Sync with backend favorites API
+    console.log('💖 Toggled favorite for item:', itemId);
+  };
 
-  if (isHelp && itemId) {
-    const helpDetails = item.details ?? item.description ?? 'No details available';
-    const isExpanded = expandedId === itemId;
+  const renderHelpItem = ({ item }: { item: HelpResult }) => {
+    const isExpanded = expandedId === item.value;
 
     const toggleExpand = () => {
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      setExpandedId(isExpanded ? null : itemId);
+      setExpandedId(isExpanded ? null : item.value);
     };
 
     return (
       <TouchableOpacity style={styles.helpCard} onPress={toggleExpand} activeOpacity={0.9}>
         <Ionicons name="help-circle-outline" size={36} color="#FF6B35" />
         <View style={{ flex: 1, marginLeft: 16 }}>
-          <Text style={styles.helpTitle}>{item.title}</Text>
+          <Text style={styles.helpTitle}>{item.label}</Text>
           <Text style={styles.helpDescription} numberOfLines={2}>
-            {item.description}
+            {item.extra?.description || 'No description available'}
           </Text>
-          {isExpanded && <Text style={styles.helpDetails}>{helpDetails}</Text>}
+          {isExpanded && item.extra?.description && (
+            <Text style={styles.helpDetails}>{item.extra.description}</Text>
+          )}
         </View>
         <Ionicons
           name={isExpanded ? 'chevron-up' : 'chevron-down'}
@@ -145,59 +149,93 @@ export default function SearchScreen() {
         />
       </TouchableOpacity>
     );
-  }
+  };
 
-  if (item.result_type === 'item') {
-    const itemId: string = item.id ?? item.item_id ?? '';
+  const renderItem = ({ item }: { item: ElasticsearchItem }) => {
     return (
-      <TouchableOpacity
-        style={styles.cardWrapper}
-        onPress={() => router.push(`/item/${itemId}`)}
-        activeOpacity={0.9}
-      >
-        <View style={styles.card}>
-          {item.photo_url && (
-            <>
-              <Image source={{ uri: item.photo_url }} style={styles.image} resizeMode="cover" />
-              <View style={styles.priceTag}>
-                <Text style={styles.priceText}>${(item.price ?? 0).toFixed(2)}</Text>
-              </View>
-            </>
-          )}
-          <Text style={styles.itemName} numberOfLines={2}>
-            {item.name ?? item.title}
-          </Text>
-          {item.bid_count !== undefined && (
-            <Text style={styles.bidCount}>🦩 {item.bid_count} bids</Text>
-          )}
-        </View>
-      </TouchableOpacity>
+      <ElasticsearchResultCard
+        item={item}
+        onHeartPress={handleHeartPress}
+        isFavorited={favorites[item.item_id]}
+        showRelevanceScore={false}
+      />
     );
-  }
-
-  return null;
-};
+  };
 
 
   return (
     <View style={styles.container}>
-      {/* ... existing header, loading, error, empty states ... */}
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#242c40" />
+        </TouchableOpacity>
+        <Text style={styles.searchQuery} numberOfLines={1}>
+          {q}
+        </Text>
+      </View>
 
-      {!loading && !error && results.length > 0 && (
+      {/* Loading State */}
+      {loading && (
+        <View style={styles.centerContent}>
+          <ActivityIndicator size="large" color="#6A0DAD" />
+          <Text style={styles.loadingText}>Searching...</Text>
+        </View>
+      )}
+
+      {/* Error State */}
+      {!loading && error && (
+        <View style={styles.centerContent}>
+          <Ionicons name="alert-circle-outline" size={64} color="#e53e3e" />
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => {
+              setError(null);
+              setLoading(true);
+            }}
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Empty State */}
+      {!loading && !error && items.length === 0 && helpResults.length === 0 && (
+        <View style={styles.centerContent}>
+          <Ionicons name="search-outline" size={64} color="#ccc" />
+          <Text style={styles.emptyText}>No results found</Text>
+          <Text style={styles.emptySubtext}>Try a different search term</Text>
+        </View>
+      )}
+
+      {/* Results */}
+      {!loading && !error && (items.length > 0 || helpResults.length > 0) && (
         <FlatList
-          data={results}
-          keyExtractor={(item, index) =>
-  item.result_type === 'item' && item.item_id
-    ? item.item_id
-    : item.id || `item-${index}`
-}
-
+          data={items}
+          keyExtractor={(item) => `item-${item.item_id}`}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
           ListHeaderComponent={
-            <Text style={styles.resultCount}>
-              Found {results.length} result{results.length !== 1 ? 's' : ''}
-            </Text>
+            <>
+              <Text style={styles.resultCount}>
+                Found {total} result{total !== 1 ? 's' : ''} for "{q}"
+              </Text>
+
+              {/* Help Results Section */}
+              {helpResults.length > 0 && (
+                <View style={styles.helpSection}>
+                  <Text style={styles.sectionTitle}>💡 Help & Support</Text>
+                  {helpResults.map((help) => (
+                    <View key={help.value}>
+                      {renderHelpItem({ item: help })}
+                    </View>
+                  ))}
+                  <View style={styles.divider} />
+                  <Text style={styles.sectionTitle}>🛍️ Marketplace Items</Text>
+                </View>
+              )}
+            </>
           }
         />
       )}
@@ -271,78 +309,57 @@ const styles = StyleSheet.create({
     color: '#999',
   },
   listContent: {
-    paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 32,
-  },
-  columnWrapper: {
-    gap: COLUMN_GAP,
-    justifyContent: 'space-between',
   },
   resultCount: {
     fontSize: 14,
     color: '#666',
     marginBottom: 16,
     fontWeight: '500',
+    paddingHorizontal: 16,
   },
-  cardWrapper: {
-    width: ITEM_WIDTH,
-    marginBottom: 16,
+  helpSection: {
+    marginBottom: 24,
   },
-  card: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 12,
-    padding: 12,
-    position: 'relative',
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
-  },
-  image: {
-    width: '100%',
-    height: 160,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  priceTag: {
-    position: 'absolute',
-    top: 20,
-    left: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  priceText: {
-    color: '#fff',
+  sectionTitle: {
+    fontSize: 18,
     fontWeight: '700',
-    fontSize: 16,
+    color: '#242c40',
+    marginBottom: 12,
+    paddingHorizontal: 16,
   },
-  itemName: {
-    fontSize: 15,
+  divider: {
+    height: 1,
+    backgroundColor: '#eee',
+    marginVertical: 20,
+    marginHorizontal: 16,
+  },
+  helpCard: {
+    flexDirection: 'row',
+    padding: 16,
+    marginBottom: 12,
+    marginHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: '#FFF9F5',
+    borderWidth: 1,
+    borderColor: '#FFE4D6',
+    alignItems: 'center',
+  },
+  helpTitle: {
+    fontSize: 16,
     fontWeight: '600',
     color: '#242c40',
     marginBottom: 4,
   },
-  bidCount: {
-    fontSize: 12,
+  helpDescription: {
+    fontSize: 14,
     color: '#666',
-    fontWeight: '500',
   },
-  helpCard: {
-  flexDirection: 'row',
-  padding: 16,
-  marginBottom: 12,
-  borderRadius: 12,
-  borderWidth: 1,
-  borderColor: '#FFE4D6',
-  alignItems: 'center',
-},
-
-  helpTitle: { fontSize: 16, fontWeight: '600', color: '#242c40' },
-  helpDescription: { fontSize: 14, color: '#666' },
-  helpDetails: { fontSize: 14, color: '#444', marginTop: 8
+  helpDetails: {
+    fontSize: 14,
+    color: '#444',
+    marginTop: 8,
+    lineHeight: 20,
   },
 });

@@ -60,18 +60,19 @@ const end = new Date(safe);
   const minutes = Math.floor((ms % 3600000) / 60000);
   const seconds = Math.floor((ms % 60000) / 1000);
 
-  // Show days when more than 4 days left
-  if (days > 4) {
+  // Show days + hours when more than 2 days left
+  if (days >= 2) {
     return {
       timeText: `${days}d ${hours}h`,
       isUrgent: false,
     };
   }
 
-  // Show hours when 4 days or less
+  // Show hours/minutes/seconds ONLY when less than 48 hours
   const totalHours = Math.floor(ms / 3600000);
+  const totalSeconds = Math.floor((ms % 3600000) / 1000);
   return {
-    timeText: `${totalHours}h ${minutes}m`,
+    timeText: `${totalHours}h ${minutes}m ${seconds}s`,
     isUrgent: totalHours < 2,
   };
 };
@@ -121,12 +122,12 @@ export const formatTimeWithSeconds = (iso: string, now: number): string => {
   const minutes = Math.floor((diffMs % 3600000) / 60000);
   const seconds = Math.floor((diffMs % 60000) / 1000);
 
-  // Show days when more than 4 days left
-  if (days > 4) {
+  // Show days + hours when more than 2 days left
+  if (days >= 2) {
     return `${days}d ${hours}h left`;
   }
 
-  // Show hours when 4 days or less
+  // Show hours/minutes/seconds ONLY when less than 48 hours
   const totalHours = Math.floor(diffMs / 3600000);
   return `${totalHours}h ${minutes}m ${seconds}s left`;
 };

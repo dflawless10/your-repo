@@ -70,9 +70,13 @@ export function useCartBackend() {
   const removeFromCart = async (productId: string) => {
     try {
       const token = await AsyncStorage.getItem('jwtToken');
-      await fetch(`http://10.0.0.170:5000/api/cart/${productId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+      await fetch('http://10.0.0.170:5000/remove-from-cart', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ item_id: productId }),
       });
       await fetchCart();
     } catch (err) {

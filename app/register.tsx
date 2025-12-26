@@ -6,7 +6,10 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  Image
+  Image,
+  KeyboardAvoidingView,
+  ScrollView,
+  Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -59,72 +62,84 @@ export default function Register() {
   };
 
   return (
-    <View style={styles.container}>
-      <Image
-        source={require('@/assets/goat-stamp.png')}
-        style={styles.stamp}
-        resizeMode="contain"
-      />
-      <Text style={styles.title}>Create a BidGoat Account 🐐</Text>
-
-      <TextInput
-        style={styles.input}
-        placeholder="First Name"
-        value={firstname}
-        onChangeText={setFirstname}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Last Name"
-        value={lastname}
-        onChangeText={setLastname}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Username"
-        value={username}
-        onChangeText={setUsername}
-        autoCapitalize="none"
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        value={email}
-        onChangeText={setEmail}
-        keyboardType="email-address"
-        autoCapitalize="none"
-      />
-      <View style={styles.passwordContainer}>
-  <TextInput
-    style={styles.passwordInput}
-    placeholder="Password"
-    secureTextEntry={!showPassword}
-    value={password}
-    onChangeText={setPassword}
-  />
-  <Text onPress={() => setShowPassword(prev => !prev)} style={styles.toggle}>
-    {showPassword ? '🙈 Hide' : '👁️ Show'}
-  </Text>
-</View>
-
-      <TouchableOpacity
-        style={[styles.button, loading && styles.buttonDisabled]}
-        onPress={handleRegister}
-        disabled={loading}
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
       >
-        <Ionicons name="sparkles" size={20} color="#fff" />
-        <Text style={styles.buttonText}>Join the Herd</Text>
-      </TouchableOpacity>
-    </View>
+        <Image
+          source={require('@/assets/goat-stamp.png')}
+          style={styles.stamp}
+          resizeMode="contain"
+        />
+        <Text style={styles.title}>Create a BidGoat Account 🐐</Text>
+
+        <TextInput
+          style={styles.input}
+          placeholder="First Name"
+          value={firstname}
+          onChangeText={setFirstname}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Last Name"
+          value={lastname}
+          onChangeText={setLastname}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Username"
+          value={username}
+          onChangeText={setUsername}
+          autoCapitalize="none"
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Email"
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
+        <View style={styles.passwordContainer}>
+          <TextInput
+            style={styles.passwordInput}
+            placeholder="Password"
+            secureTextEntry={!showPassword}
+            value={password}
+            onChangeText={setPassword}
+          />
+          <Text onPress={() => setShowPassword(prev => !prev)} style={styles.toggle}>
+            {showPassword ? '🙈 Hide' : '👁️ Show'}
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.button, loading && styles.buttonDisabled]}
+          onPress={handleRegister}
+          disabled={loading}
+        >
+          <Ionicons name="sparkles" size={20} color="#fff" />
+          <Text style={styles.buttonText}>Join the Herd</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 24,
-    justifyContent: 'center',
     backgroundColor: '#fff8e1'
+  },
+  scrollContent: {
+    flexGrow: 1,
+    padding: 24,
+    justifyContent: 'center'
   },
   stamp: {
   width: 120,

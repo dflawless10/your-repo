@@ -15,10 +15,13 @@ const PROFANITY_LIST = COMPREHENSIVE_PROFANITY_LIST;
 // Import patterns from policy configuration
 const CONTACT_PATTERNS = {
   email: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/gi,
-  phone: /(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g,
+  // Phone pattern - only match valid phone number formats (must have 10+ digits total)
+  phone: /(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g,
   url: /(https?:\/\/[^\s]+)|(www\.[^\s]+)/gi,
-  emailVariants: /\b\w+\s*(at|AT|@)\s*\w+\s*(dot|DOT|\.)\s*\w+\b/gi,
-  phoneVariants: /\b\d{3}[\s.-]?\d{3}[\s.-]?\d{4}\b/g,
+  // Only match email variants with "at" and "dot" spelled out (not just period)
+  emailVariants: /\b\w+\s*(at|AT)\s*\w+\s*(dot|DOT)\s*\w+\b/gi,
+  // More strict phone variants - must be 10 consecutive digits or proper phone format
+  phoneVariants: /\b\d{10,}\b|\b\d{3}[-.\s]\d{3}[-.\s]\d{4}\b/g,
   socialMedia: /\b(whatsapp|telegram|signal|facebook|instagram|twitter|snapchat)\b/gi,
 };
 

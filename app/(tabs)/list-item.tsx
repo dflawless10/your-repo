@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Picker } from "@react-native-picker/picker";
+import { Ionicons } from '@expo/vector-icons';
 import { useGoatBid } from "@/hooks/useGoatBid";
 import { GoatFlip } from "@/components/GoatAnimator/goatFlip";
 import { useRouter } from 'expo-router';
@@ -13,6 +14,8 @@ import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHead
 import { CharacterCounterInput, CHARACTER_LIMITS, validateCharacterCount } from 'app/components/CharacterCounterInput';
 import { handleListingSuccess } from 'app/utils/formHelpers';
 import { validateContentQuick } from 'app/utils/contentModeration';
+import { useImageValidation } from '@/hooks/useImageValidation';
+import ImageValidationFeedback from '@/app/components/ImageValidationFeedback';
 
 
 const API_URL = 'http://10.0.0.170:5000';
@@ -33,9 +36,13 @@ function ItemScreen() {
   const [rarity, setRarity] = useState('common');
   const [weightLbs, setWeightLbs] = useState('1.0');
   const [gender, setGender] = useState<string>('unisex');
+  const [durationDays, setDurationDays] = useState(7);
 
   const { goatTrigger, lastBidAmount, triggerGoat } = useGoatBid();
   const router = useRouter();
+
+  // Image validation for first image
+  const imageValidation = useImageValidation(imageUris.length > 0 ? imageUris[0] : null);
 
 
 
@@ -99,7 +106,7 @@ function ItemScreen() {
   formData.append('rarity', rarity);
   formData.append('weight_lbs', weightLbs);
   formData.append('gender', gender);
-  formData.append('duration_hours', '0');  // 0 hours = instant buy
+  formData.append('duration_hours', String(durationDays * 24));  // Convert days to hours
   formData.append('buy_it_now', price);  // Buy it now price is the listed price
 
   // Main image (first image)
@@ -161,8 +168,15 @@ function ItemScreen() {
       <EnhancedHeader scrollY={scrollY} />
 
       <View style={styles.headerTitleContainer}>
-        <Text style={styles.headerTitleText}>🛍️ Buy It Now</Text>
-        <Text style={styles.headerSubtitle}>List your item for instant purchase</Text>
+        <View style={styles.titleWithArrow}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
+            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+          </TouchableOpacity>
+          <View>
+            <Text style={styles.headerTitleText}>Buy It Now</Text>
+            <Text style={styles.headerSubtitle}>List your item for instant purchase</Text>
+          </View>
+        </View>
       </View>
 
       <Animated.ScrollView
@@ -191,6 +205,7 @@ function ItemScreen() {
 
       <ImageUploader
         maxImages={5}
+        imageUris={imageUris}
         onImagesChange={(uris) => {
           setImageUris(uris);
           if (uris.length > 0) {
@@ -200,6 +215,11 @@ function ItemScreen() {
         title="Upload Item Photos"
         subtitle="Add up to 5 photos"
       />
+
+      {/* Image Validation Feedback */}
+      {imageUris.length > 0 && (
+        <ImageValidationFeedback validation={imageValidation} />
+      )}
 
       <Text style={styles.sectionTitle}>💰 Buy It Now Listing</Text>
 
@@ -225,6 +245,17 @@ function ItemScreen() {
         helpText="💡 Great descriptions include: condition, materials, measurements, brand (if applicable), and what makes this item special"
       />
       <TextInput placeholder="Price ($)" value={price} onChangeText={setPrice} keyboardType="numeric" style={styles.input} />
+
+      <Text style={styles.label}>⏰ Listing Duration</Text>
+      <Picker
+        selectedValue={durationDays}
+        onValueChange={(value) => setDurationDays(value)}
+        style={styles.picker}
+      >
+        <Picker.Item label="7 Days" value={7} />
+        <Picker.Item label="14 Days" value={14} />
+        <Picker.Item label="30 Days" value={30} />
+      </Picker>
 
       <Text style={styles.sectionTitle}>📦 Item Details</Text>
       <TextInput placeholder="Tags (comma-separated)" value={tags} onChangeText={setTags} style={styles.input} />
@@ -260,13 +291,13 @@ function ItemScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    paddingTop: 140,
+    paddingTop: 260,
     padding: 16,
     paddingBottom: 40,
   },
   headerTitleContainer: {
     position: 'absolute',
-    top: HEADER_MAX_HEIGHT,
+    top: HEADER_MAX_HEIGHT + 34,
     left: 0,
     right: 0,
     paddingHorizontal: 16,
@@ -274,7 +305,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
-    zIndex: 10,
+    zIndex: 100,
+  },
+  titleWithArrow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backArrow: {
+    marginRight: 12,
+    padding: 4,
   },
   headerTitleText: {
     fontSize: 20,

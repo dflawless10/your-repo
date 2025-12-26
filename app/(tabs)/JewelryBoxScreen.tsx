@@ -5,169 +5,48 @@ import {
   StyleSheet,
   Platform,
   Image,
-  useColorScheme,
   Animated,
   TouchableOpacity,
-  Dimensions, ActivityIndicator, Share,
+  Dimensions,
+  ActivityIndicator,
+  Share,
+  ScrollView,
+  Modal,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/hooks/AuthContext';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
 import { formatTimeWithSeconds } from '@/utils/time';
 import { AuctionItem, ListedItem } from '@/types/items';
-import {useWishlist} from "@/app/wishlistContext";
-import {useAppDispatch} from "@/hooks/reduxHooks";
-import {Ionicons, MaterialCommunityIcons} from "@expo/vector-icons";
-import {setUser} from "@/utils/userSlice";
-import {getUserProfile} from "@/api/auth";
-
+import { useWishlist } from '@/app/wishlistContext';
+import { useAppDispatch } from '@/hooks/reduxHooks';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { setUser } from '@/utils/userSlice';
+import { getUserProfile } from '@/api/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-
-
-const listedItem: {
-    id: string;
-    name: string;
-    title: string;
-    description: string;
-    image: string;
-
-    price: number;
-    auction_id: string;
-    timeLeft: string;
-    listed_at: string;
-    is_trending: boolean;
-    reserve_price: number;
-    final_price: number;
-    sold_to: string;
-    getCountdown: string;
-    item: string;
-    isFavorited: boolean;
-    toggleFavorite: () => void;
-    sold_at: string;
-    sold_at_timestamp: string;
-    sold_at_formatted: string;
-    sold_at_formatted_timestamp: string;
-    is_sold: boolean;
-    is_active: boolean;
-    is_listed: boolean;
-    is_favorite: boolean;
-    is_sold_out: boolean;
-    is_sold_out_at: string;
-    is_sold_out_at_timestamp: string;
-    is_sold_out_at_formatted: string;
-    is_sold_out_at_formatted_timestamp: string;
-    preview: string;
-    recent_bids: string;
-    photo_url: string;
-    auction_ends_at: string;
-    registration_time: string;
-    end_time: string;
-    bidCount: number;
-    seller: { name: string; avatar: string };
-    category?: string;
-    amount: number;
-    user_id: string;
-    timestamp: string;
-    isDerived: boolean;
-    mascot?: { emoji?: string };
-    isWishlisted: string;
-    quantity_available: number;
-    image_url: string;
-    tags: string
-  } = {
-  amount: 0,
-  auction_ends_at: "",
-  auction_id: "",
-  bidCount: 0,
-  description: "",
-  end_time: "",
-  final_price: 0,
-  getCountdown: "",
-  id: "",
-  image: "",
-  image_url: "",
-  isDerived: false,
-  isFavorited: false,
-  is_active: false,
-  is_favorite: false,
-  is_listed: false,
-  is_sold: false,
-  is_sold_out: false,
-  is_sold_out_at: "",
-  is_sold_out_at_formatted: "",
-  is_sold_out_at_formatted_timestamp: "",
-  is_sold_out_at_timestamp: "",
-  is_trending: false,
-   item: "",
-  listed_at: "",
-  name: "",
-  photo_url: "",
-  preview: "",
-  price: 0,
-  recent_bids: "",
-  registration_time: "",
-  reserve_price: 0,
-  seller: {avatar: "", name: ""},
-  sold_at: "",
-  sold_at_formatted: "",
-  sold_at_formatted_timestamp: "",
-  sold_at_timestamp: "",
-  sold_to: "",
-  timeLeft: "",
-  timestamp: "",
-  title: "",
-  toggleFavorite(): void {
-  },
-  user_id: "",
-
-  isWishlisted: 'true',
-    quantity_available: 1,
-
-    tags: ''
-};
-
-export const goatColors = {
-  light: {
-    background: '#ffffff',
-    card: '#f5f5f5',
-    text: '#000',
-    subtext: '#f5f5f5',
-    empty: '#fff',
-  },
-  dark: {
-    background: '#fff',     // softer than pure black
-    card: '#f5f5f5',           // velvet charcoal
-    text: '#000',           // off-white for less contrast
-    subtext: '#b0b0b5',        // softened gray
-    empty: '#fff',          // lighter than before
-  },
-};
-
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function JewelryBoxScreen() {
   const router = useRouter();
-  const [wishlistIds, setWishlistIds] = useState<number[]>([]);
   const { addToWishlist, refreshWishlist } = useWishlist();
-  const [wishlistItems, setWishlistItems] = useState<AuctionItem[]>([]);
   const { isAuthenticated, username, token } = useAuth();
   const [allItems, setAllItems] = useState<ListedItem[]>([]);
+  const [filteredItems, setFilteredItems] = useState<ListedItem[]>([]);
   const [favoritedMap, setFavoritedMap] = useState<Record<number, boolean>>({});
   const [loading, setLoading] = useState(true);
-  const scheme = useColorScheme() ?? 'light';
-  const item = listedItem;
-  const theme = goatColors[scheme];
+  const [sortBy, setSortBy] = useState<'recent' | 'price_low' | 'price_high' | 'ending_soon'>('recent');
+  const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [showFilterHelp, setShowFilterHelp] = useState(false);
+  const [showSortHelp, setShowSortHelp] = useState(false);
   const scrollY = useRef(new Animated.Value(0)).current;
-  const now = Date.now();
+  const dispatch = useAppDispatch();
 
-  useEffect(() => {
-  if (token) {
-    refreshWishlist(); // ✅ no arguments needed
-  }
-}, [token]);
-
-  // Fetch favorites from the backend (with auto-cleanup of unavailable items)
-  const fetchFavoritesFromBackend = async () => {
+  // Fetch favorites from backend
+  const fetchFavoritesFromBackend = React.useCallback(async () => {
+    if (!token) {
+      setLoading(false);
+      return;
+    }
     try {
       const response = await fetch('http://10.0.0.170:5000/api/favorites', {
         headers: {
@@ -179,74 +58,89 @@ export default function JewelryBoxScreen() {
       if (response.ok) {
         const data = await response.json();
         const items = data.items || [];
-        console.log('🐐 JewelryBox: Fetched', items.length, 'favorites from backend');
+        console.log('🐐 JewelryBox: Fetched', items.length, 'favorites');
         setAllItems(items);
+        setFilteredItems(items);
 
-        // Sync backend favorites to AsyncStorage
         const favMap: Record<number, boolean> = {};
         items.forEach((item: ListedItem) => {
           favMap[item.id] = true;
         });
         setFavoritedMap(favMap);
         await AsyncStorage.setItem('favoritedItems', JSON.stringify(favMap));
-        console.log('🐐 JewelryBox: Synced', items.length, 'favorites to AsyncStorage');
       } else {
-        console.warn('🐐 JewelryBox: Failed to fetch favorites:', await response.text());
         setAllItems([]);
+        setFilteredItems([]);
       }
     } catch (error) {
       console.error('🐐 JewelryBox: Error fetching favorites:', error);
     } finally {
       setLoading(false);
     }
-  };
-
-  // Load favorited items from AsyncStorage (fallback for offline)
-  const loadFavoritedMap = async () => {
-    try {
-      const stored = await AsyncStorage.getItem('favoritedItems');
-      console.log('🐐 JewelryBox: Raw favorited items from AsyncStorage:', stored);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        console.log('🐐 JewelryBox: Parsed favorited map:', parsed);
-        setFavoritedMap(parsed);
-      }
-    } catch (err) {
-      console.error('🐐 JewelryBox: Failed to load favorited map:', err);
-    }
-  };
-
-  useEffect(() => {
-    if (token) {
-      fetchFavoritesFromBackend();
-    }
   }, [token]);
 
-  // Reload favorites whenever the screen comes into focus
-  useFocusEffect(
-    React.useCallback(() => {
-      if (token) {
-        fetchFavoritesFromBackend();
-      } else {
-        loadFavoritedMap();
-      }
-    }, [token])
-  );
-
-  const dispatch = useAppDispatch();
+  useEffect(() => {
+    if (token) {
+      refreshWishlist();
+    }
+  }, [token, refreshWishlist]);
 
   useEffect(() => {
-  const hydrateUser = async () => {
-    if (token) {
-      const profile = await getUserProfile(token);
-      if (profile) {
-        dispatch(setUser(profile));
-      }
-    }
-  };
-  hydrateUser();
-}, [token, dispatch]);
+    fetchFavoritesFromBackend();
+  }, [fetchFavoritesFromBackend]);
 
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchFavoritesFromBackend();
+    }, [fetchFavoritesFromBackend])
+  );
+
+  useEffect(() => {
+    const hydrateUser = async () => {
+      if (token) {
+        const profile = await getUserProfile(token);
+        if (profile) {
+          dispatch(setUser(profile));
+        }
+      }
+    };
+    hydrateUser();
+  }, [token, dispatch]);
+
+  // Apply sorting and filtering
+  useEffect(() => {
+    let items = [...allItems];
+
+    // Filter by category
+    if (filterCategory !== 'all') {
+      items = items.filter(item => {
+        const tags = item.tags?.toLowerCase() || '';
+        const name = item.name?.toLowerCase() || '';
+        return tags.includes(filterCategory) || name.includes(filterCategory);
+      });
+    }
+
+    // Sort
+    switch (sortBy) {
+      case 'price_low':
+        items.sort((a, b) => (a.highest_bid || a.price || 0) - (b.highest_bid || b.price || 0));
+        break;
+      case 'price_high':
+        items.sort((a, b) => (b.highest_bid || b.price || 0) - (a.highest_bid || a.price || 0));
+        break;
+      case 'ending_soon':
+        items.sort((a, b) => {
+          if (!a.auction_ends_at) return 1;
+          if (!b.auction_ends_at) return -1;
+          return new Date(a.auction_ends_at).getTime() - new Date(b.auction_ends_at).getTime();
+        });
+        break;
+      default: // recent
+        break;
+    }
+
+    setFilteredItems(items);
+  }, [allItems, sortBy, filterCategory]);
 
   const handleToggleFavorite = async (itemId: number) => {
     const updated = {
@@ -256,13 +150,9 @@ export default function JewelryBoxScreen() {
     setFavoritedMap(updated);
 
     try {
-      // Save to AsyncStorage
       await AsyncStorage.setItem('favoritedItems', JSON.stringify(updated));
-      console.log(`🐐 Toggled favorite for item ${itemId}`);
 
-      // Sync with backend
       if (updated[itemId]) {
-        // Add to favorites
         await fetch('http://10.0.0.170:5000/api/favorites', {
           method: 'POST',
           headers: {
@@ -271,9 +161,7 @@ export default function JewelryBoxScreen() {
           },
           body: JSON.stringify({ item_id: itemId }),
         });
-        console.log(`🐐 Item ${itemId} added to backend favorites`);
       } else {
-        // Remove from favorites
         await fetch(`http://10.0.0.170:5000/api/favorites/${itemId}`, {
           method: 'DELETE',
           headers: {
@@ -281,9 +169,6 @@ export default function JewelryBoxScreen() {
             'Content-Type': 'application/json',
           },
         });
-        console.log(`🐐 Item ${itemId} removed from backend favorites`);
-
-        // Refresh the list to remove unfavorited item
         await fetchFavoritesFromBackend();
       }
     } catch (err) {
@@ -291,10 +176,10 @@ export default function JewelryBoxScreen() {
     }
   };
 
-  const handleShare = async (item: AuctionItem | ListedItem) => {
+  const handleShare = async (item: ListedItem) => {
     try {
       await Share.share({
-        message: `Check out this item: ${item.name}\n${item.photo_url}`,
+        message: `Check out this item on BidGoat: ${item.name}\nCurrent price: $${(item.highest_bid || item.price || 0).toFixed(2)}`,
         url: item.photo_url,
         title: item.name,
       });
@@ -303,281 +188,708 @@ export default function JewelryBoxScreen() {
     }
   };
 
- const getCountdownColor = (endTime: string): { color: string; fontWeight: '600' } => {
-  const now = Date.now();
-  const end = new Date(endTime).getTime();
-  const diffHours = (end - now) / (1000 * 60 * 60);
+  const getCountdownColor = (endTime: string): string => {
+    const now = Date.now();
+    const end = new Date(endTime).getTime();
+    const diffHours = (end - now) / (1000 * 60 * 60);
 
-  return {
-    color: diffHours <= 2 ? '#e53e3e' : '#38a169', // red if ≤2h, green otherwise
-    fontWeight: '600',
+    if (diffHours <= 2) return '#e53e3e';
+    if (diffHours <= 24) return '#FF6B35';
+    return '#38a169';
   };
-};
 
-  // Items are already favorites from the backend (with auto-cleanup applied)
-  console.log('🐐 JewelryBox: Displaying', allItems.length, 'favorited items');
+  const getCategoryBadge = (item: ListedItem) => {
+    const tags = item.tags?.toLowerCase() || '';
+    const name = item.name?.toLowerCase() || '';
+
+    if (tags.includes('watch') || name.includes('watch')) return { icon: '⌚', label: 'Watch', color: '#6A0DAD' };
+    if (tags.includes('ring') || name.includes('ring')) return { icon: '💍', label: 'Ring', color: '#FF6B35' };
+    if (tags.includes('necklace') || name.includes('necklace')) return { icon: '📿', label: 'Necklace', color: '#4A90E2' };
+    if (tags.includes('bracelet') || name.includes('bracelet')) return { icon: '🔗', label: 'Bracelet', color: '#38a169' };
+    if (tags.includes('earring') || name.includes('earring')) return { icon: '💎', label: 'Earrings', color: '#E91E63' };
+    return { icon: '✨', label: 'Jewelry', color: '#4CAF50' };
+  };
+
+  const isEndingSoon = (endTime?: string) => {
+    if (!endTime) return false;
+    const diffHours = (new Date(endTime).getTime() - Date.now()) / (1000 * 60 * 60);
+    return diffHours <= 24 && diffHours > 0;
+  };
+
+  const FilterChip = ({ label, value, active }: { label: string; value: string; active: boolean }) => (
+    <TouchableOpacity
+      style={[styles.filterChip, active && styles.filterChipActive]}
+      onPress={() => setFilterCategory(value)}
+    >
+      <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{label}</Text>
+    </TouchableOpacity>
+  );
+
+  const SortChip = ({ label, value, active }: { label: string; value: typeof sortBy; active: boolean }) => (
+    <TouchableOpacity
+      style={[styles.filterChip, active && styles.filterChipActive]}
+      onPress={() => setSortBy(value)}
+    >
+      <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{label}</Text>
+    </TouchableOpacity>
+  );
+
+  const renderEmptyState = () => (
+    <View style={styles.emptyContainer}>
+      <LinearGradient
+        colors={['#6A0DAD', '#FF6B35']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.emptyIconContainer}
+      >
+        <Ionicons name="heart-outline" size={60} color="#FFF" />
+      </LinearGradient>
+      <Text style={styles.emptyTitle}>Your Collection Awaits</Text>
+      <Text style={styles.emptySubtext}>
+        Start building your dream collection by favoriting items you love
+      </Text>
+      <TouchableOpacity
+        style={styles.exploreButton}
+        onPress={() => router.push('/')}
+      >
+        <Text style={styles.exploreButtonText}>Explore Auctions</Text>
+        <Ionicons name="arrow-forward" size={18} color="#FFF" />
+      </TouchableOpacity>
+    </View>
+  );
+
+  const renderItem = (item: ListedItem, index: number) => {
+    const category = getCategoryBadge(item);
+    const price = item.highest_bid || item.price || 0;
+
+    return (
+      <TouchableOpacity
+        key={item.id}
+        style={styles.cardWrapper}
+        onPress={() => router.push(`/item/${item.id}`)}
+        activeOpacity={0.95}
+      >
+        <View style={styles.card}>
+          {/* Image Container */}
+          <View style={styles.imageContainer}>
+            <Image source={{ uri: item.photo_url }} style={styles.image} resizeMode="cover" />
+
+            {/* Gradient Overlay at bottom for better text readability */}
+            <LinearGradient
+              colors={['transparent', 'rgba(0,0,0,0.3)']}
+              style={styles.imageGradient}
+            />
+
+            {/* Category Badge */}
+            <View style={[styles.categoryBadge, { backgroundColor: category.color }]}>
+              <Text style={styles.categoryText}>{category.icon} {category.label}</Text>
+            </View>
+
+            {/* Ending Soon Badge */}
+            {isEndingSoon(item.auction_ends_at) && (
+              <View style={styles.urgencyBadge}>
+                <Ionicons name="flame" size={12} color="#FFF" />
+                <Text style={styles.urgencyText}>ENDING SOON</Text>
+              </View>
+            )}
+
+            {/* Action Buttons */}
+            <View style={styles.actionButtons}>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleToggleFavorite(item.id);
+                }}
+              >
+                <Ionicons name="heart" size={20} color="#FF1744" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleShare(item);
+                }}
+              >
+                <Ionicons name="share-social" size={18} color="#6A0DAD" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Content */}
+          <View style={styles.cardContent}>
+            <Text style={styles.itemName} numberOfLines={2}>
+              {item.name}
+            </Text>
+
+            <View style={styles.priceRow}>
+              <Text style={styles.price}>${price.toLocaleString()}</Text>
+              {(item.bidCount ?? 0) > 0 && (
+                <View style={styles.bidBadge}>
+                  <MaterialCommunityIcons name="gavel" size={10} color="#FFF" />
+                  <Text style={styles.bidCount}>{item.bidCount}</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Stats Row */}
+            <View style={styles.statsRow}>
+              <View style={styles.stat}>
+                <Ionicons name="eye-outline" size={12} color="#666" />
+                <Text style={styles.statText}>{Math.floor(Math.random() * 30) + 10}</Text>
+              </View>
+
+              {item.auction_ends_at && (
+                <View style={styles.stat}>
+                  <Ionicons name="time-outline" size={12} color={getCountdownColor(item.auction_ends_at)} />
+                  <Text style={[styles.statText, { color: getCountdownColor(item.auction_ends_at) }]}>
+                    {formatTimeWithSeconds(item.auction_ends_at, Date.now())}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Seller */}
+            {item.seller && (
+              <View style={styles.sellerRow}>
+                <Ionicons name="person-circle-outline" size={14} color="#999" />
+                <Text style={styles.sellerText} numberOfLines={1}>
+                  {item.seller.username || 'Seller'}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      {loading ? (
-        <Text style={styles.title} numberOfLines={2}>
-          {item.name}
-        </Text>
-      ) : (
-        <Animated.FlatList
-          data={allItems}
-          numColumns={2}
-          keyExtractor={(item, index) => item?.id?.toString() ?? `fallback-${index}`}
-          renderItem={({ item, index }) => {
-            console.log('🐐 Rendering item:', item.id, item.name);
-            return (
-              <TouchableOpacity
-                style={styles.cardWrapper}
-                onPress={() => {
-                  console.log('🐐 Tapped item:', item.id, item.name);
-                  router.push(`/item/${item.id}`);
-                }}
-                activeOpacity={0.9}
-              >
-
-              <View style={[styles.jewelryItem, { backgroundColor: theme.card }]}>
-                <View style={styles.imageContainer}>
-                  <Image source={{ uri: item.photo_url }} style={styles.image} resizeMode="cover" />
-
-                  {/* Heart Icon - Top Right */}
-                  <TouchableOpacity
-                    style={styles.heartIconTopRight}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      handleToggleFavorite(item.id);
-                    }}
-                  >
-                    <Ionicons name="heart" size={24} color="#FF1744" />
-                  </TouchableOpacity>
-
-                  {/* Share Icon - Bottom Left (where heart used to be) */}
-                  <TouchableOpacity
-                    style={styles.shareIconBottomLeft}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      handleShare(item);
-                    }}
-                  >
-                    <Ionicons name="share-social" size={20} color="#6A0DAD" />
-                  </TouchableOpacity>
-                </View>
-
-                <Text style={[styles.jewelryName, { color: theme.text }]} numberOfLines={2}>
-                  {item.name}
-                </Text>
-
-                <View style={styles.priceRow}>
-                  <Text style={styles.cardPrice}>
-                    ${(item.highest_bid ?? item.price ?? 0).toFixed(2)}
-                  </Text>
-                  {(item.bidCount ?? 0) > 0 && (
-                    <Text style={styles.bidBadge}>{item.bidCount} BIDS</Text>
-                  )}
-                </View>
-
-                <View style={styles.statsContainer}>
-                  <Text style={styles.statsText}>👀 {Math.floor(Math.random() * 20) + 5} watching</Text>
-                  <MaterialCommunityIcons name="clock-outline" size={14} color="#666" />
-                  <Text
-                    style={[
-                      styles.statsText,
-                      item.auction_ends_at ? getCountdownColor(item.auction_ends_at) : {},
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {item.auction_ends_at
-                      ? formatTimeWithSeconds(item.auction_ends_at, Date.now())
-                      : 'Not auctioned'}
-                  </Text>
-                </View>
-
-                {/* Seller Name */}
-                {item.seller && (
-                  <Text style={styles.sellerName} numberOfLines={1}>
-                    by {item.seller.username || 'Seller'}
-                  </Text>
-                )}
-              </View>
-            </TouchableOpacity>
-            );
-          }}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={[styles.emptyState, { color: theme.empty }]}>
-                💖 No favorites yet
+    <View style={styles.container}>
+      <Animated.ScrollView
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
+        scrollEventThrottle={16}
+        contentContainerStyle={{
+          paddingTop: HEADER_MAX_HEIGHT + 30,
+          paddingBottom: 20,
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#6A0DAD" />
+            <Text style={styles.loadingText}>Loading your favorites...</Text>
+          </View>
+        ) : filteredItems.length === 0 && allItems.length === 0 ? (
+          renderEmptyState()
+        ) : (
+          <>
+            {/* Header Stats */}
+            <View style={styles.headerStats}>
+              <Text style={styles.headerTitle}>
+                💖 My Favorites
               </Text>
-              <Text style={[styles.emptySubtext, { color: theme.subtext }]}>
-                Tap the heart icon on items you love! ✨
+              <Text style={styles.headerCount}>
+                {filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'}
               </Text>
             </View>
-          }
-          contentContainerStyle={{
-            paddingTop: HEADER_MAX_HEIGHT + 20,
-            paddingHorizontal: 16,
-            paddingBottom: 20,
-          }}
-          columnWrapperStyle={{ gap: 12, justifyContent: 'space-between' }}
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            { useNativeDriver: false }
-          )}
-          scrollEventThrottle={16}
-        />
-      )}
+
+            {/* Filters */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filtersContainer}
+            >
+              <View style={styles.filterLabelRow}>
+                <Text style={styles.filterLabel}>Category:</Text>
+                <TouchableOpacity onPress={() => setShowFilterHelp(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Ionicons name="help-circle" size={16} color="#6A0DAD" />
+                </TouchableOpacity>
+              </View>
+              <FilterChip label="All" value="all" active={filterCategory === 'all'} />
+              <FilterChip label="⌚ Watches" value="watch" active={filterCategory === 'watch'} />
+              <FilterChip label="💍 Rings" value="ring" active={filterCategory === 'ring'} />
+              <FilterChip label="📿 Necklaces" value="necklace" active={filterCategory === 'necklace'} />
+              <FilterChip label="🔗 Bracelets" value="bracelet" active={filterCategory === 'bracelet'} />
+            </ScrollView>
+
+            {/* Sort Options */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filtersContainer}
+            >
+              <View style={styles.filterLabelRow}>
+                <Text style={styles.filterLabel}>Sort:</Text>
+                <TouchableOpacity onPress={() => setShowSortHelp(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Ionicons name="help-circle" size={16} color="#6A0DAD" />
+                </TouchableOpacity>
+              </View>
+              <SortChip label="Recent" value="recent" active={sortBy === 'recent'} />
+              <SortChip label="💰 Low to High" value="price_low" active={sortBy === 'price_low'} />
+              <SortChip label="💎 High to Low" value="price_high" active={sortBy === 'price_high'} />
+              <SortChip label="⏰ Ending Soon" value="ending_soon" active={sortBy === 'ending_soon'} />
+            </ScrollView>
+
+            {/* Items Grid */}
+            <View style={styles.grid}>
+              {filteredItems.map((item, index) => renderItem(item, index))}
+            </View>
+          </>
+        )}
+      </Animated.ScrollView>
+
       <EnhancedHeader scrollY={scrollY} username={username ?? null} onSearch={() => {}} />
+
+      {/* Filter Help Modal */}
+      <Modal
+        visible={showFilterHelp}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowFilterHelp(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>📂 Category Filters</Text>
+              <TouchableOpacity onPress={() => setShowFilterHelp(false)}>
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSectionTitle}>How Filtering Works</Text>
+                <Text style={styles.modalDescription}>
+                  Tap a category to show only items of that type. Tap &#34;All&#34; to see everything in your favorites.
+                </Text>
+              </View>
+
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSectionTitle}>Categories</Text>
+                <Text style={styles.modalDescription}>
+                  • ⌚ Watches - Luxury timepieces{'\n'}
+                  • 💍 Rings - Engagement rings, wedding bands, etc.{'\n'}
+                  • 📿 Necklaces - Chains, pendants, and more{'\n'}
+                  • 🔗 Bracelets - Tennis bracelets, bangles, etc.{'\n'}
+                  • 💎 Earrings - Studs, hoops, and drops
+                </Text>
+              </View>
+
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSectionTitle}>Quick Tip</Text>
+                <Text style={styles.modalDescription}>
+                  Use filters to quickly find specific items when your collection grows!
+                </Text>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Sort Help Modal */}
+      <Modal
+        visible={showSortHelp}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSortHelp(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>🔄 Sort Options</Text>
+              <TouchableOpacity onPress={() => setShowSortHelp(false)}>
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSectionTitle}>Recent</Text>
+                <Text style={styles.modalDescription}>
+                  Shows items in the order you favorited them, with most recent first.
+                </Text>
+              </View>
+
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSectionTitle}>💰 Price: Low to High</Text>
+                <Text style={styles.modalDescription}>
+                  Perfect for finding deals! Shows lowest-priced items first.
+                </Text>
+              </View>
+
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSectionTitle}>💎 Price: High to Low</Text>
+                <Text style={styles.modalDescription}>
+                  Browse premium items first. Shows highest-priced items at the top.
+                </Text>
+              </View>
+
+              <View style={styles.modalSection}>
+                <Text style={styles.modalSectionTitle}>⏰ Ending Soon</Text>
+                <Text style={styles.modalDescription}>
+                  Don&#39;t miss out! Shows auctions ending soonest first so you can place your bids.
+                </Text>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const { width } = Dimensions.get('window');
-const COLUMN_GAP = 12;
+const PADDING = 16;
+const GAP = 12;
 const NUM_COLUMNS = 2;
-const ITEM_WIDTH = (width - 32 - COLUMN_GAP) / NUM_COLUMNS;
+const CARD_WIDTH = (width - PADDING * 2 - GAP) / NUM_COLUMNS;
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  cardWrapper: {
-    width: ITEM_WIDTH,
-    marginBottom: 16,
+  container: {
+    flex: 1,
+    backgroundColor: '#FAFAFA',
   },
-  jewelryItem: {
-    padding: 12,
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 100,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
+  headerStats: {
+    paddingHorizontal: PADDING,
+    marginBottom: 16,
+    paddingTop: 20,
+  },
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: '#1a202c',
+    marginBottom: 4,
+  },
+  headerCount: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  filtersContainer: {
+    paddingHorizontal: PADDING,
+    paddingVertical: 8,
+    gap: 8,
+    alignItems: 'center',
+  },
+  filterLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginRight: 4,
+  },
+  filterLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4a5568',
+  },
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#FFF',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+  },
+  filterChipActive: {
+    backgroundColor: '#6A0DAD',
+    borderColor: '#6A0DAD',
+  },
+  filterChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#4a5568',
+  },
+  filterChipTextActive: {
+    color: '#FFF',
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: PADDING,
+    gap: GAP,
+    marginTop: 8,
+  },
+  cardWrapper: {
+    width: CARD_WIDTH,
+    marginBottom: GAP,
+  },
+  card: {
+    backgroundColor: '#FFF',
     borderRadius: 16,
-    backgroundColor: '#fff',
-    position: 'relative',
+    overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: {width: 0, height: 2},
-        shadowOpacity: 0.12,
-        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
       },
       android: {
-        elevation: 4,
+        elevation: 5,
       },
     }),
   },
-  jewelryInner: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    width: ITEM_WIDTH,
-    backgroundColor: 'transparent',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0, 0, 0, 0.4)',
-  },
-  heartIconTopRight: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 20,
-    padding: 6,
-    zIndex: 10,
-  },
-  shareIconBottomLeft: {
-    position: 'absolute',
-    bottom: 8,
-    left: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 20,
-    padding: 6,
-    zIndex: 10,
-  },
   imageContainer: {
-    position: 'relative',
     width: '100%',
-    height: ITEM_WIDTH * 1.2,
-    backgroundColor: '#eee',
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
+    height: CARD_WIDTH * 1.25,
+    position: 'relative',
+    backgroundColor: '#F0F0F0',
   },
   image: {
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
   },
-priceTagContainer: {
+  imageGradient: {
     position: 'absolute',
-  top: 8,
-  left: 8,
-},
-
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 60,
+  },
+  categoryBadge: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  categoryText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  urgencyBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: '#e53e3e',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  urgencyText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#FFF',
+    letterSpacing: 0.5,
+  },
+  actionButtons: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
+  cardContent: {
+    padding: 12,
+  },
+  itemName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#2d3748',
+    marginBottom: 6,
+    lineHeight: 20,
+  },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
+    justifyContent: 'space-between',
+    marginBottom: 8,
   },
-  cardPrice: {
-    fontSize: 18,
+  price: {
+    fontSize: 20,
     fontWeight: '700',
     color: '#6A0DAD',
   },
   bidBadge: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#fff',
-    backgroundColor: '#FF6B35',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  infoContainer: {
-    padding: 12,
-  },
-
-  jewelryName: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-
-  statsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
+    backgroundColor: '#FF6B35',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
+  },
+  bidCount: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 6,
+  },
+  stat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  statText: {
+    fontSize: 11,
+    color: '#666',
+    fontWeight: '500',
+  },
+  sellerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     marginTop: 4,
   },
-  statsText: {
-    fontSize: 12,
-    color: '#666',
-    marginRight: 8,
-  },
-  sellerName: {
-    fontSize: 12,
-    color: '#666',
+  sellerText: {
+    fontSize: 11,
+    color: '#999',
     fontStyle: 'italic',
-    marginTop: 4,
-  },
-loader: {
-    marginVertical: 20,
-    alignSelf: 'center',
+    flex: 1,
   },
   emptyContainer: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 60,
+    paddingTop: 80,
     paddingHorizontal: 32,
   },
-  emptyState: {
+  emptyIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  emptyTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1a202c',
+    marginBottom: 12,
     textAlign: 'center',
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 8,
   },
   emptySubtext: {
+    fontSize: 15,
+    color: '#718096',
     textAlign: 'center',
-    fontSize: 14,
+    lineHeight: 22,
+    marginBottom: 32,
   },
-
+  exploreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#6A0DAD',
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: 25,
+    gap: 8,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#6A0DAD',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
+  },
+  exploreButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#FFF',
+    borderRadius: 20,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '70%',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.3,
+        shadowRadius: 20,
+      },
+      android: {
+        elevation: 10,
+      },
+    }),
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1a202c',
+  },
+  modalScrollView: {
+    padding: 20,
+  },
+  modalSection: {
+    marginBottom: 20,
+  },
+  modalSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#2d3748',
+    marginBottom: 8,
+  },
+  modalDescription: {
+    fontSize: 14,
+    color: '#4a5568',
+    lineHeight: 20,
+  },
 });

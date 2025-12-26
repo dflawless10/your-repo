@@ -104,15 +104,17 @@ export default function SparkleItemCard({
       console.warn('Share failed:', error);
     }
   };
-   const getCountdownColor = (endTime: string): { color: string; fontWeight: '600' } => {
+   const getCountdownColor = (endTime: string): { color: string; fontWeight: '600' | 'bold' } => {
   const now = Date.now();
   const end = new Date(endTime).getTime();
   const diffHours = (end - now) / (1000 * 60 * 60);
 
-  return {
-    color: diffHours <= 2 ? '#e53e3e' : '#38a169', // red if ≤2h, green otherwise
-    fontWeight: '600',
-  };
+  if (diffHours <= 2) {
+    return { color: '#E53E3E', fontWeight: 'bold' }; // Bright red + bold if ≤2h
+  } else if (diffHours <= 24) {
+    return { color: '#c53030', fontWeight: '600' }; // Red if ≤24h
+  }
+  return { color: '#38a169', fontWeight: '600' }; // Green otherwise
 };
 
 
@@ -163,6 +165,13 @@ export default function SparkleItemCard({
         {hasEnded && (
           <View style={styles.endedBadge}>
             <Text style={styles.endedBadgeText}>ENDED</Text>
+          </View>
+        )}
+
+        {/* Buy It Now Badge - Top Left */}
+        {item.buy_it_now && (
+          <View style={styles.buyItNowBadge}>
+            <Text style={styles.buyItNowText}>BUY NOW</Text>
           </View>
         )}
 
@@ -340,6 +349,22 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   endedBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  buyItNowBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: '#10B981',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    zIndex: 5,
+  },
+  buyItNowText: {
     color: '#fff',
     fontSize: 10,
     fontWeight: '800',

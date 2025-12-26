@@ -9,6 +9,7 @@ import {
   Animated,
   Button,
   Alert,
+  Platform,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { useTheme } from '../theme/ThemeContext';
@@ -19,6 +20,7 @@ import EnhancedHeader, { HEADER_MAX_HEIGHT } from '../components/EnhancedHeader'
 import { getUserProfile, logoutUser } from '@/api/auth';
 import { User } from '@/types';
 import { Link, router } from 'expo-router';
+import { playGoatSoundByName } from '@/assets/sounds/officialGoatSoundsSoundtrack';
 
 type MascotMood =
   | 'Celebrate'
@@ -112,12 +114,48 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = async () => {
-    try {
-      await logoutUser();
-    } catch (error) {
-      Alert.alert('Error', 'Failed to logout. Please try again.');
-      throw error;
-    }
+    Alert.alert(
+      '🐐 Logout',
+      'You are about to log out of BidGoat Mobile. Are you sure you want to log out?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Play goat sound (don't await - let it play in background)
+              playGoatSoundByName('Victory Baa');
+
+              // Show thank you message
+              Alert.alert(
+                '🐐 Thank You!',
+                'Thank you for being a loyal BidGoat user! See you soon! 🎉',
+                [
+                  {
+                    text: 'OK',
+                    onPress: async () => {
+                      try {
+                        await logoutUser();
+                      } catch (error) {
+                        console.error('Logout failed:', error);
+                        Alert.alert('Error', 'Failed to logout. Please try again.');
+                      }
+                    },
+                  },
+                ],
+                { cancelable: false }
+              );
+            } catch (error) {
+              console.error('Logout error:', error);
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -128,8 +166,8 @@ export default function ProfileScreen() {
         avatarUrl={profileImage}
       />
       <Animated.ScrollView
-        style={[themedStyles.container, { paddingTop: HEADER_MAX_HEIGHT }]}
-        contentContainerStyle={{ paddingBottom: 120 }}
+        style={themedStyles.container}
+        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20, paddingBottom: 120 }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
@@ -187,21 +225,23 @@ export default function ProfileScreen() {
             <ProfileItem label="Notifications" value="Enabled" isDarkMode={isDarkMode} />
 
             <Text style={themedStyles.section}>🐐 Mascot Mood</Text>
-            <Picker
-              selectedValue={mascotMood}
-              style={themedStyles.picker}
-              onValueChange={(value: MascotMood) => setMascotMood(value)}
-            >
-              <Picker.Item label="Mischievous" value="Mischievous" />
-              <Picker.Item label="Joyful" value="Joyful" />
-              <Picker.Item label="Sleepy" value="Sleepy" />
-              <Picker.Item label="Curious" value="Curious" />
-              <Picker.Item label="Celebrate" value="Celebrate" />
-              <Picker.Item label="Grumpy" value="Grumpy" />
-              <Picker.Item label="Sad" value="Sad" />
-              <Picker.Item label="Chaotic" value="Chaotic" />
-            </Picker>
-            <Text style={[themedStyles.item, { marginTop: 8 }]}>Current Mood: {mascotMood}</Text>
+            <View style={themedStyles.pickerContainer}>
+              <Picker
+                selectedValue={mascotMood}
+                style={themedStyles.picker}
+                itemStyle={themedStyles.pickerItem}
+                onValueChange={(value: MascotMood) => setMascotMood(value)}
+              >
+                <Picker.Item label="🎉 Celebrate" value="Celebrate" />
+                <Picker.Item label="😈 Mischievous" value="Mischievous" />
+                <Picker.Item label="😊 Joyful" value="Joyful" />
+                <Picker.Item label="😠 Grumpy" value="Grumpy" />
+                <Picker.Item label="😢 Sad" value="Sad" />
+                <Picker.Item label="🤔 Curious" value="Curious" />
+                <Picker.Item label="😴 Sleepy" value="Sleepy" />
+                <Picker.Item label="🤪 Chaotic" value="Chaotic" />
+              </Picker>
+            </View>
 
             <View style={themedStyles.logoutButtonContainer}>
               <Button
@@ -257,11 +297,24 @@ function getThemedStyles(isDarkMode: boolean) {
       width: '100%',
       marginBottom: 8,
     },
+    pickerContainer: {
+      backgroundColor: isDarkMode ? '#1a1a1a' : '#f5f5f5',
+      borderWidth: 1,
+      borderColor: isDarkMode ? '#444' : '#E0E0E0',
+      borderRadius: 8,
+      justifyContent: 'center',
+      height: 56,
+    },
     picker: {
-      height: 50,
+      height: Platform.OS === 'ios' ? 180 : 56,
       width: '100%',
-      marginBottom: 8,
-      color: isDarkMode ? '#fff' : '#000',
+      fontSize: 16,
+      color: '#1A1A1A',
+    },
+    pickerItem: {
+      height: Platform.OS === 'ios' ? 180 : 56,
+      fontSize: 16,
+      color: '#1A1A1A',
     },
     imageContainer: {
       alignItems: 'center',

@@ -8,7 +8,8 @@ import {
   ScrollView,
   Animated, Share, TouchableOpacity,
 } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import ReviewSkeleton from 'app/ReviewSkeleton';
 import StarRating from "app/seller/StarRating";
 import TextReview from "app/seller/TextReview";
@@ -19,6 +20,7 @@ import CheckboxGroup from 'app/components/CheckBoxGroup';
 import DateRangePicker from 'app/components/DataRangePicker';
 import Dropdown from 'app/components/DropDown';
 import {ReviewFilter} from 'types/ReviewFilter';
+import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
 
 
 type Review = {
@@ -57,11 +59,13 @@ type Seller = {
 
 export default function SellerProfileScreen() {
   const { sellerId, from, itemId } = useLocalSearchParams();
+  const router = useRouter();
   const [seller, setSeller] = useState<Seller | null>(null);
   const [loading, setLoading] = useState(true);
   const [ctsStats, setCtsStats] = useState({ watchers: 0, ctsRate: 0, rewardPoints: 0 });
   const skeletonOpacity = useRef(new Animated.Value(1)).current;
   const contentOpacity = useRef(new Animated.Value(0)).current;
+  const scrollY = useRef(new Animated.Value(0)).current;
   const [filter, setFilter] = useState<ReviewFilter>({
   keyword: '',
   minRating: 1,
@@ -205,18 +209,37 @@ export default function SellerProfileScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={[styles.container, { paddingTop: 28 }]}>
-      {/* Header */}
-      <View style={[styles.header, { marginBottom: 16 }]}>
-        <Image
+    <View style={{ flex: 1 }}>
+      <EnhancedHeader scrollY={scrollY} onSearch={() => {}} />
+      <Animated.ScrollView
+        style={styles.scrollContainer}
+        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20, paddingBottom: 100 }}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
+        scrollEventThrottle={16}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
+        <View style={styles.pageHeader}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.pageTitle}>Seller Profile</Text>
+        </View>
+
+        {/* Header */}
+        <View style={[styles.header, { marginBottom: 16, paddingHorizontal: 16 }]}>
+          <Image
           source={
             seller?.avatar_url
               ? { uri: seller.avatar_url }
-              : require('app/components/assets/GoatGenieBadge.png')
+              : require('../../assets/goat-wink.png')
           }
           style={styles.avatar}
         />
-        <View style={{ flex: 1 }}>
+        <View style={styles.headerInfo}>
           <Text style={styles.title}>👤 {seller?.username}</Text>
           {seller?.badge ? <Text style={styles.badge}>{seller.badge}</Text> : null}
           <StarRating
@@ -316,13 +339,35 @@ export default function SellerProfileScreen() {
       <Animated.View style={{ opacity: contentOpacity }}>{renderReviews()}</Animated.View>
       {/* Add Review */}
       <BuyerReviewForm seller={seller} />
-    </ScrollView>
+      </Animated.ScrollView>
+    </View>
   );
 }
 
 
 
 const styles = StyleSheet.create({
+  scrollContainer: {
+    flex: 1,
+    backgroundColor: '#F7FAFC',
+  },
+  pageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 40,
+    paddingBottom: 8,
+    backgroundColor: '#F7FAFC',
+  },
+  backButton: {
+    marginRight: 12,
+    padding: 4,
+  },
+  pageTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1A202C',
+  },
   container: {
     padding: 20,
     backgroundColor: '#f9f9f9',
@@ -419,13 +464,15 @@ const styles = StyleSheet.create({
     color: '#f6ad55',
     marginBottom: 8,
   },
-  header: { flexDirection: 'row', gap: 12, alignItems: 'center', marginBottom: 8 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
-  quickRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginTop: 8 },
+  header: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  headerInfo: { flex: 1, marginLeft: 12 },
+  row: { flexDirection: 'row', alignItems: 'center', marginTop: 6, marginRight: 8 },
+  quickRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8, marginRight: 8 },
   chip: {
     backgroundColor: '#e2e8f0',
     color: '#2d3748',
     paddingHorizontal: 8,
+    marginRight: 8,
     paddingVertical: 4,
     borderRadius: 12,
     fontSize: 12,

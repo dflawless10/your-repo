@@ -133,6 +133,29 @@ if (Number.isNaN(maxBid) || maxBid <= selectedBidItem.current_highest_bid) {
     }
   };
 
+  const disableAutoBid = async (itemId: number) => {
+    try {
+      const token = await AsyncStorage.getItem('jwtToken');
+      const response = await fetch(`http://10.0.0.170:5000/api/auto-bid/disable/${itemId}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        Alert.alert('Success', 'Auto-bid disabled');
+        await fetchMyBids(); // Refresh
+      } else {
+        Alert.alert('Error', 'Failed to disable auto-bid');
+      }
+    } catch (error) {
+      console.error('Failed to disable auto-bid:', error);
+      Alert.alert('Error', 'Failed to disable auto-bid');
+    }
+  };
+
   const filteredBids = bids.filter(bid => {
     if (activeTab === 'active') return bid.status === 'active' || bid.status === 'outbid';
     if (activeTab === 'won') return bid.status === 'won';
@@ -143,6 +166,7 @@ if (Number.isNaN(maxBid) || maxBid <= selectedBidItem.current_highest_bid) {
   const renderBidCard = ({ item }: { item: BidItem }) => {
     const isWinning = item.is_winning;
     const timeRemaining = getTimeRemaining(item.auction_ends_at);
+    const timeColor = getTimeRemainingColor(item.auction_ends_at);
 
     const pluralize = (count: number) => (count === 1 ? '' : 's');
 
@@ -211,8 +235,8 @@ if (Number.isNaN(maxBid) || maxBid <= selectedBidItem.current_highest_bid) {
           {/* Time Remaining or Final Price */}
           {item.status === 'active' || item.status === 'outbid' ? (
             <View style={styles.timeRow}>
-              <Ionicons name="time-outline" size={16} color="#FF6B6B" />
-              <Text style={styles.timeText}>{timeRemaining}</Text>
+              <Ionicons name="time-outline" size={16} color={timeColor} />
+              <Text style={[styles.timeText, { color: timeColor }]}>{timeRemaining}</Text>
             </View>
           ) : (
             item.final_price && (
@@ -226,10 +250,32 @@ if (Number.isNaN(maxBid) || maxBid <= selectedBidItem.current_highest_bid) {
           {/* Auto-Bid Indicator */}
           {item.auto_bid_enabled && (
             <View style={styles.autoBidIndicator}>
-              <Ionicons name="flash" size={14} color="#FFA500" />
-              <Text style={styles.autoBidText}>
-                Auto-bid ON (Max: ${item.auto_bid_max}) • {item.auto_bid_strategy}
-              </Text>
+              <View style={styles.autoBidInfo}>
+                <Ionicons name="flash" size={14} color="#FFA500" />
+                <Text style={styles.autoBidText}>
+                  Auto-bid ON (Max: ${item.auto_bid_max}) • {item.auto_bid_strategy}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.disableAutoBidButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  Alert.alert(
+                    'Disable Auto-Bid',
+                    'Are you sure you want to disable auto-bidding for this item?',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Disable',
+                        style: 'destructive',
+                        onPress: () => disableAutoBid(item.item_id),
+                      },
+                    ]
+                  );
+                }}
+              >
+                <Ionicons name="close-circle" size={18} color="#F57C00" />
+              </TouchableOpacity>
             </View>
           )}
 
@@ -273,6 +319,17 @@ if (Number.isNaN(maxBid) || maxBid <= selectedBidItem.current_highest_bid) {
     return `${hours}h ${minutes}m remaining`;
   };
 
+  const getTimeRemainingColor = (endsAt: string) => {
+    const end = new Date(endsAt);
+    const now = new Date();
+    const diff = end.getTime() - now.getTime();
+    const hours = diff / (1000 * 60 * 60);
+
+    if (hours <= 2) return '#FF6B6B'; // Red for <= 2 hours
+    if (hours <= 24) return '#FFA500'; // Orange for <= 24 hours
+    return '#4CAF50'; // Green for > 24 hours (48+ hours)
+  };
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -291,8 +348,27 @@ if (Number.isNaN(maxBid) || maxBid <= selectedBidItem.current_highest_bid) {
       <EnhancedHeader scrollY={scrollY} />
 
       <View style={styles.headerTitleContainer}>
-        <Text style={styles.headerTitle}>My Bids</Text>
-        <Text style={styles.headerSubtitle}>Track your auction activity</Text>
+        <View style={styles.headerTitleRow}>
+          <View style={styles.titleWithArrow}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.backArrow}
+            >
+              <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+            </TouchableOpacity>
+            <View>
+              <Text style={styles.headerTitle}>My Bids</Text>
+              <Text style={styles.headerSubtitle}>Track your auction activity</Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.statsButton}
+            onPress={() => router.push('/auto-bid-stats')}
+          >
+            <Ionicons name="stats-chart" size={20} color="#6A0DAD" />
+            <Text style={styles.statsButtonText}>Stats</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Tabs */}
@@ -363,13 +439,6 @@ if (Number.isNaN(maxBid) || maxBid <= selectedBidItem.current_highest_bid) {
                 <Ionicons name="close" size={28} color="#333" />
               </TouchableOpacity>
             </View>
-<TextInput
-  keyboardType="numeric"
-  value={autoBidMax}
-  onChangeText={setAutoBidMax}
-  placeholder="0.00"
-  style={styles.input}
-/>
             <ScrollView>
               {selectedBidItem && (
                 <>
@@ -486,15 +555,28 @@ const styles = StyleSheet.create({
   },
   headerTitleContainer: {
     position: 'absolute',
-    top: HEADER_MAX_HEIGHT,
+    top: HEADER_MAX_HEIGHT + 48,
     left: 0,
     right: 0,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 16,
     backgroundColor: '#FFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
-    zIndex: 10,
+    zIndex: 100,
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  titleWithArrow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backArrow: {
+    marginRight: 12,
+    padding: 4,
   },
   headerTitle: {
     fontSize: 20,
@@ -506,15 +588,33 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#718096',
   },
+  statsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F3E5F5',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  statsButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6A0DAD',
+  },
   tabsContainer: {
+    position: 'absolute',
+    top: HEADER_MAX_HEIGHT + 130,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     backgroundColor: '#FFF',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    paddingTop: 140,
     gap: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
+    zIndex: 99,
   },
   tab: {
     flex: 1,
@@ -537,6 +637,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
+    paddingTop: 300,
   },
   bidCard: {
     flexDirection: 'row',
@@ -637,7 +738,6 @@ const styles = StyleSheet.create({
   timeText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#FF6B6B',
   },
   finalPriceRow: {
     flexDirection: 'row',
@@ -657,17 +757,26 @@ const styles = StyleSheet.create({
   autoBidIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'space-between',
     backgroundColor: '#FFF3E0',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
     marginBottom: 8,
   },
+  autoBidInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flex: 1,
+  },
   autoBidText: {
     fontSize: 11,
     color: '#F57C00',
     fontWeight: '600',
+  },
+  disableAutoBidButton: {
+    padding: 4,
   },
   actionRow: {
     flexDirection: 'row',

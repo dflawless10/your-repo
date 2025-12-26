@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Option = {
   label: string;
@@ -15,23 +16,61 @@ type Props = {
   placeholder?: string;
   allowCustom?: boolean;
   onAddCustom?: (customValue: string, label: string) => void;
+  fieldName?: string; // For storing custom options
 };
 
-export default function AutocompleteInput({ label, value, onValueChange, options, placeholder, allowCustom = true, onAddCustom }: Props) {
+export default function AutocompleteInput({ label, value, onValueChange, options, placeholder, allowCustom = true, onAddCustom, fieldName }: Props) {
   const [searchText, setSearchText] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [customOptions, setCustomOptions] = useState<Option[]>([]);
+
+  // Load custom options from AsyncStorage on mount
+  useEffect(() => {
+    if (fieldName) {
+      loadCustomOptions();
+    }
+  }, [fieldName]);
+
+  const loadCustomOptions = async () => {
+    try {
+      const storageKey = `custom_watch_options_${fieldName}`;
+      const stored = await AsyncStorage.getItem(storageKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setCustomOptions(parsed);
+      }
+    } catch (error) {
+      console.error('Error loading custom options:', error);
+    }
+  };
+
+  const saveCustomOption = async (option: Option) => {
+    try {
+      if (!fieldName) return;
+
+      const storageKey = `custom_watch_options_${fieldName}`;
+      const newCustomOptions = [...customOptions, option];
+      setCustomOptions(newCustomOptions);
+      await AsyncStorage.setItem(storageKey, JSON.stringify(newCustomOptions));
+    } catch (error) {
+      console.error('Error saving custom option:', error);
+    }
+  };
+
+  // Merge original options with custom saved options
+  const allOptions = [...options, ...customOptions];
 
   // Find the label for the current value
-  const displayValue = options.find(opt => opt.value === value)?.label || value || '';
+  const displayValue = allOptions.find(opt => opt.value === value)?.label || value || '';
 
   // Filter options based on search
-  const filteredOptions = options.filter(opt =>
+  const filteredOptions = allOptions.filter(opt =>
     opt.label.toLowerCase().includes(searchText.toLowerCase())
   );
 
   // Check if search text matches existing option exactly
-  const exactMatch = options.find(opt =>
+  const exactMatch = allOptions.find(opt =>
     opt.label.toLowerCase() === searchText.toLowerCase()
   );
 
@@ -44,9 +83,13 @@ export default function AutocompleteInput({ label, value, onValueChange, options
     setIsOpen(false);
   };
 
-  const handleAddCustom = () => {
+  const handleAddCustom = async () => {
     const customValue = searchText.toLowerCase().replace(/\s+/g, '');
     const customLabel = searchText.trim();
+    const newOption = { label: customLabel, value: customValue };
+
+    // Save to AsyncStorage
+    await saveCustomOption(newOption);
 
     // Add to local state immediately
     onValueChange(customValue);
@@ -116,10 +159,14 @@ export default function AutocompleteInput({ label, value, onValueChange, options
                 option.value === value && styles.selectedItem
               ]}
             >
-              <Text style={[
-                styles.dropdownText,
-                option.value === value && styles.selectedText
-              ]}>
+              <Text
+                style={[
+                  styles.dropdownText,
+                  option.value === value && styles.selectedText
+                ]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
                 {option.label}
               </Text>
               {option.value === value && (
@@ -152,21 +199,26 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#4A5568',
+    color: '#6A0DAD', // BidGoat purple
     marginBottom: 6,
   },
   inputWrapper: {
     position: 'relative',
   },
   input: {
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderWidth: 2,
+    borderColor: '#E0D4F7', // Light purple border
     padding: 12,
     paddingRight: 40,
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: 'white',
     fontSize: 16,
     color: '#1A202C',
+    shadowColor: '#6A0DAD',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   arrowButtons: {
     position: 'absolute',
@@ -175,12 +227,12 @@ const styles = StyleSheet.create({
     bottom: 1,
     flexDirection: 'column',
     justifyContent: 'center',
-    borderLeftWidth: 1,
-    borderLeftColor: '#E2E8F0',
-    backgroundColor: '#F7FAFC',
-    borderTopRightRadius: 8,
-    borderBottomRightRadius: 8,
-    width: 32,
+    borderLeftWidth: 2,
+    borderLeftColor: '#E0D4F7',
+    backgroundColor: '#F9F5FF', // Very light purple
+    borderTopRightRadius: 10,
+    borderBottomRightRadius: 10,
+    width: 36,
   },
   arrowButton: {
     flex: 1,
@@ -188,49 +240,57 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dropdown: {
-    maxHeight: 200,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
+    maxHeight: 220,
+    borderWidth: 2,
+    borderColor: '#6A0DAD',
+    borderRadius: 10,
     marginTop: 4,
     backgroundColor: '#fff',
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
+    shadowColor: '#6A0DAD',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
   },
   dropdownItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 12,
+    padding: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#F7FAFC',
+    borderBottomColor: '#F0E7FF',
   },
   dropdownText: {
+    flex: 1,
     fontSize: 15,
     color: '#2D3748',
+    numberOfLines: 1,
+    ellipsizeMode: 'tail',
+    marginRight: 8,
   },
   highlightedItem: {
-    backgroundColor: '#EDF2F7',
+    backgroundColor: '#F9F5FF', // Light purple highlight
   },
   selectedItem: {
-    backgroundColor: '#FFF5F2',
+    backgroundColor: '#FFF0EB', // Light orange
+    borderLeftWidth: 3,
+    borderLeftColor: '#FF6B35',
   },
   selectedText: {
-    color: '#FF6B35',
-    fontWeight: '600',
+    color: '#FF6B35', // BidGoat orange
+    fontWeight: '700',
   },
   addCustomItem: {
-    backgroundColor: '#F7FAFC',
+    backgroundColor: '#FFF5F2',
     borderTopWidth: 2,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: '#FF6B35',
+    paddingVertical: 16,
   },
   addCustomText: {
     fontSize: 15,
-    color: '#FF6B35',
-    fontWeight: '600',
+    color: '#FF6B35', // BidGoat orange
+    fontWeight: '700',
     marginLeft: 8,
+    flex: 1,
   },
 });

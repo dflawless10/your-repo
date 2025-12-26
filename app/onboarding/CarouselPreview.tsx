@@ -12,10 +12,10 @@ import Carousel from 'react-native-reanimated-carousel';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import Toast from 'react-native-toast-message';
-import { getCountdownLocal } from '@/utils/time';
+import { formatTimeWithSeconds } from '@/utils/time';
 import { useWishlist } from 'app/wishlistContext';
 import { useAppDispatch } from 'hooks/reduxHooks';
-import {Ionicons} from "@expo/vector-icons";
+import {Ionicons, MaterialCommunityIcons} from "@expo/vector-icons";
 import {goatSounds, playGoatSoundByName} from "@/assets/sounds/officialGoatSoundsSoundtrack";
 const { width } = Dimensions.get('window');
 const TEN_MIN_MS = 10 * 60 * 1000;
@@ -32,6 +32,9 @@ type CarouselItem = {
   countdown?: string;
   auctionEndsAt?: string;
   description?: string;
+  buy_it_now?: number;
+  original_price?: number;
+  relist_count?: number;
   seller?: {
     id: number;
     username: string;
@@ -49,6 +52,20 @@ interface Props {
   category: Category;
   onFirstSwipe?: () => void;
 }
+
+// Helper function to get countdown color based on time remaining
+const getCountdownColor = (endTime: string): string => {
+  const now = Date.now();
+  const end = new Date(endTime).getTime();
+  const diffHours = (end - now) / (1000 * 60 * 60);
+
+  if (diffHours <= 2) {
+    return '#E53E3E'; // Bright red if ≤2h
+  } else if (diffHours <= 24) {
+    return '#c53030'; // Red if ≤24h
+  }
+  return '#38a169'; // Green otherwise
+};
 
 const CarouselPreview: React.FC<Props> = ({ category, onFirstSwipe }) => {
   const fade = useRef(new Animated.Value(0)).current;
@@ -117,11 +134,11 @@ const CarouselPreview: React.FC<Props> = ({ category, onFirstSwipe }) => {
       return;
     }
 
-    // Map category to endpoint - Use just-listed for all categories to ensure we have data
+    // Map category to endpoint
     const endpoints = {
       'Just Listed': 'http://10.0.0.170:5000/api/just-listed',
       'Create Auction': 'http://10.0.0.170:5000/api/just-listed',
-      'Sell Now': 'http://10.0.0.170:5000/api/just-listed',
+      'Sell Now': 'http://10.0.0.170:5000/api/shop/relisted-discounts',
     };
 
     const url = endpoints[category];
@@ -146,7 +163,7 @@ const CarouselPreview: React.FC<Props> = ({ category, onFirstSwipe }) => {
           ? rawTimestamp
           : rawTimestamp.replace(' ', 'T') + 'Z';
 
-        const { timeText } = getCountdownLocal(safeTimestamp);
+        const timeText = formatTimeWithSeconds(safeTimestamp, Date.now());
 
         // Debug seller data
         if (item.seller) {
@@ -164,6 +181,9 @@ const CarouselPreview: React.FC<Props> = ({ category, onFirstSwipe }) => {
           countdown: timeText,
           auctionEndsAt: safeTimestamp,
           description: item.description || '',
+          buy_it_now: item.buy_it_now || item.buyItNow,
+          original_price: item.original_price || item.originalPrice,
+          relist_count: item.relist_count || item.relistCount || 0,
           seller: item.seller ? {
             id: item.seller.id,
             username: item.seller.username,
@@ -280,16 +300,18 @@ total_reviews = 0;
   }, [carouselItems.length]); // Only run when item count changes, not on every item update
 
   useEffect(() => {
+  // Set up interval that checks every 10 minutes
   const interval = setInterval(() => {
-    // Pick a title length from a random item or fallback
-    const randomItem = carouselItems[Math.floor(Math.random() * carouselItems.length)];
-    const titleLen = randomItem?.title?.length || 10;
+    // Use ref to access current items without adding to dependencies
+    const titleLen = carouselItems.length > 0 
+      ? (carouselItems[Math.floor(Math.random() * carouselItems.length)]?.title?.length || 10)
+      : 10;
 
     maybePlayGoat(titleLen);
   }, TEN_MIN_MS);
 
   return () => clearInterval(interval);
-}, [carouselItems]);
+}, []); // Empty dependency array - only run once on mount
 
 
   const maybePlayGoat = async (titleLen: number) => {
@@ -311,15 +333,6 @@ total_reviews = 0;
   }
 };
 
-
-  // ⏰ Countdown color logic - matches SparkleItemCard, Discover, and Favorites
-  const getCountdownColor = (endTime: string): string => {
-    const now = Date.now();
-    const end = new Date(endTime).getTime();
-    const diffHours = (end - now) / (1000 * 60 * 60);
-
-    return diffHours <= 2 ? '#e53e3e' : '#38a169';
-  };
 
   // 💖 Favorite toggle - syncs with backend and navigates to JewelryBox
   const handleFavoriteTap = async (item: CarouselItem) => {
@@ -463,6 +476,22 @@ total_reviews = 0;
               <View style={styles.imageContainer}>
                 <Image source={item.image} style={styles.image} resizeMode="cover" />
 
+                {/* Buy It Now Badge - Top Left */}
+                {!!item.buy_it_now && (
+                  <View style={styles.buyItNowBadge}>
+                    <Text style={styles.buyItNowText}>BUY NOW</Text>
+                  </View>
+                )}
+
+                {/* Discount Badge - Top Left (below Buy Now if both exist) */}
+                {item.original_price && item.price && item.original_price > item.price && (
+                  <View style={[styles.discountBadge, !!item.buy_it_now && { top: 40 }]}>
+                    <Text style={styles.discountText}>
+                      {Math.round(((item.original_price - Number(item.price)) / item.original_price) * 100)}% OFF
+                    </Text>
+                  </View>
+                )}
+
                 {/* Favorite Heart - Top Right */}
                 <TouchableOpacity
                   onPress={(e) => {
@@ -478,14 +507,6 @@ total_reviews = 0;
                   />
                 </TouchableOpacity>
 
-                {/* Countdown Badge - Bottom Left */}
-                {item.countdown && item.auctionEndsAt && (
-                  <View style={styles.countdownBadge}>
-                    <Text style={[styles.countdownText, { color: getCountdownColor(item.auctionEndsAt) }]}>
-                       {item.countdown}
-                    </Text>
-                  </View>
-                )}
               </View>
 
               {/* Info Container */}
@@ -503,30 +524,48 @@ total_reviews = 0;
                   )}
                 </View>
 
-                {/* Star Rating */}
-                {item.seller && item.seller.avg_rating > 0 && (
-                  <View style={styles.ratingRow}>
-                    <Ionicons name="star" size={14} color="#FFD700" />
-                    <Text style={styles.ratingText}>
-                      {item.seller.avg_rating.toFixed(1)} ({item.seller.total_reviews})
-                    </Text>
-                  </View>
-                )}
+                {/* Bottom Row: Countdown (left) | Seller + Rating (right) */}
+                <View style={styles.bottomRow}>
+                  {/* Countdown Timer - Left Side */}
+                  {item.countdown && item.auctionEndsAt && (
+                    <View style={styles.statsContainer}>
+                      <MaterialCommunityIcons name="clock-outline" size={14} color="#666" />
+                      <Text
+                        style={[
+                          styles.statsText,
+                          { color: getCountdownColor(item.auctionEndsAt) },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {item.countdown}
+                      </Text>
+                    </View>
+                  )}
 
-                {/* Seller Name - styled as link */}
-                {item.seller && (
-                  <TouchableOpacity
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      handleSellerTap(item);
-                    }}
-                    style={styles.sellerRow}
-                  >
-                    <Text style={styles.sellerName} numberOfLines={1}>
-                      by {item.seller.username}
-                    </Text>
-                  </TouchableOpacity>
-                )}
+                  {/* Seller Name and Star Rating - Right Side */}
+                  {item.seller && (
+                    <View style={styles.sellerRatingRow}>
+                      <TouchableOpacity
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleSellerTap(item);
+                        }}
+                      >
+                        <Text style={styles.sellerName} numberOfLines={1}>
+                          by {item.seller.username}
+                        </Text>
+                      </TouchableOpacity>
+                      {item.seller.avg_rating > 0 && (
+                        <View style={styles.ratingRow}>
+                          <Ionicons name="star" size={14} color="#FFD700" />
+                          <Text style={styles.ratingText}>
+                            {item.seller.avg_rating.toFixed(1)} ({item.seller.total_reviews})
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </View>
               </View>
             </View>
           </TouchableOpacity>
@@ -576,18 +615,20 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
-  countdownBadge: {
-    position: 'absolute',
-    bottom: 8,
-    left: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
+  bottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
   },
-  countdownText: {
-    fontSize: 11,
-    fontWeight: '700',
+  statsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statsText: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
   },
   infoContainer: {
     padding: 12,
@@ -602,7 +643,6 @@ const styles = StyleSheet.create({
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
     marginBottom: 4,
   },
   cardPrice: {
@@ -619,26 +659,65 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 4,
     overflow: 'hidden',
+    marginLeft: 8,
+  },
+  sellerRatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  sellerName: {
+    fontSize: 12,
+    color: '#007AFF',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+    marginRight: 8,
   },
   ratingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginBottom: 4,
   },
   ratingText: {
     fontSize: 12,
     color: '#666',
     fontWeight: '600',
+    marginLeft: 4,
   },
   sellerRow: {
     marginTop: 4,
   },
-  sellerName: {
-    fontSize: 13,
-    color: '#007AFF',
-    fontWeight: '600',
-    textDecorationLine: 'underline',
+  buyItNowBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: '#10B981',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    zIndex: 10,
+    elevation: 10,
+  },
+  buyItNowText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  discountBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: '#E53935',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    zIndex: 9,
+    elevation: 9,
+  },
+  discountText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
 });
 

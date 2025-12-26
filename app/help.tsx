@@ -1,22 +1,37 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { useRouter } from 'expo-router';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, Platform } from 'react-native';
+import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import EnhancedHeader, { HEADER_MAX_HEIGHT } from './components/EnhancedHeader';
 
 export default function HelpScreen() {
   const router = useRouter();
+  const scrollY = new Animated.Value(0);
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Help Center</Text>
-        <View style={{ width: 24 }} />
-      </View>
+      <Stack.Screen options={{ headerShown: false }} />
+      <EnhancedHeader scrollY={scrollY} />
 
-      <ScrollView style={styles.content}>
+      <Animated.ScrollView
+        style={styles.content}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
+        scrollEventThrottle={16}
+        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20 }}
+      >
+        {/* Page Header with Back Arrow */}
+        <View style={styles.pageHeader}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backButton}
+          >
+            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+          </TouchableOpacity>
+          <Text style={styles.pageTitle}>Help Center</Text>
+        </View>
         <Text style={styles.title}>🐐 Welcome to BidGoat Help!</Text>
 
         <View style={styles.section}>
@@ -72,7 +87,8 @@ export default function HelpScreen() {
           <Text style={styles.sectionTitle}>Need More Help?</Text>
           <Text style={styles.text}>Contact us at support@bidgoat.com</Text>
         </View>
-      </ScrollView>
+        <View style={{ height: 40 }} />
+      </Animated.ScrollView>
     </View>
   );
 }
@@ -82,23 +98,25 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
-  header: {
+  pageHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    paddingHorizontal: 16,
+    paddingTop: 40,
+    paddingBottom: 8,
+    backgroundColor: '#f8f9fa',
   },
-  headerTitle: {
-    fontSize: 18,
+  backButton: {
+    marginRight: 12,
+    padding: 4,
+  },
+  pageTitle: {
+    fontSize: 20,
     fontWeight: '700',
-    color: '#333',
+    color: '#1A202C',
   },
   content: {
     flex: 1,
-    padding: 16,
   },
   title: {
     fontSize: 24,

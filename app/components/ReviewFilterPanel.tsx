@@ -8,6 +8,7 @@ import { ReviewFilter } from '@/types/ReviewFilter';
 import CheckboxGroup from 'app/components/CheckBoxGroup';
 import DateRangePicker from 'app/components/DataRangePicker';
 import Dropdown from 'app/components/DropDown';
+import GlobalFooter from "@/app/components/GlobalFooter";
 
 
 type Props = {
@@ -84,7 +85,7 @@ export default function ReviewFilterPanel({ filter, setFilter }: Readonly<Props>
   onSelect={(val) => setFilter({ ...filter, sortBy: val })}
 />
 
-
+ <GlobalFooter />
     </View>
 
   );

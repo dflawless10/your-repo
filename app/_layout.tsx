@@ -21,9 +21,10 @@ import {
   sendPushTokenToBackend,
   setupNotificationListeners,
   removeNotificationListeners,
-} from '@/utils/pushNotifications';
+} from './utils/pushNotifications';
 import * as Notifications from 'expo-notifications';
 import { ThemeProvider as AppThemeProvider } from 'app/theme/ThemeContext';
+import Toast from 'react-native-toast-message';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -113,18 +114,35 @@ const responseListener = useRef<Notifications.Subscription | null>(null);
               <>
                 <Stack>
                   <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                  <Stack.Screen name="about" options={{ headerShown: false }} />
+                  <Stack.Screen name="help" options={{ headerShown: false }} />
+                  <Stack.Screen name="admin-on-duty" options={{ headerShown: false }} />
+                  <Stack.Screen name="account/settings" options={{ headerShown: false }} />
+                  <Stack.Screen name="notifications" options={{ headerShown: false }} />
                   <Stack.Screen name="orders" options={{ headerShown: false }} />
+                  <Stack.Screen name="buyer/sent-offers" options={{ headerShown: false }} />
+                  <Stack.Screen name="purchases" options={{ headerShown: false }} />
+                  <Stack.Screen name="relisted-discounts" options={{ headerShown: false }} />
                   <Stack.Screen name="seller/dashboard" options={{ headerShown: false }} />
                   <Stack.Screen name="seller/orders" options={{ headerShown: false }} />
                   <Stack.Screen name="seller/revenue" options={{ headerShown: false }} />
+                  <Stack.Screen name="seller/analytics" options={{ headerShown: false }} />
+                  <Stack.Screen name="seller/[sellerId]" options={{ headerShown: false }} />
+                  <Stack.Screen name="admin/dashboard" options={{ headerShown: false }} />
+                  <Stack.Screen name="admin/moderation" options={{ headerShown: false }} />
                   <Stack.Screen name="watch-appraisal" options={{ headerShown: false }} />
+                  <Stack.Screen name="watch-listing" options={{ headerShown: false }} />
                   <Stack.Screen name="diamond-appraisal" options={{ headerShown: false }} />
+                  <Stack.Screen name="diamond-listing" options={{ headerShown: false }} />
+                  <Stack.Screen name="jewelry-box" options={{ headerShown: false }} />
                   <Stack.Screen name="MustSellScreen" options={{ headerShown: false }} />
                   <Stack.Screen name="category/[name]" options={{ headerShown: false }} />
-                  <Stack.Screen name="listing/create" options={{ title: 'List an Item' }} />
+                  <Stack.Screen name="CreateAuctionScreen" options={{ headerShown: false }} />
+                  <Stack.Screen name="listing/create" options={{ headerShown: false }} />
                   <Stack.Screen name="+not-found" />
                 </Stack>
                 <StatusBar style="auto" />
+                <Toast />
               </>
             </AuthProvider>
           </NavigationThemeProvider>

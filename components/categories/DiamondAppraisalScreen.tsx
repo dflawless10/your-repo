@@ -41,6 +41,9 @@ export default function DiamondAppraisalScreen() {
   const [clarityGrade, setClarityGrade] = useState<ClarityGrade>('FL');
   const [shape, setShape] = useState<Shape>('Round');
   const [certified, setCertified] = useState('Yes');
+  const [certificationLab, setCertificationLab] = useState('GIA');
+  const [certificationNumber, setCertificationNumber] = useState('');
+  const [ethicallySourced, setEthicallySourced] = useState('Yes');
   const [price, setPrice] = useState<string>('');
 
   useEffect(() => {
@@ -99,30 +102,107 @@ export default function DiamondAppraisalScreen() {
           onChangeText={setCaratWeight}
         />
         <Text style={styles.label}>Color Grade</Text>
-        <Picker selectedValue={colorGrade} onValueChange={(v) => setColorGrade(v as ColorGrade)}>
+        <Picker
+          selectedValue={colorGrade}
+          onValueChange={(v) => setColorGrade(v as ColorGrade)}
+          style={styles.picker}
+        >
           {Object.keys(colorFactorByGrade).map((grade) => (
             <Picker.Item key={grade} label={grade} value={grade} />
           ))}
         </Picker>
 
         <Text style={styles.label}>Clarity Grade</Text>
-        <Picker selectedValue={clarityGrade} onValueChange={(v) => setClarityGrade(v as ClarityGrade)}>
+        <Picker
+          selectedValue={clarityGrade}
+          onValueChange={(v) => setClarityGrade(v as ClarityGrade)}
+          style={styles.picker}
+        >
           {Object.keys(clarityFactorByGrade).map((grade) => (
             <Picker.Item key={grade} label={grade} value={grade} />
           ))}
         </Picker>
 
         <Text style={styles.label}>Shape</Text>
-        <Picker selectedValue={shape} onValueChange={(v) => setShape(v as Shape)}>
+        <Picker
+          selectedValue={shape}
+          onValueChange={(v) => setShape(v as Shape)}
+          style={styles.picker}
+        >
           {Object.keys(shapeFactorByShape).map((s) => (
             <Picker.Item key={s} label={s} value={s} />
           ))}
         </Picker>
 
         <Text style={styles.label}>Certified</Text>
-        <Picker selectedValue={certified} onValueChange={(v) => setCertified(v)}>
-          <Picker.Item label="Yes" value="Yes" />
-          <Picker.Item label="No" value="No" />
+        <Picker
+          selectedValue={certified}
+          onValueChange={(v) => {
+            console.log('🐐 Certification changed to:', v);
+            setCertified(v);
+          }}
+          style={styles.picker}
+        >
+          <Picker.Item label="Yes - GIA/IGI Certified" value="Yes" />
+          <Picker.Item label="No - Not Certified" value="No" />
+        </Picker>
+
+        {certified === 'Yes' ? (
+          <>
+            <Text style={[styles.label, { color: '#6A0DAD', fontSize: 16 }]}>
+              📜 Certification Lab *
+            </Text>
+            <Picker
+              selectedValue={certificationLab}
+              onValueChange={(v) => {
+                console.log('🐐 Cert Lab changed to:', v);
+                setCertificationLab(v);
+              }}
+              style={styles.picker}
+            >
+              <Picker.Item label="Select Lab..." value="" />
+              <Picker.Item label="GIA - Gemological Institute of America" value="GIA" />
+              <Picker.Item label="IGI - International Gemological Institute" value="IGI" />
+              <Picker.Item label="AGS - American Gem Society" value="AGS" />
+              <Picker.Item label="EGL - European Gemological Laboratories" value="EGL" />
+              <Picker.Item label="HRD - Hoge Raad Voor Diamant" value="HRD" />
+              <Picker.Item label="GCAL - Gem Certification & Assurance Lab" value="GCAL" />
+              <Picker.Item label="GSI - Gemological Science International" value="GSI" />
+              <Picker.Item label="DGLA - Diamond & Gem Laboratories" value="DGLA" />
+              <Picker.Item label="PGGL - Precision Gem Grading Laboratory" value="PGGL" />
+              <Picker.Item label="Other" value="Other" />
+            </Picker>
+
+            <Text style={[styles.label, { color: '#6A0DAD', fontSize: 16 }]}>
+              🔢 Certification Number (Optional)
+            </Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g., 2141438171"
+              value={certificationNumber}
+              onChangeText={(text) => {
+                console.log('🐐 Cert Number changed to:', text);
+                setCertificationNumber(text);
+              }}
+            />
+            <Text style={styles.helpText}>
+              💡 Buyers can verify this certificate number on the lab's official website
+            </Text>
+          </>
+        ) : (
+          <Text style={[styles.helpText, { color: '#999' }]}>
+            Select "Yes - GIA/IGI Certified" above to add certification details
+          </Text>
+        )}
+
+        <Text style={styles.label}>Ethically Sourced</Text>
+        <Picker
+          selectedValue={ethicallySourced}
+          onValueChange={(v) => setEthicallySourced(v)}
+          style={styles.picker}
+        >
+          <Picker.Item label="Yes - Conflict-Free Diamond" value="Yes" />
+          <Picker.Item label="No / Unknown" value="No" />
         </Picker>
 
         <DiamondListingCard
@@ -132,6 +212,9 @@ export default function DiamondAppraisalScreen() {
           color={colorGrade}
           clarity={clarityGrade}
           certified={certified}
+          certificationLab={certificationLab}
+          certificationNumber={certificationNumber}
+          ethicallySourced={ethicallySourced}
           price={price}
         />
       </Animated.ScrollView>
@@ -180,5 +263,20 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
   },
   label: { marginTop: 10, fontWeight: 'bold' },
+  picker: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 6,
+    marginBottom: 12,
+    backgroundColor: 'white',
+    height: 50,
+  },
+  helpText: {
+    fontSize: 12,
+    color: '#6A0DAD',
+    marginTop: -8,
+    marginBottom: 12,
+    fontStyle: 'italic',
+  },
   priceText: { fontSize: 18, marginVertical: 10 },
 });

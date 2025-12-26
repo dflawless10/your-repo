@@ -17,6 +17,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import EnhancedHeader, {HEADER_MAX_HEIGHT} from '@/app/components/EnhancedHeader';
+import GlobalFooter from "@/app/components/GlobalFooter";
 
 const API_URL = 'http://10.0.0.170:5000';
 
@@ -185,19 +186,38 @@ export default function SellerOrdersScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FF6B35" />
-        <Text style={styles.loadingText}>Loading orders...</Text>
+        <EnhancedHeader scrollY={scrollY} />
+        <View style={styles.headerTitleContainer}>
+          <View style={styles.titleWithArrow}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
+              <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Selling Orders</Text>
+          </View>
+        </View>
+        <ActivityIndicator size="large" color="#FF6B35" style={{ marginTop: 200 }} />
       </View>
     );
   }
 
   return (
-    <>
+    <View style={{ flex: 1 }}>
       <EnhancedHeader scrollY={scrollY} username={username} onSearch={() => {}} />
+
+      {/* Title with Back Arrow */}
+      <View style={styles.headerTitleContainer}>
+        <View style={styles.titleWithArrow}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
+            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Selling Orders</Text>
+        </View>
+      </View>
+
       <Animated.ScrollView
         style={styles.container}
         contentContainerStyle={{
-    paddingTop: HEADER_MAX_HEIGHT + 20, // 👈 this is the fix
+    paddingTop: 240,
     paddingBottom: 40,
   }}
         onScroll={Animated.event(
@@ -209,10 +229,6 @@ export default function SellerOrdersScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Page Title */}
-        <View style={styles.pageHeader}>
-          <Text style={styles.pageTitle}>Orders to Ship</Text>
-        </View>
 
         {/* Stats */}
         <View style={styles.statsContainer}>
@@ -386,7 +402,8 @@ export default function SellerOrdersScreen() {
           </View>
         </View>
       </Modal>
-    </>
+      <GlobalFooter />
+    </View>
   );
 }
 
@@ -397,8 +414,6 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     backgroundColor: '#F7FAFC',
   },
   loadingText: {
@@ -406,20 +421,28 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
   },
-  pageHeader: {
-    padding: 16,
-    paddingTop: 60,
-    paddingBottom: 24,
-    backgroundColor: '#F7FAFC',
+  headerTitleContainer: {
     position: 'absolute',
-  top: 0,
-  left: 0,
-  right: 0,
-  height: HEADER_MAX_HEIGHT,
-  zIndex: 10,
-},
-  pageTitle: {
-    fontSize: 16,
+    top: HEADER_MAX_HEIGHT + 48,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: '#FFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+    zIndex: 100,
+  },
+  titleWithArrow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backArrow: {
+    marginRight: 12,
+    padding: 4,
+  },
+  headerTitle: {
+    fontSize: 20,
     fontWeight: '700',
     color: '#1A202C',
   },

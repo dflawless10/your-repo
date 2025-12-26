@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Modal, Image } from 'react-native';
 
-export default function GoatPopup({ visible }: { visible: boolean }) {
+export default function GoatPopup({ visible }: Readonly<{ visible: boolean }>) {
   return (
     <Modal transparent visible={visible} animationType="fade">
       <View style={styles.overlay}>

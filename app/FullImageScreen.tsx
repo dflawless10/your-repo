@@ -1,4 +1,4 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import {
   View,
   Text,
@@ -6,6 +6,8 @@ import {
   FlatList,
   TouchableOpacity,
   Dimensions,
+  Platform,
+  Animated,
 } from 'react-native';
 import {useEffect, useRef, useState} from 'react';
 import { Image } from 'expo-image';
@@ -13,13 +15,17 @@ import {
   GestureDetector,
   Gesture,
 } from 'react-native-gesture-handler';
-import Animated, {
+import ReanimatedAnimated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
   runOnJS,
 } from 'react-native-reanimated';
 import React from "react";
+import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import GlobalFooter from "./components/GlobalFooter";
+import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
 
 
 const { width, height } = Dimensions.get('window');
@@ -80,15 +86,15 @@ const ZoomableImage = ({
   return (
     <View style={styles.imageWrapper}>
       <GestureDetector gesture={composedGesture}>
-        <Animated.View style={animatedStyle}>
+        <ReanimatedAnimated.View style={animatedStyle}>
           <Image
             source={{ uri: uri || fallbackImage }}
             style={styles.image}
             contentFit="contain"
-            placeholder={require('./components/assets/placeholder.svg.png')}
+            placeholder={require('../assets/goat-icon.png')}
             onLoad={onLoad}
           />
-        </Animated.View>
+        </ReanimatedAnimated.View>
       </GestureDetector>
     </View>
   );
@@ -97,6 +103,7 @@ const ZoomableImage = ({
 export default function FullImageScreen() {
   const { mediaArray, index } = useLocalSearchParams();
   const router = useRouter();
+  const scrollY = useRef(new Animated.Value(0)).current;
 
   let images: string[] = [];
   try {
@@ -124,12 +131,25 @@ export default function FullImageScreen() {
   );
 
   return (
-    <View style={styles.container}>
-      <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-        <Text style={styles.backText}>← Back</Text>
-      </TouchableOpacity>
+    <View style={{ flex: 1 }}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <EnhancedHeader scrollY={scrollY} />
 
-      <FlatList
+      <View style={styles.container}>
+        {/* Title with Back Arrow */}
+        <View style={styles.headerTitleContainer}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backButton}
+          >
+            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>
+            {activeIndex + 1} / {images.length}
+          </Text>
+        </View>
+
+        <FlatList
         ref={flatListRef}
         data={images}
         horizontal
@@ -167,11 +187,9 @@ export default function FullImageScreen() {
             ]}
           />
         ))}
+        </View>
+        <GlobalFooter />
       </View>
-
-      <Text style={styles.indexText}>
-        {activeIndex + 1} / {images.length}
-      </Text>
     </View>
   );
 }
@@ -181,19 +199,23 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
-  backButton: {
-    position: 'absolute',
-    top: 40,
-    left: 20,
-    zIndex: 10,
-    padding: 8,
+  headerTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     backgroundColor: '#fff',
-    borderRadius: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
   },
-  backText: {
-    color: '#2d3748',
-    fontSize: 16,
-    fontWeight: 'bold',
+  backButton: {
+    marginRight: 12,
+    padding: 4,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1A1A1A',
   },
   imageWrapper: {
     width,
@@ -209,19 +231,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     marginTop: 6,
+    position: 'absolute',
+    bottom: 60,
+    left: 0,
+    right: 0,
   },
   dot: {
     width: 6,
     height: 6,
     borderRadius: 3,
     marginHorizontal: 3,
-  },
-  indexText: {
-    position: 'absolute',
-    bottom: 40,
-    alignSelf: 'center',
-    color: '#2d3748',
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

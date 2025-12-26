@@ -16,7 +16,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/hooks/AuthContext';
 import Svg, { Defs, LinearGradient, Stop, Polygon } from 'react-native-svg';
-import { CharacterCounterInput, CHARACTER_LIMITS, validateCharacterCount } from '@/components/CharacterCounterInput';
+import { CharacterCounterInput, CHARACTER_LIMITS, validateCharacterCount } from './components/CharacterCounterInput';
+import { useImageValidation } from '@/hooks/useImageValidation';
+import ImageValidationFeedback from '@/app/components/ImageValidationFeedback';
 
 const AnimatedSvg = Animated.createAnimatedComponent(Svg);
 
@@ -65,16 +67,60 @@ export default function DiamondListingScreen() {
   const params = useLocalSearchParams();
   const { token } = useAuth();
 
+  // Debug: Log all params including additionalImages
+  console.log('🐐 Diamond listing params:', params);
+  console.log('🐐 additionalImages param:', params.additionalImages);
+
   const [title, setTitle] = useState(`${params.carat}ct ${params.shape} Diamond`);
-  const [description, setDescription] = useState(
-    `Beautiful ${params.shape} cut diamond\n\n` +
-    `Carat: ${params.carat}ct\n` +
-    `Color: ${params.color}\n` +
-    `Clarity: ${params.clarity}\n` +
-    `Certified: ${params.certified}`
-  );
+  const [description, setDescription] = useState('');
   const [startingBid, setStartingBid] = useState(params.price?.toString() || '');
   const [duration, setDuration] = useState('7');
+
+  // Advanced auction options
+  const [hasReserve, setHasReserve] = useState(false);
+  const [reservePrice, setReservePrice] = useState('');
+  const [hasBuyItNow, setHasBuyItNow] = useState(false);
+  const [buyItNowPrice, setBuyItNowPrice] = useState('');
+  const [isMustSell, setIsMustSell] = useState(false);
+  const [appraisedValue] = useState(params.price?.toString() || '');
+
+  // Image validation
+  const imageValidation = useImageValidation(params.imageUrl as string | null);
+
+  const showMustSellConfirmation = () => {
+    const startingBidNum = parseFloat(startingBid) || 0;
+    const appraisedNum = parseFloat(appraisedValue) || 0;
+    const potentialLoss = appraisedNum - startingBidNum;
+
+    Alert.alert(
+      '🐐 BidGoat Must-Sell Terms',
+      `📋 IMPORTANT REMINDER - Please Read Carefully:\n\n` +
+      `💎 Appraised Value: $${appraisedNum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n` +
+      `🔥 Your Starting Bid: $${startingBidNum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n` +
+      `⏰ Duration: ${duration} day${duration === '1' ? '' : 's'}\n` +
+      `⚠️ Potential Loss: $${potentialLoss.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n\n` +
+      `MUST-SELL TERMS (BidGoat Courtesy Reminder):\n\n` +
+      `✓ Your item WILL SELL to the highest bidder when time expires\n` +
+      `✓ NO RESERVE PRICE - Even if only one bid at $${startingBidNum.toLocaleString()}\n` +
+      `✓ NO CANCELLATION - Once listed, you CANNOT cancel\n` +
+      `✓ YOU ARE LEGALLY OBLIGATED to sell at final price\n` +
+      `✓ If no bids received, item sells at starting bid\n\n` +
+      `This creates maximum urgency and attracts bidders, but you accept ALL RISK of selling below appraisal value.\n\n` +
+      `Do you accept these terms and want to proceed?`,
+      [
+        {
+          text: 'No, Go Back',
+          style: 'cancel',
+        },
+        {
+          text: 'Yes, I Accept Terms',
+          style: 'destructive',
+          onPress: () => submitListing(),
+        },
+      ],
+      { cancelable: true }
+    );
+  };
 
   const handleCreateListing = async () => {
     if (!title || !startingBid) {
@@ -85,6 +131,46 @@ export default function DiamondListingScreen() {
     if (!params.imageUrl) {
       Alert.alert('Error', 'Please upload a photo of your diamond first using the "Upload Photo" button above.');
       return;
+    }
+
+    // Validate required diamond specifications
+    if (!params.carat || !params.shape || !params.color || !params.clarity) {
+      Alert.alert('Error', 'Please fill in all diamond specifications (Carat Weight, Cut, Color, and Clarity) before listing.');
+      return;
+    }
+
+    // Validate Must Sell constraints
+    if (isMustSell) {
+      const durationNum = parseInt(duration);
+      if (durationNum < 1 || durationNum > 7) {
+        Alert.alert('Error', 'Must Sell duration must be between 1 and 7 days');
+        return;
+      }
+      if (hasReserve || hasBuyItNow) {
+        Alert.alert('Error', 'Must Sell mode cannot have Reserve Price or Buy It Now options');
+        return;
+      }
+    }
+
+    // Validate Reserve Price
+    if (hasReserve && reservePrice) {
+      const reserve = parseFloat(reservePrice);
+      const starting = parseFloat(startingBid);
+      if (reserve < starting) {
+        Alert.alert('Error', 'Reserve price must be greater than or equal to starting bid');
+        return;
+      }
+    }
+
+    // Validate Buy It Now Price
+    if (hasBuyItNow && buyItNowPrice) {
+      const buyNow = parseFloat(buyItNowPrice);
+      const starting = parseFloat(startingBid);
+      const reserve = hasReserve && reservePrice ? parseFloat(reservePrice) : starting;
+      if (buyNow <= reserve) {
+        Alert.alert('Error', 'Buy It Now price must be greater than reserve price (or starting bid if no reserve)');
+        return;
+      }
     }
 
     // Character count validation with moderation
@@ -100,6 +186,17 @@ export default function DiamondListingScreen() {
       return;
     }
 
+    // Show Must-Sell confirmation if enabled
+    if (isMustSell) {
+      showMustSellConfirmation();
+      return;
+    }
+
+    // Otherwise proceed with normal listing
+    await submitListing();
+  };
+
+  const submitListing = async () => {
     try {
       const formData = new FormData();
       formData.append('name', title);
@@ -114,25 +211,81 @@ console.log('duration_hours:', parseInt(duration));
 console.log('category_id: 1');
       formData.append('tags', `diamond,${params.shape},${params.carat}ct,${params.color},${params.clarity}`);
 console.log('tags:', `diamond,${params.shape},${params.carat}ct,${params.color},${params.clarity}`);
-      formData.append('rarity', 'rare');
-console.log('rarity: rare');
+      formData.append('rarity', params.rarity || 'rare');
+console.log('rarity:', params.rarity || 'rare');
+      
+      // Add diamond specifications as JSON
+      const diamondSpecs = JSON.stringify({
+        carat: params.carat,
+        cut: params.shape,
+        color: params.color,
+        clarity: params.clarity,
+        certification: params.certified,
+        certificationLab: params.certificationLab || '',
+        certificationNumber: params.certificationNumber || '',
+        ethicallySourced: params.ethicallySourced || 'No'
+      });
+      formData.append('diamond_specifications', diamondSpecs);
+console.log('diamond_specifications:', diamondSpecs);
 
+      // Add advanced auction options
+      if (hasReserve && reservePrice) {
+        formData.append('reserve_price', parseFloat(reservePrice).toString());
+        console.log('reserve_price:', parseFloat(reservePrice));
+      }
 
+      if (hasBuyItNow && buyItNowPrice) {
+        formData.append('buy_it_now', parseFloat(buyItNowPrice).toString());
+        console.log('buy_it_now:', parseFloat(buyItNowPrice));
+      }
 
-      // Handle the image file
+      if (isMustSell) {
+        formData.append('is_must_sell', '1');
+        console.log('is_must_sell: 1');
+      }
+
+      // Add appraised value to preserve it
+      if (appraisedValue) {
+        formData.append('appraised_value', parseFloat(appraisedValue).toString());
+        console.log('appraised_value:', parseFloat(appraisedValue));
+      }
+
+      // Handle the main image file
       const imageUri = params.imageUrl as string;
       const filename = imageUri.split('/').pop() || 'diamond.jpg';
       const match = /\.(\w+)$/.exec(filename);
       const type = match ? `image/${match[1]}` : 'image/jpeg';
 
       formData.append('photo', {
-  uri: imageUri,
-  name: filename,
-  type: type,
-} as any);
-console.log('photo:', imageUri, filename, type);
+        uri: imageUri,
+        name: filename,
+        type: type,
+      } as any);
+      console.log('photo:', imageUri, filename, type);
 
+      // Handle additional images (backend expects keys like "additional_photo_0", "additional_photo_1", etc.)
+      if (params.additionalImages) {
+        try {
+          const additionalImagesArray = JSON.parse(params.additionalImages as string);
+          console.log('Additional images to upload:', additionalImagesArray.length);
 
+          for (let i = 0; i < additionalImagesArray.length; i++) {
+            const addUri = additionalImagesArray[i];
+            const addFilename = addUri.split('/').pop() || `diamond_${i + 1}.jpg`;
+            const addMatch = /\.(\w+)$/.exec(addFilename);
+            const addType = addMatch ? `image/${addMatch[1]}` : 'image/jpeg';
+
+            formData.append(`additional_photo_${i}`, {
+              uri: addUri,
+              name: addFilename,
+              type: addType,
+            } as any);
+            console.log(`Additional photo ${i}:`, addUri, addFilename, addType);
+          }
+        } catch (error) {
+          console.error('Error parsing additional images:', error);
+        }
+      }
 
       const response = await fetch('http://10.0.0.170:5000/create_item', {
         method: 'POST',
@@ -143,7 +296,19 @@ console.log('photo:', imageUri, filename, type);
       });
 
       if (response.ok) {
-        Alert.alert('Success', '💎 Diamond listed successfully!', [
+        let successMessage = '💎 Diamond listed successfully!';
+
+        if (hasReserve && reservePrice) {
+          successMessage += `\n🔒 Reserve price set at $${parseFloat(reservePrice).toLocaleString()}`;
+        }
+        if (hasBuyItNow && buyItNowPrice) {
+          successMessage += `\n⚡ Buy It Now price: $${parseFloat(buyItNowPrice).toLocaleString()}`;
+        }
+        if (isMustSell) {
+          successMessage += `\n🔥 Must Sell mode activated (${duration} days)`;
+        }
+
+        Alert.alert('Success', successMessage, [
           { text: 'OK', onPress: () => router.push('/(tabs)/MyAuctionScreen') },
         ]);
       } else {
@@ -176,11 +341,17 @@ console.log('photo:', imageUri, filename, type);
         </View>
 
         {params.imageUrl && (
-          <Image
-            source={{ uri: params.imageUrl as string }}
-            style={styles.previewImage}
-            resizeMode="cover"
-          />
+          <>
+            <Image
+              source={{ uri: params.imageUrl as string }}
+              style={styles.previewImage}
+              resizeMode="cover"
+            />
+            {/* Image Validation Feedback */}
+            <View style={{ paddingHorizontal: 16 }}>
+              <ImageValidationFeedback validation={imageValidation} />
+            </View>
+          </>
         )}
 
         <View style={styles.form}>
@@ -207,14 +378,44 @@ console.log('photo:', imageUri, filename, type);
             style={styles.textArea}
           />
 
-        <Text style={styles.label}>Starting Bid ($) *</Text>
+        {/* Display Appraised Value */}
+        {appraisedValue && (
+          <View style={styles.appraisedValueContainer}>
+            <View style={styles.appraisedValueHeader}>
+              <Ionicons name="diamond" size={24} color="#6A0DAD" />
+              <Text style={styles.appraisedValueLabel}>Appraised Value</Text>
+            </View>
+            <Text style={styles.appraisedValueAmount}>
+              ${parseFloat(appraisedValue).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </Text>
+          </View>
+        )}
+
+        <Text style={styles.label}>
+          {isMustSell ? 'Starting Bid ($) - Must-Sell *' : 'Starting Bid ($) *'}
+        </Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, isMustSell && styles.mustSellInput]}
           value={startingBid}
           onChangeText={setStartingBid}
-          placeholder="0.00"
+          placeholder={isMustSell ? "0.00 (No minimum!)" : "0.00"}
           keyboardType="decimal-pad"
         />
+        {isMustSell ? (
+          <View style={styles.warningBox}>
+            <Ionicons name="warning" size={20} color="#D97706" />
+            <Text style={styles.warningText}>
+              🔥 Must-Sell Mode: Your item will sell to the highest bidder regardless of price! Set starting bid to $0.00 for maximum urgency.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.infoBox}>
+            <Ionicons name="information-circle" size={20} color="#6A0DAD" />
+            <Text style={styles.infoText}>
+              This is the minimum opening bid. Set it below appraisal value to attract bidders. You can add a Buy It Now price below for instant purchase.
+            </Text>
+          </View>
+        )}
 
         <Text style={styles.label}>Auction Duration (days) *</Text>
         <View style={styles.durationRow}>
@@ -239,6 +440,134 @@ console.log('photo:', imageUri, filename, type);
           ))}
         </View>
 
+        {/* Advanced Auction Options */}
+        <View style={styles.advancedOptionsContainer}>
+          <Text style={styles.sectionHeader}>💎 Advanced Options</Text>
+
+          {/* Reserve Price Option */}
+          <TouchableOpacity
+            style={styles.optionRow}
+            onPress={() => {
+              if (!isMustSell) {
+                setHasReserve(!hasReserve);
+                if (hasReserve) setReservePrice('');
+              }
+            }}
+            disabled={isMustSell}
+          >
+            <View style={styles.checkboxContainer}>
+              <View style={[styles.checkbox, hasReserve && styles.checkboxActive, isMustSell && styles.checkboxDisabled]}>
+                {hasReserve && <Ionicons name="checkmark" size={18} color="#fff" />}
+              </View>
+              <Text style={[styles.optionLabel, isMustSell && styles.optionLabelDisabled]}>Set Reserve Price</Text>
+            </View>
+            <Ionicons name="shield-checkmark" size={20} color={isMustSell ? "#CBD5E0" : "#6A0DAD"} />
+          </TouchableOpacity>
+          {hasReserve && !isMustSell && (
+            <View style={styles.optionInputContainer}>
+              <Text style={styles.optionHelpText}>Minimum price you'll accept (hidden from buyers)</Text>
+              <TextInput
+                style={styles.optionInput}
+                value={reservePrice}
+                onChangeText={setReservePrice}
+                placeholder="Enter reserve price"
+                keyboardType="decimal-pad"
+              />
+            </View>
+          )}
+
+          {/* Buy It Now Option */}
+          <TouchableOpacity
+            style={styles.optionRow}
+            onPress={() => {
+              if (!isMustSell) {
+                setHasBuyItNow(!hasBuyItNow);
+                if (hasBuyItNow) setBuyItNowPrice('');
+              }
+            }}
+            disabled={isMustSell}
+          >
+            <View style={styles.checkboxContainer}>
+              <View style={[styles.checkbox, hasBuyItNow && styles.checkboxActive, isMustSell && styles.checkboxDisabled]}>
+                {hasBuyItNow && <Ionicons name="checkmark" size={18} color="#fff" />}
+              </View>
+              <Text style={[styles.optionLabel, isMustSell && styles.optionLabelDisabled]}>Add Buy It Now</Text>
+            </View>
+            <Ionicons name="flash" size={20} color={isMustSell ? "#CBD5E0" : "#FF6B35"} />
+          </TouchableOpacity>
+          {hasBuyItNow && !isMustSell && (
+            <View style={styles.optionInputContainer}>
+              <Text style={styles.optionHelpText}>Instant purchase price</Text>
+              <TextInput
+                style={styles.optionInput}
+                value={buyItNowPrice}
+                onChangeText={setBuyItNowPrice}
+                placeholder="Enter Buy It Now price"
+                keyboardType="decimal-pad"
+              />
+            </View>
+          )}
+
+          {/* Divider */}
+          <View style={styles.optionDivider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>OR</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Must Sell Mode */}
+          <TouchableOpacity
+            style={styles.optionRow}
+            onPress={() => {
+              setIsMustSell(!isMustSell);
+              if (!isMustSell) {
+                // Disable other options when Must Sell is enabled
+                setHasReserve(false);
+                setHasBuyItNow(false);
+                setReservePrice('');
+                setBuyItNowPrice('');
+                setDuration('7'); // Reset to max 7 days
+                setStartingBid('0.00'); // Auto-set to $0.00 for maximum urgency
+              } else {
+                // When disabling must-sell, restore appraised value
+                setStartingBid(appraisedValue);
+              }
+            }}
+          >
+            <View style={styles.checkboxContainer}>
+              <View style={[styles.checkbox, isMustSell && styles.checkboxActive]}>
+                {isMustSell && <Ionicons name="checkmark" size={18} color="#fff" />}
+              </View>
+              <Text style={styles.optionLabel}>Must Sell (1-7 days)</Text>
+            </View>
+            <Ionicons name="flame" size={20} color="#D97706" />
+          </TouchableOpacity>
+          {isMustSell && (
+            <View style={styles.optionInputContainer}>
+              <Text style={styles.optionHelpText}>⚠️ No reserve, no buy-it-now. Creates urgency!</Text>
+              <View style={styles.mustSellDurationRow}>
+                {['1', '3', '5', '7'].map((days) => (
+                  <TouchableOpacity
+                    key={days}
+                    style={[
+                      styles.mustSellDurationButton,
+                      duration === days && styles.mustSellDurationButtonActive,
+                    ]}
+                    onPress={() => setDuration(days)}
+                  >
+                    <Text style={[
+                      styles.mustSellDurationText,
+                      duration === days && styles.mustSellDurationTextActive,
+                    ]}>
+                      {days}d
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+        </View>
+
         <View style={styles.infoBox}>
           <Ionicons name="information-circle" size={20} color="#FF6B35" />
           <Text style={styles.infoText}>
@@ -254,6 +583,27 @@ console.log('photo:', imageUri, filename, type);
         </View>
 
         <View style={styles.buttonContainer}>
+          <TouchableOpacity
+            style={styles.cancelButton}
+            onPress={() => {
+              Alert.alert(
+                'Cancel Listing',
+                'Are you sure you want to cancel? Your entered information will be lost.',
+                [
+                  { text: 'Keep Editing', style: 'cancel' },
+                  {
+                    text: 'Yes, Cancel',
+                    style: 'destructive',
+                    onPress: () => router.back()
+                  }
+                ]
+              );
+            }}
+          >
+            <Ionicons name="close-circle" size={20} color="#718096" />
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={styles.submitButton}
             onPress={handleCreateListing}
@@ -377,5 +727,205 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#fff',
+  },
+  // Advanced Auction Options Styles
+  advancedOptionsContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 24,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  sectionHeader: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#2D3748',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F7FAFC',
+  },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#CBD5E0',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxActive: {
+    backgroundColor: '#6A0DAD',
+    borderColor: '#6A0DAD',
+  },
+  checkboxDisabled: {
+    backgroundColor: '#F7FAFC',
+    borderColor: '#E2E8F0',
+    opacity: 0.5,
+  },
+  optionLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#2D3748',
+  },
+  optionLabelDisabled: {
+    color: '#A0AEC0',
+  },
+  optionInputContainer: {
+    paddingLeft: 36,
+    paddingRight: 8,
+    paddingBottom: 16,
+    marginTop: 8,
+  },
+  optionHelpText: {
+    fontSize: 12,
+    color: '#718096',
+    marginBottom: 8,
+    fontStyle: 'italic',
+  },
+  optionInput: {
+    backgroundColor: '#F7FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: '#1A202C',
+  },
+  optionDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+    gap: 12,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E2E8F0',
+  },
+  dividerText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#A0AEC0',
+    letterSpacing: 1,
+  },
+  mustSellDurationRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+  },
+  mustSellDurationButton: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+  },
+  mustSellDurationButtonActive: {
+    borderColor: '#D97706',
+    backgroundColor: '#FEF3C7',
+  },
+  mustSellDurationText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#718096',
+  },
+  mustSellDurationTextActive: {
+    color: '#D97706',
+  },
+  appraisedValueContainer: {
+    backgroundColor: '#F0F4FF',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    marginBottom: 8,
+    borderWidth: 2,
+    borderColor: '#6A0DAD',
+    shadowColor: '#6A0DAD',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  appraisedValueHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  appraisedValueLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6A0DAD',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  appraisedValueAmount: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#6A0DAD',
+    textAlign: 'center',
+  },
+  mustSellInput: {
+    borderColor: '#D97706',
+    borderWidth: 2,
+    backgroundColor: '#FEF3C7',
+  },
+  warningBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+  },
+  warningText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#92400E',
+    fontWeight: '600',
+  },
+  cancelButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F7FAFC',
+    paddingVertical: 16,
+    borderRadius: 12,
+    marginRight: 8,
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+    gap: 6,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#718096',
   },
 });

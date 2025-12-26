@@ -1,10 +1,11 @@
 import React, { useState, useRef } from "react";
 import { Animated as RNAnimated, Text, View, Image, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
 import { ListedItem } from "@/types/items";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { differenceInSeconds, parseISO } from "date-fns";
 import { useRouter } from "expo-router";
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
+import GlobalFooter from "@/app/components/GlobalFooter";
 
 interface Props {
   items: ListedItem[];
@@ -78,6 +79,32 @@ const MATERIALS = ['Leather', 'Titanium', 'Silver', 'Gold', 'Platinum', 'Stainle
 const GOLD_COLORS = ['Yellow', 'Rose', 'White'];
 const KARAT_OPTIONS = ['10K', '14K', '18K', '20K', '22K', '24K'];
 
+// Helper functions
+  function isAuctionUrgent(auctionEndsAt: string, now: Date): boolean {
+    const end = parseISO(auctionEndsAt);
+    const diffSeconds = differenceInSeconds(end, now);
+    return diffSeconds <= 3600; // urgent if less than 1 hour left
+  }
+
+  function formatTimeWithSeconds(auctionEndsAt: string, now: Date): string {
+    const end = parseISO(auctionEndsAt);
+    const diffSeconds = differenceInSeconds(end, now);
+
+    if (diffSeconds <= 0) return "Ended";
+
+    const days = Math.floor(diffSeconds / 86400);
+    const hours = Math.floor((diffSeconds % 86400) / 3600);
+    const minutes = Math.floor((diffSeconds % 3600) / 60);
+    const seconds = diffSeconds % 60;
+
+    // Show days if 48+ hours remaining
+    if (diffSeconds >= 172800) { // 48 hours in seconds
+      return `${days}d ${hours}h`;
+    }
+
+    return `${hours}h ${minutes}m ${seconds}s`;
+  }
+
 export default function RelistedDiscountsScreen({ items }: Props) {
   const router = useRouter();
   const scrollY = useRef(new RNAnimated.Value(0)).current;
@@ -93,25 +120,7 @@ export default function RelistedDiscountsScreen({ items }: Props) {
   const [showActiveOnly, setShowActiveOnly] = useState(false);
   const [activeFilterTab, setActiveFilterTab] = useState<string | null>(null);
 
-  // Helper functions
-  function isAuctionUrgent(auctionEndsAt: string, now: Date): boolean {
-    const end = parseISO(auctionEndsAt);
-    const diffSeconds = differenceInSeconds(end, now);
-    return diffSeconds <= 3600; // urgent if less than 1 hour left
-  }
 
-  function formatTimeWithSeconds(auctionEndsAt: string, now: Date): string {
-    const end = parseISO(auctionEndsAt);
-    const diffSeconds = differenceInSeconds(end, now);
-
-    if (diffSeconds <= 0) return "Ended";
-
-    const hours = Math.floor(diffSeconds / 3600);
-    const minutes = Math.floor((diffSeconds % 3600) / 60);
-    const seconds = diffSeconds % 60;
-
-    return `${hours}h ${minutes}m ${seconds}s`;
-  }
 
   // Reset dependent filters when parent changes
   const handleCategoryChange = (category: string) => {
@@ -248,8 +257,18 @@ export default function RelistedDiscountsScreen({ items }: Props) {
       <EnhancedHeader scrollY={scrollY} />
 
       <View style={styles.headerTitleContainer}>
-        <Text style={styles.heroTitle}>🔄 Relisted & Reduced</Text>
-        <Text style={styles.headerSubtitle}>Your Second Chance at Great Deals</Text>
+        <View style={styles.titleRow}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backButton}
+          >
+            <Ionicons name="arrow-back" size={24} color="#1a1a1a" />
+          </TouchableOpacity>
+          <View style={styles.titleTextContainer}>
+            <Text style={styles.heroTitle}>🔄 Relisted & Reduced</Text>
+            <Text style={styles.headerSubtitle}>Your Second Chance at Great Deals</Text>
+          </View>
+        </View>
       </View>
 
       <RNAnimated.ScrollView
@@ -261,13 +280,12 @@ export default function RelistedDiscountsScreen({ items }: Props) {
         style={{ flex: 1 }}
         contentContainerStyle={styles.contentContainer}
       >
-
       {/* Filter Section */}
       <View style={styles.filtersSection}>
         {/* Results Count & Clear */}
         <View style={styles.filterHeader}>
           <Text style={styles.resultsCount}>
-            {filteredItems.length} item{filteredItems.length !== 1 ? 's' : ''}
+            {filteredItems.length} item{filteredItems.length === 1 ? '' : 's'}
           </Text>
           {hasActiveFilters && (
             <TouchableOpacity onPress={clearAllFilters}>
@@ -496,21 +514,70 @@ export default function RelistedDiscountsScreen({ items }: Props) {
               </Text>
             )}
 
-            {/* Status badge */}
-            {item.status && (
-              <Text style={styles.statusBadge}>Status: {item.status}</Text>
-            )}
+            {/* Status badge - Show actual auction status */}
+            {(() => {
+              const hasEnded = item.auction_ends_at && new Date(item.auction_ends_at) < now;
+              const hasBids = item.highest_bid && item.highest_bid > 0;
+
+              if (hasEnded && hasBids) {
+                return <Text style={[styles.statusBadge, styles.soldBadge]}>✅ SOLD</Text>;
+              } else if (hasEnded) {
+                return <Text style={[styles.statusBadge, styles.endedBadge]}>⏸️ ENDED</Text>;
+              } else {
+                return <Text style={[styles.statusBadge, styles.activeBadge]}>🟢 ACTIVE</Text>;
+              }
+            })()}
 
             {/* Item name */}
             <Text style={styles.itemName}>{item.name}</Text>
 
-            {/* Price row */}
-            <View style={styles.priceRow}>
-              <Text style={styles.price}>${item.price}</Text>
-              {item.original_price && (
-                <Text style={styles.originalPrice}>${item.original_price}</Text>
-              )}
-            </View>
+            {/* Price row - Show correct pricing based on auction status */}
+            {(() => {
+              const hasEnded = item.auction_ends_at && new Date(item.auction_ends_at) < now;
+              const hasBids = item.highest_bid && item.highest_bid > 0;
+
+              if (hasEnded && hasBids) {
+                // SOLD: Show final bid price
+                return (
+                  <View style={styles.priceRow}>
+                    <Text style={[styles.price, styles.soldPrice]}>
+  Final: ${(item.highest_bid ?? 0).toLocaleString()}
+</Text>
+
+{item.original_price &&
+ item.highest_bid !== undefined &&
+ item.original_price > item.highest_bid && (
+  <Text style={styles.originalPrice}>
+    Was ${item.original_price.toLocaleString()}
+  </Text>
+)}
+
+                  </View>
+                );
+              } else if (hasEnded) {
+                // ENDED, no bids: Show starting price
+                return (
+                  <View style={styles.priceRow}>
+                    <Text style={styles.price}>
+                      ${item.price.toLocaleString()}
+                    </Text>
+                    <Text style={styles.noBidsText}>(No bids)</Text>
+                  </View>
+                );
+              } else {
+                // ACTIVE: Show current bid or starting price
+                return (
+                  <View style={styles.priceRow}>
+                    <Text style={styles.price}>
+                      ${(item.highest_bid || item.price).toLocaleString()}
+                    </Text>
+                    {item.highest_bid && item.highest_bid > item.price && (
+                      <Text style={styles.bidIndicator}>({item.bid_count || 0} bids)</Text>
+                    )}
+                  </View>
+                );
+              }
+            })()}
 
             {/* Ends at row */}
             <View style={styles.endsRow}>
@@ -543,18 +610,19 @@ export default function RelistedDiscountsScreen({ items }: Props) {
             </View>
           )}
       </RNAnimated.ScrollView>
+      <GlobalFooter />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   contentContainer: {
-    paddingTop: 180,
+    paddingTop: 200,
     paddingBottom: 20,
   },
   headerTitleContainer: {
     position: 'absolute',
-    top: HEADER_MAX_HEIGHT,
+    top: HEADER_MAX_HEIGHT + 50,
     left: 0,
     right: 0,
     paddingHorizontal: 16,
@@ -562,7 +630,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
-    zIndex: 10,
+    zIndex: 999,
+    elevation: 15,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backButton: {
+    marginRight: 12,
+    padding: 4,
+  },
+  titleTextContainer: {
+    flex: 1,
   },
   heroTitle: {
     fontSize: 24,
@@ -573,6 +653,28 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginTop: 4,
+  },
+  pageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 24,
+    paddingBottom: 12,
+    backgroundColor: '#F7FAFC',
+  },
+  pageBackButton: {
+    marginRight: 12,
+    padding: 4,
+  },
+  pageTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1A202C',
+  },
+  pageSubtitle: {
+    fontSize: 14,
+    color: '#718096',
+    marginTop: 2,
   },
   filtersSection: {
     paddingVertical: 12,
@@ -690,14 +792,45 @@ const styles = StyleSheet.create({
   },
   ribbonText: { color: "#fff", fontWeight: "bold", fontSize: 12 },
   relistBadge: { marginTop: 8, fontSize: 12, color: "#555" },
-  statusBadge: { marginTop: 6, fontSize: 12, fontWeight: "600", color: "#1976D2" },
+  statusBadge: {
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: "600",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  activeBadge: {
+    backgroundColor: "rgba(76, 175, 80, 0.15)",
+    color: "#2E7D32",
+  },
+  endedBadge: {
+    backgroundColor: "rgba(255, 152, 0, 0.15)",
+    color: "#E65100",
+  },
+  soldBadge: {
+    backgroundColor: "rgba(76, 175, 80, 0.15)",
+    color: "#2E7D32",
+  },
   itemName: { fontSize: 16, fontWeight: "600", marginTop: 8 },
-  priceRow: { flexDirection: "row", alignItems: "center", marginTop: 4 },
-  price: { fontSize: 18, fontWeight: "bold", color: "#6A0DAD", marginRight: 8 },
+  priceRow: { flexDirection: "row", alignItems: "center", marginTop: 4, flexWrap: "wrap", gap: 6 },
+  price: { fontSize: 18, fontWeight: "bold", color: "#6A0DAD" },
+  soldPrice: {
+    color: "#2E7D32",
+  },
   originalPrice: {
     fontSize: 14,
     textDecorationLine: "line-through",
     color: "#999",
+  },
+  noBidsText: {
+    fontSize: 14,
+    color: "#999",
+    fontStyle: "italic",
+  },
+  bidIndicator: {
+    fontSize: 13,
+    color: "#666",
   },
   countdown: { marginTop: 6, fontSize: 12, color: "#444" },
   emptyContainer: {
