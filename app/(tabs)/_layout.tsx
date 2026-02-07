@@ -12,11 +12,8 @@ import { HapticTab } from 'components/HapticTab';
 import TabBarBackground from '@/components/ui/TabBarBackground';
 import wishlistIcon from '../../assets/goat-stamp-coin.png';
 import { WishlistProvider } from 'app/wishlistContext';
-import { ThemeProvider } from 'app/theme/ThemeContext';
+// ThemeProvider removed - already provided in root _layout.tsx
 import 'react-native-reanimated';
-
-// ✅ Force global light mode
-Appearance.setColorScheme('light');
 
 function CustomHeader({
   routeName,
@@ -73,18 +70,18 @@ function CustomTabIcon({
           color={color}
         />
       );
-    case 'jewelry-box':
+    case 'explore':
       return (
         <Ionicons
-          name={focused ? 'diamond' : 'diamond-outline'}
+          name={focused ? 'search' : 'search-outline'}
           size={size}
           color={color}
         />
       );
-    case 'MyAuctionScreen':
+    case 'discover':
       return (
-        <MaterialCommunityIcons
-          name={focused ? 'gavel' : 'gavel'}
+        <Ionicons
+          name={focused ? 'compass' : 'compass-outline'}
           size={size}
           color={color}
         />
@@ -140,12 +137,10 @@ export default function AppLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <Provider store={store}>
-        <ThemeProvider>
-          <WishlistProvider>
-            <Tabs
-              initialRouteName="index"
-              screenOptions={({ route }) => ({
+      <WishlistProvider>
+        <Tabs
+          initialRouteName="index"
+          screenOptions={({ route }) => ({
                 headerShown: true,
                 header: () =>
                   CustomHeader({
@@ -154,8 +149,10 @@ export default function AppLayout() {
                     username,
                     isLoading,
                   }),
-                tabBarButton: HapticTab,
-                tabBarBackground: TabBarBackground,
+                ...(Platform.OS !== 'web' && {
+                  tabBarButton: HapticTab,
+                  tabBarBackground: TabBarBackground,
+                }),
                 tabBarStyle: Platform.select({
                   ios: { position: 'absolute' },
                   default: {},
@@ -175,20 +172,20 @@ export default function AppLayout() {
             >
               {/* Visible Tabs - Complete User Journey: Browse → Bid → Win → Collect */}
               <Tabs.Screen name="index" options={{ title: 'Home' }} />
-              <Tabs.Screen name="jewelry-box" options={{ title: 'My Jewelry Box', headerShown: false }} />
-              <Tabs.Screen name="MyAuctionScreen" options={{ title: 'My Auctions' }} />
+              <Tabs.Screen name="explore" options={{ title: 'Explore' }} />
+              <Tabs.Screen name="discover" options={{ title: 'Discover' }} />
               <Tabs.Screen name="wishlist" options={{ title: 'Wishlist' }} />
 
               {/* Hidden Routes - Accessible via Menu Modal */}
-              <Tabs.Screen name="discover" options={{ href: null }} />
-              <Tabs.Screen name="explore" options={{ href: null }} />
+              <Tabs.Screen name="jewelry-box" options={{ href: null, headerShown: false }} />
+              <Tabs.Screen name="MyAuctionScreen" options={{ href: null }} />
               <Tabs.Screen name="MyBidsScreen" options={{ href: null }} />
               <Tabs.Screen name="JewelryBoxScreen" options={{ href: null, headerShown: false }} />
               <Tabs.Screen name="cart" options={{ href: null }} />
               <Tabs.Screen name="profile" options={{ href: null }} />
               <Tabs.Screen name="editProfile" options={{ href: null }} />
               <Tabs.Screen name="favorites" options={{ href: null, headerShown: false }} />
-              <Tabs.Screen name="list-item" options={{ href: null, title: 'List an Item' }} />
+              <Tabs.Screen name="list-item" options={{ href: null, title: 'List an Item', tabBarStyle: { display: 'none' } }} />
               <Tabs.Screen name="community-guidelines" options={{ href: null }} />
               <Tabs.Screen name="navigation/AuthNavigator" options={{ href: null }} />
               <Tabs.Screen name="navigation/index" options={{ href: null }} />
@@ -196,10 +193,8 @@ export default function AppLayout() {
               <Tabs.Screen name="navigation/OnboardingNavigator" options={{ href: null }} />
               <Tabs.Screen name="navigation/TabNavigator" options={{ href: null }} />
               <Tabs.Screen name="item/[itemId]" options={{ href: null }} />
-            </Tabs>
-          </WishlistProvider>
-        </ThemeProvider>
-      </Provider>
+        </Tabs>
+      </WishlistProvider>
     </GestureHandlerRootView>
   );
 }

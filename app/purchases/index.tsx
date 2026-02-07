@@ -22,8 +22,11 @@ import {
   getOrderStatusColor,
 } from '@/api/purchases';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
+import GlobalFooter from '@/app/components/GlobalFooter';
+import { useTheme } from '@/app/theme/ThemeContext';
 
 export default function MyPurchasesScreen() {
+  const { theme, colors } = useTheme();
   const router = useRouter();
   const [items, setItems] = useState<PurchasedItem[]>([]);
   const [stats, setStats] = useState<CollectionStats | null>(null);
@@ -70,35 +73,35 @@ export default function MyPurchasesScreen() {
     return (
       <>
         {/* Title with Back Arrow */}
-        <View style={styles.titleContainer}>
+        <View style={[styles.titleContainer, { backgroundColor: colors.background }]}>
           <TouchableOpacity
             onPress={() => router.back()}
             style={styles.backArrow}
           >
-            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+            <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
-          <Text style={styles.pageTitle}>My Collection</Text>
+          <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>My Collection</Text>
         </View>
 
         {/* Stats Card */}
         {stats && (
-          <View style={styles.statsCard}>
-            <Text style={styles.statsTitle}>Your Collection</Text>
+          <View style={[styles.statsCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}>
+            <Text style={[styles.statsTitle, { color: colors.textPrimary }]}>Your Collection</Text>
             <View style={styles.statsGrid}>
           <View style={styles.statItem}>
             <Ionicons name="diamond-outline" size={32} color="#FF6B35" />
-            <Text style={styles.statValue}>{stats.total_items}</Text>
-            <Text style={styles.statLabel}>Items</Text>
+            <Text style={[styles.statValue, { color: colors.textPrimary }]}>{stats.total_items}</Text>
+            <Text style={[styles.statLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Items</Text>
           </View>
           <View style={styles.statItem}>
             <Ionicons name="cash-outline" size={32} color="#4CAF50" />
-            <Text style={styles.statValue}>${stats.total_value.toLocaleString()}</Text>
-            <Text style={styles.statLabel}>Total Value</Text>
+            <Text style={[styles.statValue, { color: colors.textPrimary }]}>${stats.total_value.toLocaleString()}</Text>
+            <Text style={[styles.statLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Total Value</Text>
           </View>
           <View style={styles.statItem}>
             <Ionicons name="trending-up-outline" size={32} color="#2196F3" />
-            <Text style={styles.statValue}>${stats.avg_item_value.toLocaleString()}</Text>
-            <Text style={styles.statLabel}>Avg Value</Text>
+            <Text style={[styles.statValue, { color: colors.textPrimary }]}>${stats.avg_item_value.toLocaleString()}</Text>
+            <Text style={[styles.statLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Avg Value</Text>
           </View>
         </View>
           </View>
@@ -113,7 +116,7 @@ export default function MyPurchasesScreen() {
 
     return (
       <TouchableOpacity
-        style={styles.card}
+        style={[styles.card, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}
         activeOpacity={0.7}
         onPress={() => router.push(`/item/${item.id}`)}
       >
@@ -124,7 +127,7 @@ export default function MyPurchasesScreen() {
         />
         <View style={styles.cardContent}>
           <View style={styles.cardHeader}>
-            <Text style={styles.itemName} numberOfLines={2}>
+            <Text style={[styles.itemName, { color: colors.textPrimary }]} numberOfLines={2}>
               {item.name}
             </Text>
             <View style={[styles.rarityBadge, { backgroundColor: rarityColor }]}>
@@ -133,19 +136,19 @@ export default function MyPurchasesScreen() {
           </View>
 
           {item.description && (
-            <Text style={styles.itemDescription} numberOfLines={2}>
+            <Text style={[styles.itemDescription, { color: theme === 'dark' ? '#999' : '#666' }]} numberOfLines={2}>
               {item.description}
             </Text>
           )}
 
           <View style={styles.priceRow}>
             <View style={styles.priceItem}>
-              <Text style={styles.priceLabel}>Purchase Price</Text>
+              <Text style={[styles.priceLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Purchase Price</Text>
               <Text style={styles.purchasePrice}>${item.purchase_price.toLocaleString()}</Text>
             </View>
             {item.original_price !== item.purchase_price && (
               <View style={styles.priceItem}>
-                <Text style={styles.priceLabel}>Original Price</Text>
+                <Text style={[styles.priceLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Original Price</Text>
                 <Text style={styles.originalPrice}>${item.original_price.toLocaleString()}</Text>
               </View>
             )}
@@ -153,8 +156,8 @@ export default function MyPurchasesScreen() {
 
           <View style={styles.cardFooter}>
             <View style={styles.metaRow}>
-              <Ionicons name="calendar-outline" size={16} color="#666" />
-              <Text style={styles.metaText}>{formatPurchaseDate(item.purchase_date)}</Text>
+              <Ionicons name="calendar-outline" size={16} color={theme === 'dark' ? '#999' : '#666'} />
+              <Text style={[styles.metaText, { color: theme === 'dark' ? '#999' : '#666' }]}>{formatPurchaseDate(item.purchase_date)}</Text>
             </View>
             <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
               <Text style={styles.statusText}>{item.order_status}</Text>
@@ -164,27 +167,30 @@ export default function MyPurchasesScreen() {
           {item.seller && (
             <View style={styles.sellerRow}>
               <Ionicons name="person-outline" size={16} color="#999" />
-              <Text style={styles.sellerText}>Seller: {item.seller.username}</Text>
+              <Text style={[styles.sellerText, { color: theme === 'dark' ? '#999' : '#666' }]}>Seller: {item.seller.username}</Text>
             </View>
           )}
 
           {/* Verify Ownership Button - Only show if not verified */}
           {!item.ownership_confirmed && item.order_status === 'delivered' && (
             <TouchableOpacity
-              style={styles.verifyButton}
+              style={[styles.verifyButton, {
+                backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F3E8FF',
+                borderColor: theme === 'dark' ? '#B794F4' : '#6A0DAD'
+              }]}
               onPress={(e) => {
                 e.stopPropagation();
                 router.push(`/confirm-ownership/${item.id}?itemName=${encodeURIComponent(item.name)}`);
               }}
             >
-              <Ionicons name="shield-checkmark-outline" size={18} color="#6A0DAD" />
-              <Text style={styles.verifyButtonText}>Verify Ownership</Text>
+              <Ionicons name="shield-checkmark-outline" size={18} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+              <Text style={[styles.verifyButtonText, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>Verify Ownership</Text>
             </TouchableOpacity>
           )}
 
           {/* Verified Badge */}
           {item.ownership_confirmed && (
-            <View style={styles.verifiedBadge}>
+            <View style={[styles.verifiedBadge, { backgroundColor: theme === 'dark' ? 'rgba(56, 161, 105, 0.2)' : '#e6fffa' }]}>
               <Ionicons name="shield-checkmark" size={16} color="#38a169" />
               <Text style={styles.verifiedText}>Ownership Verified</Text>
             </View>
@@ -196,9 +202,9 @@ export default function MyPurchasesScreen() {
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <Ionicons name="cart-outline" size={64} color="#ccc" />
-      <Text style={styles.emptyTitle}>No Purchases Yet</Text>
-      <Text style={styles.emptyText}>
+      <Ionicons name="cart-outline" size={64} color={theme === 'dark' ? '#666' : '#ccc'} />
+      <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No Purchases Yet</Text>
+      <Text style={[styles.emptyText, { color: theme === 'dark' ? '#999' : '#666' }]}>
         Start bidding and winning auctions to build your jewelry collection!
       </Text>
       <TouchableOpacity
@@ -213,24 +219,25 @@ export default function MyPurchasesScreen() {
 
   if (loading && !refreshing) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color="#FF6B35" />
-        <Text style={styles.loadingText}>Loading your collection...</Text>
+        <Text style={[styles.loadingText, { color: theme === 'dark' ? '#999' : '#666' }]}>Loading your collection...</Text>
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <EnhancedHeader scrollY={scrollY} onSearch={() => {}} />
 
       <Animated.FlatList
+        style={{ backgroundColor: colors.background }}
         data={items}
         renderItem={renderPurchaseCard}
         keyExtractor={(item) => item.id.toString()}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={renderEmptyState}
-        contentContainerStyle={items.length === 0 ? { ...styles.emptyListContent, paddingTop: HEADER_MAX_HEIGHT } : { ...styles.listContent, paddingTop: HEADER_MAX_HEIGHT }}
+        contentContainerStyle={items.length === 0 ? { ...styles.emptyListContent, paddingTop: HEADER_MAX_HEIGHT, backgroundColor: colors.background } : { ...styles.listContent, paddingTop: HEADER_MAX_HEIGHT, backgroundColor: colors.background }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
@@ -245,6 +252,7 @@ export default function MyPurchasesScreen() {
           />
         }
       />
+      <GlobalFooter />
     </View>
   );
 }

@@ -7,6 +7,7 @@ import DiamondListingCard from 'components/cards/DiamondListingCard';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
 import { appraiseDiamond, formatPrice } from '@/api/appraisal';
 import GlobalFooter from "@/app/components/GlobalFooter";
+import { useTheme } from '@/app/theme/ThemeContext';
 
 type ColorGrade = 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K' | 'L' | 'M' | 'N';
 type ClarityGrade = 'FL' | 'IF' | 'VVS1' | 'VVS2' | 'VS1' | 'VS2' | 'SI1' | 'SI2' | 'I1' | 'I2';
@@ -33,7 +34,10 @@ const shapeFactorByShape: Record<Shape, number> = {
 
 export default function DiamondAppraisalScreen() {
   const router = useRouter();
+  const { theme, colors } = useTheme();
   const scrollY = useRef(new Animated.Value(0)).current;
+  const headerOpacity = useRef(new Animated.Value(0)).current;
+  const headerScale = useRef(new Animated.Value(1)).current;
 
   const [caratWeight, setCaratWeight] = useState('');
   const [colorGrade, setColorGrade] = useState<ColorGrade>('F');
@@ -49,6 +53,33 @@ export default function DiamondAppraisalScreen() {
 
   // Debounce timer to avoid excessive API calls
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    // Fade in header title and arrow
+    setTimeout(() => {
+      Animated.timing(headerOpacity, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+      }).start(() => {
+        // After fade-in completes, start pulsing animation
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(headerScale, {
+              toValue: 1.05,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(headerScale, {
+              toValue: 1,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
+      });
+    }, 500);
+  }, []);
 
   useEffect(() => {
     // Clear previous timer
@@ -136,24 +167,24 @@ export default function DiamondAppraisalScreen() {
   };
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <EnhancedHeader scrollY={scrollY} />
 
-      <View style={styles.headerTitleContainer}>
+      <Animated.View style={[styles.headerTitleContainer, { opacity: headerOpacity, transform: [{ scale: headerScale }], backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
         <View style={styles.titleWithArrow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
-            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+            <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
           <View>
-            <Text style={styles.headerTitleText}>Diamond Price Calculator</Text>
-            <Text style={styles.headerSubtitle}>Calculate your diamond&#39;s market value</Text>
+            <Text style={[styles.headerTitleText, { color: colors.textPrimary }]}>Diamond Price Calculator</Text>
+            <Text style={[styles.headerSubtitle, { color: theme === 'dark' ? '#999' : '#718096' }]}>Calculate your diamond&#39;s market value</Text>
           </View>
         </View>
-      </View>
+      </Animated.View>
 
       <Animated.ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.scrollContent}
+        style={[styles.container, { backgroundColor: colors.background }]}
+        contentContainerStyle={{ ...styles.scrollContent, backgroundColor: colors.background }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
@@ -162,49 +193,74 @@ export default function DiamondAppraisalScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : 'white', color: colors.textPrimary, borderColor: theme === 'dark' ? '#3C3C3E' : '#ccc' }]}
           placeholder="Carat Weight (0.1 - 10.00)"
+          placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
           keyboardType="decimal-pad"
           value={caratWeight}
           onChangeText={handleCaratWeightChange}
         />
-        <Text style={styles.label}>Color Grade</Text>
-        <Picker selectedValue={colorGrade} onValueChange={(v) => setColorGrade(v as ColorGrade)}>
-          {Object.keys(colorFactorByGrade).map((grade) => (
-            <Picker.Item key={grade} label={grade} value={grade} />
-          ))}
-        </Picker>
+        <Text style={[styles.label, { color: colors.textPrimary }]}>Color Grade</Text>
+        <View style={[styles.pickerContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#3C3C3E' : '#ccc' }]}>
+          <Picker
+            selectedValue={colorGrade}
+            onValueChange={(v) => setColorGrade(v as ColorGrade)}
+            style={[styles.picker, { color: colors.textPrimary }]}
+          >
+            {Object.keys(colorFactorByGrade).map((grade) => (
+              <Picker.Item key={grade} label={grade} value={grade} />
+            ))}
+          </Picker>
+        </View>
 
-        <Text style={styles.label}>Clarity Grade</Text>
-        <Picker selectedValue={clarityGrade} onValueChange={(v) => setClarityGrade(v as ClarityGrade)}>
-          {Object.keys(clarityFactorByGrade).map((grade) => (
-            <Picker.Item key={grade} label={grade} value={grade} />
-          ))}
-        </Picker>
+        <Text style={[styles.label, { color: colors.textPrimary }]}>Clarity Grade</Text>
+        <View style={[styles.pickerContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#3C3C3E' : '#ccc' }]}>
+          <Picker
+            selectedValue={clarityGrade}
+            onValueChange={(v) => setClarityGrade(v as ClarityGrade)}
+            style={[styles.picker, { color: colors.textPrimary }]}
+          >
+            {Object.keys(clarityFactorByGrade).map((grade) => (
+              <Picker.Item key={grade} label={grade} value={grade} />
+            ))}
+          </Picker>
+        </View>
 
-        <Text style={styles.label}>Shape</Text>
-        <Picker selectedValue={shape} onValueChange={(v) => setShape(v as Shape)}>
-          {Object.keys(shapeFactorByShape).map((s) => (
-            <Picker.Item key={s} label={s} value={s} />
-          ))}
-        </Picker>
+        <Text style={[styles.label, { color: colors.textPrimary }]}>Shape</Text>
+        <View style={[styles.pickerContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#3C3C3E' : '#ccc' }]}>
+          <Picker
+            selectedValue={shape}
+            onValueChange={(v) => setShape(v as Shape)}
+            style={[styles.picker, { color: colors.textPrimary }]}
+          >
+            {Object.keys(shapeFactorByShape).map((s) => (
+              <Picker.Item key={s} label={s} value={s} />
+            ))}
+          </Picker>
+        </View>
 
-        <Text style={styles.label}>Certified</Text>
-        <Picker selectedValue={certified} onValueChange={(v) => setCertified(v)}>
-          <Picker.Item label="Yes - GIA/IGI Certified" value="Yes" />
-          <Picker.Item label="No - Not Certified" value="No" />
-        </Picker>
+        <Text style={[styles.label, { color: colors.textPrimary }]}>Certified</Text>
+        <View style={[styles.pickerContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#3C3C3E' : '#ccc' }]}>
+          <Picker
+            selectedValue={certified}
+            onValueChange={(v) => setCertified(v)}
+            style={[styles.picker, { color: colors.textPrimary }]}
+          >
+            <Picker.Item label="Yes - GIA/IGI Certified" value="Yes" />
+            <Picker.Item label="No - Not Certified" value="No" />
+          </Picker>
+        </View>
 
         {certified === 'Yes' && (
           <>
-            <Text style={[styles.label, { color: '#6A0DAD', fontSize: 16, marginTop: 16 }]}>
+            <Text style={[styles.label, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD', fontSize: 16, marginTop: 16 }]}>
               📜 Certification Lab *
             </Text>
-            <View style={styles.pickerContainer}>
+            <View style={[styles.pickerContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#3C3C3E' : '#ccc' }]}>
               <Picker
                 selectedValue={certificationLab}
                 onValueChange={(v) => setCertificationLab(v)}
-                style={styles.picker}
+                style={[styles.picker, { color: colors.textPrimary }]}
                 itemStyle={styles.pickerItem}
               >
                 <Picker.Item label="Select Lab..." value="" style={styles.pickerItem} />
@@ -221,27 +277,28 @@ export default function DiamondAppraisalScreen() {
               </Picker>
             </View>
 
-            <Text style={[styles.label, { color: '#6A0DAD', fontSize: 16, marginTop: 16 }]}>
+            <Text style={[styles.label, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD', fontSize: 16, marginTop: 16 }]}>
               🔢 Certification Number (Optional)
             </Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : 'white', color: colors.textPrimary, borderColor: theme === 'dark' ? '#3C3C3E' : '#ccc' }]}
               placeholder="e.g., 2141438171"
+              placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
               value={certificationNumber}
               onChangeText={setCertificationNumber}
             />
-            <Text style={styles.helpText}>
+            <Text style={[styles.helpText, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>
               💡 Buyers can verify this certificate number on the lab&#39;s official website
             </Text>
           </>
         )}
 
-        <Text style={styles.label}>Ethically Sourced</Text>
-        <View style={styles.pickerContainer}>
+        <Text style={[styles.label, { color: colors.textPrimary }]}>Ethically Sourced</Text>
+        <View style={[styles.pickerContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#3C3C3E' : '#ccc' }]}>
           <Picker
             selectedValue={ethicallySourced}
             onValueChange={(v) => setEthicallySourced(v)}
-            style={styles.picker}
+            style={[styles.picker, { color: colors.textPrimary }]}
             itemStyle={styles.pickerItem}
           >
             <Picker.Item label="Yes - Conflict-Free Diamond" value="Yes" style={styles.pickerItem} />
@@ -249,12 +306,12 @@ export default function DiamondAppraisalScreen() {
           </Picker>
         </View>
 
-        <Text style={styles.label}>Rarity</Text>
-        <View style={styles.pickerContainer}>
+        <Text style={[styles.label, { color: colors.textPrimary }]}>Rarity</Text>
+        <View style={[styles.pickerContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#3C3C3E' : '#ccc' }]}>
           <Picker
             selectedValue={rarity}
             onValueChange={(v) => setRarity(v)}
-            style={styles.picker}
+            style={[styles.picker, { color: colors.textPrimary }]}
             itemStyle={styles.pickerItem}
           >
             <Picker.Item label="Common" value="common" style={styles.pickerItem} />
@@ -266,9 +323,9 @@ export default function DiamondAppraisalScreen() {
         </View>
 
         {loading && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color="#6A0DAD" />
-            <Text style={styles.loadingText}>Calculating diamond value...</Text>
+          <View style={[styles.loadingContainer, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#f8f9fa' }]}>
+            <ActivityIndicator size="small" color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+            <Text style={[styles.loadingText, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>Calculating diamond value...</Text>
           </View>
         )}
 
@@ -287,13 +344,13 @@ export default function DiamondAppraisalScreen() {
         />
 
         {price && !loading && (
-          <View style={styles.priceContainer}>
-            <Text style={styles.priceLabel}>Estimated Market Value</Text>
-            <Text style={styles.priceValue}>{formatPrice(parseFloat(price))}</Text>
-            <Text style={styles.priceNote}>
+          <View style={[styles.priceContainer, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#f0f4ff', borderColor: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>
+            <Text style={[styles.priceLabel, { color: theme === 'dark' ? '#999' : '#4a5568' }]}>Estimated Market Value</Text>
+            <Text style={[styles.priceValue, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>{formatPrice(parseFloat(price))}</Text>
+            <Text style={[styles.priceNote, { color: theme === 'dark' ? '#999' : '#718096' }]}>
               💎 Suggested price based on our algorithm and current market prices
             </Text>
-            <Text style={styles.priceDisclaimer}>
+            <Text style={[styles.priceDisclaimer, { color: theme === 'dark' ? '#666' : '#A0AEC0' }]}>
               Pricing factors: Rapaport benchmarks, carat weight, color grade, clarity grade, shape, and certification status
             </Text>
           </View>

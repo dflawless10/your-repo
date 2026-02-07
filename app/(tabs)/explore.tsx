@@ -1,3 +1,5 @@
+import { API_BASE_URL } from '@/config';
+
 import React, { useCallback, useEffect, useState, useRef } from 'react';
 import {
   FlatList,
@@ -14,9 +16,9 @@ import {
 
 const { width } = Dimensions.get('window');
 const COLUMN_GAP = 12;
+const HORIZONTAL_PADDING = 16; // Add this
 const NUM_COLUMNS = 2;
-const ITEM_WIDTH = (width - 32 - COLUMN_GAP) / NUM_COLUMNS;
-const GRID_ITEM_WIDTH = (width - 32 - COLUMN_GAP) / NUM_COLUMNS;
+const ITEM_WIDTH = (width - (HORIZONTAL_PADDING * 2) - COLUMN_GAP) / NUM_COLUMNS; // Update this
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { format } from 'date-fns';
@@ -43,6 +45,7 @@ import {ListedItem} from "@/types/items";
 
 import { GoatFlip } from '@/components/GoatAnimator/goatFlip';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useTheme } from '@/app/theme/ThemeContext';
 
 
 type ListedItemWithStatus = ListedItem & {
@@ -77,7 +80,7 @@ const JustListedCard = React.memo(
     onShare: (item: ListedItem) => void;
   }) => {
     const { timeText, isUrgent } = getCountdownLocal(item.auction_ends_at);
-    const displayPrice = (item.highest_bid ?? item.price) ?? 0;
+   const displayPrice = Number(item.highest_bid ?? item.price ?? 0);
     const isBid = item.highest_bid && item.highest_bid > item.price;
 
     return (
@@ -125,7 +128,7 @@ const JustListedCard = React.memo(
 
             {/* Buy It Now Badge - Top Left (below Must Sell if present) */}
             {item.buy_it_now && (
-              <View style={[styles.buyItNowBadge, (item.mustSell || item.is_super_deal) && { top: 40 }]}>
+              <View style={[styles.buyItNowBadge, (item.mustSell || item.is_super_deal) ? { top: 40 } : undefined]}>
                 <Text style={styles.buyItNowText}>BUY NOW</Text>
               </View>
             )}
@@ -176,6 +179,7 @@ const JustListedCard = React.memo(
 JustListedCard.displayName = 'JustListedCard';
 
 export default function TabTwoScreen() {
+  const { theme, colors } = useTheme();
   const [justListedItems, setJustListedItems] = useState<ListedItem[]>([]);
   const [trendingItems, setTrendingItems] = useState<ListedItem[]>([]);
   const [favoritedItems, setFavoritedItems] = useState<Record<number, boolean>>({});
@@ -185,7 +189,7 @@ export default function TabTwoScreen() {
   // Filter states
   const [selectedMetal, setSelectedMetal] = useState<string>('All');
   const [selectedStone, setSelectedStone] = useState<string>('All');
-  const [selectedStyle, setSelectedStyle] = useState<string>('All');
+  const [selectedType, setSelectedType] = useState<string>('All');
   const [priceRange, setPriceRange] = useState<string>('All');
   const [sortBy, setSortBy] = useState<string>('newest');
   const [activeFilterTab, setActiveFilterTab] = useState<string | null>(null);
@@ -195,10 +199,37 @@ export default function TabTwoScreen() {
   const [itemToShare, setItemToShare] = useState<ListedItem | null>(null);
 
   // Goat animations
-
+  const headerOpacity = useRef(new RNAnimated.Value(0)).current;
+  const headerScale = useRef(new RNAnimated.Value(1)).current;
   const scrollY = useRef(new RNAnimated.Value(0)).current;
   const { wishlistIds, refreshWishlist, addToWishlist: addToWishlistBackend } = useWishlist();
   const dispatch = useAppDispatch();
+
+  // Fade in header title and arrow
+  useEffect(() => {
+    setTimeout(() => {
+      RNAnimated.timing(headerOpacity, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+      }).start(() => {
+        RNAnimated.loop(
+          RNAnimated.sequence([
+            RNAnimated.timing(headerScale, {
+              toValue: 1.05,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+            RNAnimated.timing(headerScale, {
+              toValue: 1,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
+      });
+    }, 500);
+  }, []);
 
   const toggleFavorite = async (id: number) => {
     const updated = {
@@ -262,7 +293,7 @@ export default function TabTwoScreen() {
     }
   };
 
-  const handleShare = async (item: ListedItem) => {
+  const handleShare = useCallback(async (item: ListedItem) => {
     try {
       const message = `Check out this ${item.name} on BidGoat! 💎\n\nPrice: $${((item.highest_bid ?? item.price) ?? 0).toFixed(2)}\n\nView: https://bidgoat.com/item/${item.id}`;
 
@@ -284,7 +315,7 @@ export default function TabTwoScreen() {
     } catch (error) {
       console.error('Error sharing:', error);
     }
-  };
+  }, []);
 
   const fetchTrending = async () => {
     try {
@@ -350,10 +381,12 @@ export default function TabTwoScreen() {
             }
 
             return {
-              ...item,
-              auction_ends_at: safeTimestamp,
-            };
-          });
+      ...item,
+      auction_ends_at: safeTimestamp,
+      price: Number(item.price ?? item.buy_it_now ?? 0), // Add default price
+      highest_bid: item.highest_bid ? Number(item.highest_bid) : undefined,
+    };
+  });
 
         setJustListedItems(shuffleArray(safeItems));
       } else {
@@ -509,12 +542,12 @@ export default function TabTwoScreen() {
       if (!stoneMatch) return false;
     }
 
-    // Style filter
-    if (selectedStyle !== 'All') {
-      const styleMatch = itemTags.includes(selectedStyle.toLowerCase()) ||
-                         itemName.includes(selectedStyle.toLowerCase()) ||
-                         itemDesc.includes(selectedStyle.toLowerCase());
-      if (!styleMatch) return false;
+    // Type filter
+    if (selectedType !== 'All') {
+      const typeMatch = itemTags.includes(selectedType.toLowerCase()) ||
+                         itemName.includes(selectedType.toLowerCase()) ||
+                         itemDesc.includes(selectedType.toLowerCase());
+      if (!typeMatch) return false;
     }
 
     // Price range filter
@@ -540,7 +573,10 @@ export default function TabTwoScreen() {
       const endB = new Date(b.auction_ends_at || 0).getTime();
       return endA - endB;
     }
-    if (sortBy === 'trending') return (b.bidCount || 0) - (a.bidCount || 0);
+    if (sortBy === 'most_popular') {
+      // Sort by bid count (popularity indicator)
+      return (b.bidCount || b.bid_count || 0) - (a.bidCount || a.bid_count || 0);
+    }
     // Default: newest
     const dateA = new Date(a.listed_at || a.listedAt || 0).getTime();
     const dateB = new Date(b.listed_at || b.listedAt || 0).getTime();
@@ -572,88 +608,113 @@ export default function TabTwoScreen() {
 
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff' }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <EnhancedHeader scrollY={scrollY} onSearch={() => {}} />
       <ParallaxScrollView scrollY={scrollY}
         headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
         headerImage={<></>}
       >
-          <View style={{ marginTop: HEADER_MAX_HEIGHT - 30 }}>
+          <View style={{ marginTop: HEADER_MAX_HEIGHT - 80 }}>
+          {/* Page Header with Title and Back Arrow */}
+          <RNAnimated.View style={[styles.pageHeader, { opacity: headerOpacity, transform: [{ scale: headerScale }], backgroundColor: colors.background }]}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+            </TouchableOpacity>
+            <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Explore</Text>
+          </RNAnimated.View>
+
           {/* Clean Filter Tabs */}
-          <ThemedView style={styles.filtersSection}>
-            {/* Results Count & Clear */}
-            <View style={styles.filterHeader}>
-              <Text style={styles.resultsCount}>
-                {filteredItems.length} item{filteredItems.length !== 1 ? 's' : ''}
-              </Text>
-              {(selectedMetal !== 'All' || selectedStone !== 'All' || selectedStyle !== 'All' || priceRange !== 'All' || sortBy !== 'newest') && (
-                <TouchableOpacity
-                  onPress={() => {
-                    setSelectedMetal('All');
-                    setSelectedStone('All');
-                    setSelectedStyle('All');
-                    setPriceRange('All');
-                    setSortBy('newest');
-                    setActiveFilterTab(null);
-                  }}
-                  style={styles.clearAllButton}
-                >
-                  <Text style={styles.clearAllText}>Clear All</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-
-
+          <ThemedView style={[styles.filtersSection, { backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#e5e5e5' }]}>
             {/* Filter Category Tabs */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterTabsRow}>
               <TouchableOpacity
-                style={[styles.filterTab, activeFilterTab === 'sort' && styles.filterTabActive]}
+                style={[
+                  styles.filterTab,
+                  { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#FF6B6B' : '#FF6B6B' },
+                  activeFilterTab === 'sort' && styles.filterTabActive
+                ]}
                 onPress={() => setActiveFilterTab(activeFilterTab === 'sort' ? null : 'sort')}
               >
-                <Text style={[styles.filterTabText, activeFilterTab === 'sort' && styles.filterTabTextActive]}>
+                <Text style={[
+                  styles.filterTabText,
+                  { color: theme === 'dark' && activeFilterTab !== 'sort' ? '#ECEDEE' : '#333' },
+                  activeFilterTab === 'sort' && styles.filterTabTextActive
+                ]}>
                   Sort {sortBy !== 'newest' && '•'}
                 </Text>
-                <Ionicons name="chevron-down" size={16} color={activeFilterTab === 'sort' ? '#FFF' : '#666'} />
+                <Ionicons name="chevron-down" size={16} color={activeFilterTab === 'sort' ? '#FFF' : (theme === 'dark' ? '#ECEDEE' : '#666')} />
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.filterTab, activeFilterTab === 'metal' && styles.filterTabActive]}
+                style={[
+                  styles.filterTab,
+                  { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#FF6B6B' : '#FF6B6B' },
+                  activeFilterTab === 'metal' && styles.filterTabActive
+                ]}
                 onPress={() => setActiveFilterTab(activeFilterTab === 'metal' ? null : 'metal')}
               >
-                <Text style={[styles.filterTabText, activeFilterTab === 'metal' && styles.filterTabTextActive]}>
+                <Text style={[
+                  styles.filterTabText,
+                  { color: theme === 'dark' && activeFilterTab !== 'metal' ? '#ECEDEE' : '#333' },
+                  activeFilterTab === 'metal' && styles.filterTabTextActive
+                ]}>
                   Metal {selectedMetal !== 'All' && '•'}
                 </Text>
-                <Ionicons name="chevron-down" size={16} color={activeFilterTab === 'metal' ? '#FFF' : '#666'} />
+                <Ionicons name="chevron-down" size={16} color={activeFilterTab === 'metal' ? '#FFF' : (theme === 'dark' ? '#ECEDEE' : '#666')} />
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.filterTab, activeFilterTab === 'gems' && styles.filterTabActive]}
+                style={[
+                  styles.filterTab,
+                  { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#FF6B6B' : '#FF6B6B' },
+                  activeFilterTab === 'gems' && styles.filterTabActive
+                ]}
                 onPress={() => setActiveFilterTab(activeFilterTab === 'gems' ? null : 'gems')}
               >
-                <Text style={[styles.filterTabText, activeFilterTab === 'gems' && styles.filterTabTextActive]}>
+                <Text style={[
+                  styles.filterTabText,
+                  { color: theme === 'dark' && activeFilterTab !== 'gems' ? '#ECEDEE' : '#333' },
+                  activeFilterTab === 'gems' && styles.filterTabTextActive
+                ]}>
                   Gems {selectedStone !== 'All' && '•'}
                 </Text>
-                <Ionicons name="chevron-down" size={16} color={activeFilterTab === 'gems' ? '#FFF' : '#666'} />
+                <Ionicons name="chevron-down" size={16} color={activeFilterTab === 'gems' ? '#FFF' : (theme === 'dark' ? '#ECEDEE' : '#666')} />
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.filterTab, activeFilterTab === 'era' && styles.filterTabActive]}
-                onPress={() => setActiveFilterTab(activeFilterTab === 'era' ? null : 'era')}
+                style={[
+                  styles.filterTab,
+                  { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#FF6B6B' : '#FF6B6B' },
+                  activeFilterTab === 'type' && styles.filterTabActive
+                ]}
+                onPress={() => setActiveFilterTab(activeFilterTab === 'type' ? null : 'type')}
               >
-                <Text style={[styles.filterTabText, activeFilterTab === 'era' && styles.filterTabTextActive]}>
-                  Era {selectedStyle !== 'All' && '•'}
+                <Text style={[
+                  styles.filterTabText,
+                  { color: theme === 'dark' && activeFilterTab !== 'type' ? '#ECEDEE' : '#333' },
+                  activeFilterTab === 'type' && styles.filterTabTextActive
+                ]}>
+                  Type {selectedType !== 'All' && '•'}
                 </Text>
-                <Ionicons name="chevron-down" size={16} color={activeFilterTab === 'era' ? '#FFF' : '#666'} />
+                <Ionicons name="chevron-down" size={16} color={activeFilterTab === 'type' ? '#FFF' : (theme === 'dark' ? '#ECEDEE' : '#666')} />
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.filterTab, activeFilterTab === 'price' && styles.filterTabActive]}
+                style={[
+                  styles.filterTab,
+                  { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#FF6B6B' : '#FF6B6B' },
+                  activeFilterTab === 'price' && styles.filterTabActive
+                ]}
                 onPress={() => setActiveFilterTab(activeFilterTab === 'price' ? null : 'price')}
               >
-                <Text style={[styles.filterTabText, activeFilterTab === 'price' && styles.filterTabTextActive]}>
+                <Text style={[
+                  styles.filterTabText,
+                  { color: theme === 'dark' && activeFilterTab !== 'price' ? '#ECEDEE' : '#333' },
+                  activeFilterTab === 'price' && styles.filterTabTextActive
+                ]}>
                   Price {priceRange !== 'All' && '•'}
                 </Text>
-                <Ionicons name="chevron-down" size={16} color={activeFilterTab === 'price' ? '#FFF' : '#666'} />
+                <Ionicons name="chevron-down" size={16} color={activeFilterTab === 'price' ? '#FFF' : (theme === 'dark' ? '#ECEDEE' : '#666')} />
               </TouchableOpacity>
             </ScrollView>
 
@@ -662,18 +723,26 @@ export default function TabTwoScreen() {
             {activeFilterTab === 'sort' && (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterOptionsRow}>
                 {[
-                  { label: '🆕 Newest', value: 'newest' },
-                  { label: '🔥 Trending', value: 'trending' },
+                  { label: '🆕 Newest First', value: 'newest' },
                   { label: '⏰ Ending Soon', value: 'ending_soon' },
-                  { label: '💰 Low to High', value: 'price_asc' },
-                  { label: '💎 High to Low', value: 'price_desc' },
+                  { label: '💰 Price: Low to High', value: 'price_asc' },
+                  { label: '💎 Price: High to Low', value: 'price_desc' },
+                  { label: '👀 Most Popular', value: 'most_popular' },
                 ].map((sort) => (
                   <TouchableOpacity
                     key={sort.value}
-                    style={[styles.filterPill, sortBy === sort.value && styles.filterPillActive]}
+                    style={[
+                      styles.filterPill,
+                      { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F5F5', borderColor: theme === 'dark' ? '#3C3C3E' : '#E0E0E0' },
+                      sortBy === sort.value && styles.filterPillActive
+                    ]}
                     onPress={() => { setSortBy(sort.value); setActiveFilterTab(null); }}
                   >
-                    <Text style={[styles.filterPillText, sortBy === sort.value && styles.filterPillTextActive]}>
+                    <Text style={[
+                      styles.filterPillText,
+                      { color: theme === 'dark' ? '#ECEDEE' : '#666' },
+                      sortBy === sort.value && styles.filterPillTextActive
+                    ]}>
                       {sort.label}
                     </Text>
                   </TouchableOpacity>
@@ -686,10 +755,18 @@ export default function TabTwoScreen() {
                 {['All', 'Gold', 'Silver', 'Platinum', 'Rose Gold', 'White Gold'].map((metal) => (
                   <TouchableOpacity
                     key={metal}
-                    style={[styles.filterPill, selectedMetal === metal && styles.filterPillActive]}
+                    style={[
+                      styles.filterPill,
+                      { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F5F5', borderColor: theme === 'dark' ? '#3C3C3E' : '#E0E0E0' },
+                      selectedMetal === metal && styles.filterPillActive
+                    ]}
                     onPress={() => { setSelectedMetal(metal); setActiveFilterTab(null); }}
                   >
-                    <Text style={[styles.filterPillText, selectedMetal === metal && styles.filterPillTextActive]}>
+                    <Text style={[
+                      styles.filterPillText,
+                      { color: theme === 'dark' ? '#ECEDEE' : '#666' },
+                      selectedMetal === metal && styles.filterPillTextActive
+                    ]}>
                       {metal}
                     </Text>
                   </TouchableOpacity>
@@ -702,10 +779,18 @@ export default function TabTwoScreen() {
                 {['All', 'Diamond', 'Ruby', 'Emerald', 'Sapphire', 'Pearl', 'Opal', 'Amethyst'].map((stone) => (
                   <TouchableOpacity
                     key={stone}
-                    style={[styles.filterPill, selectedStone === stone && styles.filterPillActive]}
+                    style={[
+                      styles.filterPill,
+                      { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F5F5', borderColor: theme === 'dark' ? '#3C3C3E' : '#E0E0E0' },
+                      selectedStone === stone && styles.filterPillActive
+                    ]}
                     onPress={() => { setSelectedStone(stone); setActiveFilterTab(null); }}
                   >
-                    <Text style={[styles.filterPillText, selectedStone === stone && styles.filterPillTextActive]}>
+                    <Text style={[
+                      styles.filterPillText,
+                      { color: theme === 'dark' ? '#ECEDEE' : '#666' },
+                      selectedStone === stone && styles.filterPillTextActive
+                    ]}>
                       {stone}
                     </Text>
                   </TouchableOpacity>
@@ -713,16 +798,24 @@ export default function TabTwoScreen() {
               </ScrollView>
             )}
 
-            {activeFilterTab === 'era' && (
+            {activeFilterTab === 'type' && (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterOptionsRow}>
-                {['All', 'Vintage', 'Modern', 'Art Deco', 'Victorian', 'Minimalist', 'Bohemian'].map((style) => (
+                {['All', 'Ring', 'Necklace', 'Earrings', 'Bracelet', 'Watch', 'Brooch', 'Pendant'].map((type) => (
                   <TouchableOpacity
-                    key={style}
-                    style={[styles.filterPill, selectedStyle === style && styles.filterPillActive]}
-                    onPress={() => { setSelectedStyle(style); setActiveFilterTab(null); }}
+                    key={type}
+                    style={[
+                      styles.filterPill,
+                      { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F5F5', borderColor: theme === 'dark' ? '#3C3C3E' : '#E0E0E0' },
+                      selectedType === type && styles.filterPillActive
+                    ]}
+                    onPress={() => { setSelectedType(type); setActiveFilterTab(null); }}
                   >
-                    <Text style={[styles.filterPillText, selectedStyle === style && styles.filterPillTextActive]}>
-                      {style}
+                    <Text style={[
+                      styles.filterPillText,
+                      { color: theme === 'dark' ? '#ECEDEE' : '#666' },
+                      selectedType === type && styles.filterPillTextActive
+                    ]}>
+                      {type}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -740,16 +833,46 @@ export default function TabTwoScreen() {
                 ].map((range) => (
                   <TouchableOpacity
                     key={range.value}
-                    style={[styles.filterPill, priceRange === range.value && styles.filterPillActive]}
+                    style={[
+                      styles.filterPill,
+                      { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F5F5', borderColor: theme === 'dark' ? '#3C3C3E' : '#E0E0E0' },
+                      priceRange === range.value && styles.filterPillActive
+                    ]}
                     onPress={() => { setPriceRange(range.value); setActiveFilterTab(null); }}
                   >
-                    <Text style={[styles.filterPillText, priceRange === range.value && styles.filterPillTextActive]}>
+                    <Text style={[
+                      styles.filterPillText,
+                      { color: theme === 'dark' ? '#ECEDEE' : '#666' },
+                      priceRange === range.value && styles.filterPillTextActive
+                    ]}>
                       {range.label}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
             )}
+
+            {/* Results Count & Clear All - Moved Below Filters */}
+            <View style={styles.resultsRow}>
+              <Text style={styles.resultsCount}>
+                {filteredItems.length} item{filteredItems.length !== 1 ? 's' : ''} found
+              </Text>
+              {(selectedMetal !== 'All' || selectedStone !== 'All' || selectedType !== 'All' || priceRange !== 'All' || sortBy !== 'newest') && (
+                <TouchableOpacity
+                  onPress={() => {
+                    setSelectedMetal('All');
+                    setSelectedStone('All');
+                    setSelectedType('All');
+                    setPriceRange('All');
+                    setSortBy('newest');
+                    setActiveFilterTab(null);
+                  }}
+                  style={styles.clearAllButton}
+                >
+                  <Text style={styles.clearAllText}>Clear All</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </ThemedView>
 
           {/* Trending Section - Bigger Cards */}
@@ -831,7 +954,7 @@ export default function TabTwoScreen() {
 
                         {/* Buy It Now Badge */}
                         {item.buy_it_now && (
-                          <View style={[styles.buyItNowBadge, (item.mustSell || item.is_super_deal) && { top: 40 }]}>
+                          <View style={[styles.buyItNowBadge, (item.mustSell || item.is_super_deal) ? { top: 40 } : undefined]}>
                             <Text style={styles.buyItNowText}>BUY NOW</Text>
                           </View>
                         )}
@@ -888,8 +1011,8 @@ export default function TabTwoScreen() {
                 }}
                 keyExtractor={(item) => `buy-it-now-${item.id}`}
                 numColumns={2}
-                contentContainerStyle={[styles.gridContainer, { paddingLeft: 1 }]}
-                columnWrapperStyle={[styles.gridColumnWrapper, { gap: 6 }]}
+                contentContainerStyle={[styles.gridContainer]}
+                columnWrapperStyle={[styles.gridColumnWrapper]}
                 scrollEnabled={false}
                 style={{ marginHorizontal: -16 }}
               />
@@ -972,8 +1095,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
  countdownText: {
-  fontSize: 14,
-  color: '#2e7d32', // green for normal
+  fontSize: 16,
+  color:  '#38a169',
   fontWeight: '600',
   marginTop: 4,
 },
@@ -1187,8 +1310,25 @@ modalClose: {
     borderWidth: 1,
     borderColor: 'rgba(0,200,0,0.85)',
   },
-  filtersSection: {
+  pageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
     paddingVertical: 12,
+    backgroundColor: '#fff',
+  },
+  backButton: {
+    marginRight: 12,
+    padding: 4,
+  },
+  pageTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1a1a1a',
+  },
+  filtersSection: {
+    paddingTop: 8,
+    paddingBottom: 12,
     paddingHorizontal: 0,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
@@ -1247,11 +1387,18 @@ modalClose: {
     fontWeight: '600',
     color: '#6A0DAD',
   },
+  resultsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
   resultsCount: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
     color: '#666',
-    marginHorizontal: 16,
   },
   filterRow: {
     marginVertical: 4,
@@ -1320,13 +1467,13 @@ modalClose: {
   },
   gridColumnWrapper: {
     gap: COLUMN_GAP,
-    justifyContent: 'flex-start',
+    justifyContent: 'space-between',
+  marginBottom: 16,
   },
   productCard: {
     width: ITEM_WIDTH,
     backgroundColor: '#fff',
     borderRadius: 12,
-    marginBottom: 16,
     shadowColor: '#000',
     shadowOpacity: 0.08,
     shadowRadius: 12,
@@ -1426,7 +1573,7 @@ modalClose: {
     fontSize: 10,
     fontWeight: '700',
     color: '#fff',
-    backgroundColor: '#FF6B6B',
+    backgroundColor: '#F57C00',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -1439,14 +1586,14 @@ modalClose: {
   },
   buyBeforeText: {
     fontSize: 11,
-    color: '#FF6B35',
+    color: '#F57C00',
     fontWeight: '600',
     marginTop: 4,
     marginBottom: 4,
   },
   bidCountText: {
     fontSize: 11,
-    color: '#FF6B35',
+    color: '#F57C00',
     fontWeight: '600',
     marginTop: 4,
   },
@@ -1465,13 +1612,6 @@ modalClose: {
     color: '#FFF',
     fontSize: 13,
     fontWeight: '600',
-  },
-  filterHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 4,
   },
   filterTabsRow: {
     paddingHorizontal: 16,

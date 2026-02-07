@@ -1,3 +1,5 @@
+import { API_BASE_URL } from '@/config';
+
 import React, { useEffect,  useRef, useState } from 'react';
 import {
   View,
@@ -52,6 +54,8 @@ interface Props {
   category: Category;
   onFirstSwipe?: () => void;
 }
+
+const API_URL = API_BASE_URL;
 
 // Helper function to get countdown color based on time remaining
 const getCountdownColor = (endTime: string): string => {
@@ -502,7 +506,7 @@ total_reviews = 0;
                 >
                   <Ionicons
                     name={favoritedItems[item.id] ? "heart" : "heart-outline"}
-                    size={20}
+                    size={24}
                     color={favoritedItems[item.id] ? "#FF6B6B" : "#FF6B6B"}
                   />
                 </TouchableOpacity>
@@ -524,9 +528,7 @@ total_reviews = 0;
                   )}
                 </View>
 
-                {/* Bottom Row: Countdown (left) | Seller + Rating (right) */}
                 <View style={styles.bottomRow}>
-                  {/* Countdown Timer - Left Side */}
                   {item.countdown && item.auctionEndsAt && (
                     <View style={styles.statsContainer}>
                       <MaterialCommunityIcons name="clock-outline" size={14} color="#666" />
@@ -542,9 +544,11 @@ total_reviews = 0;
                     </View>
                   )}
 
-                  {/* Seller Name and Star Rating - Right Side */}
                   {item.seller && (
                     <View style={styles.sellerRatingRow}>
+                      {item.seller.avatar_url && (
+                        <Image source={{ uri: item.seller.avatar_url }} style={styles.sellerAvatar} />
+                      )}
                       <TouchableOpacity
                         onPress={(e) => {
                           e.stopPropagation();
@@ -552,7 +556,7 @@ total_reviews = 0;
                         }}
                       >
                         <Text style={styles.sellerName} numberOfLines={1}>
-                          by {item.seller.username}
+                           {item.seller.username}
                         </Text>
                       </TouchableOpacity>
                       {item.seller.avg_rating > 0 && (
@@ -665,8 +669,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  sellerAvatar: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    marginRight: 4,
+  },
   sellerName: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#007AFF',
     fontWeight: '600',
     textDecorationLine: 'underline',
@@ -677,7 +687,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   ratingText: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#666',
     fontWeight: '600',
     marginLeft: 4,

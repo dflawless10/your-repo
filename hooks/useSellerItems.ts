@@ -1,3 +1,5 @@
+import { API_BASE_URL } from '@/config';
+
 import { useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 

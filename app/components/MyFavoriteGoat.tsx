@@ -1,3 +1,5 @@
+import { API_BASE_URL } from '@/config';
+
 // components/MyFavoriteGoat.tsx
 import React, { useEffect, useState, useRef } from 'react';
 import {
@@ -18,7 +20,7 @@ type FavoriteItem = {
   description: string;
 };
 
-const API_URL = 'http://10.0.0.170:5000';
+const API_URL = API_BASE_URL;
 
 export default function MyFavoriteGoat() {
   const [favorites, setFavorites] = useState<FavoriteItem[]>([]);

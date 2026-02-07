@@ -5,6 +5,7 @@ import { AuctionPreviewCard } from '@/components/cards/AuctionPreviewCard'; // <
 import { Audio } from 'expo-av';
 import { debounce } from 'lodash';
 import {DisplayItem} from "@/types/item";
+import GlobalFooter from "@/app/components/GlobalFooter";
 
 export interface Listing {
   id: string;
@@ -72,7 +73,9 @@ const SearchScreen = () => {
           <AuctionPreviewCard preview={item} />
         )}
       />
+
     </View>
+
   );
 };
 

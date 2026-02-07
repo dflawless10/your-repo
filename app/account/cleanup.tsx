@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,12 +14,43 @@ import { Ionicons } from '@expo/vector-icons';
 import { cleanupExpiredItems, CleanupResult } from '@/api/admin';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
 import GlobalFooter from "@/app/components/GlobalFooter";
+import { useTheme } from '@/app/theme/ThemeContext';
 
 export default function CleanupExpiredScreen() {
   const router = useRouter();
+  const { theme, colors } = useTheme();
+  const isDark = theme === 'dark';
   const scrollY = useRef(new Animated.Value(0)).current;
+  const headerOpacity = useRef(new Animated.Value(0)).current;
+  const headerScale = useRef(new Animated.Value(1)).current;
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CleanupResult | null>(null);
+
+  useEffect(() => {
+    // Fade in header title and arrow
+    setTimeout(() => {
+      Animated.timing(headerOpacity, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+      }).start(() => {
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(headerScale, {
+              toValue: 1.05,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(headerScale, {
+              toValue: 1,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
+      });
+    }, 500);
+  }, []);
 
   const handleCleanup = async () => {
     Alert.alert(
@@ -30,32 +61,34 @@ export default function CleanupExpiredScreen() {
         {
           text: 'Delete Expired',
           style: 'destructive',
-          onPress: async () => {
-            try {
-              setLoading(true);
-              const cleanupResult = await cleanupExpiredItems();
-              setResult(cleanupResult);
+          onPress: () => {
+            (async () => {
+              try {
+                setLoading(true);
+                const cleanupResult = await cleanupExpiredItems();
+                setResult(cleanupResult);
 
-              if (cleanupResult.deleted_items > 0) {
+                if (cleanupResult.deleted_items > 0) {
+                  Alert.alert(
+                    'Cleanup Complete',
+                    `Successfully deleted ${cleanupResult.deleted_items} expired item${cleanupResult.deleted_items === 1 ? '' : 's'}.`
+                  );
+                } else {
+                  Alert.alert(
+                    'No Items to Clean',
+                    'You have no expired auction items to delete.'
+                  );
+                }
+              } catch (error) {
+                console.error('Cleanup error:', error);
                 Alert.alert(
-                  'Cleanup Complete',
-                  `Successfully deleted ${cleanupResult.deleted_items} expired item${cleanupResult.deleted_items === 1 ? '' : 's'}.`
+                  'Cleanup Failed',
+                  'Could not delete expired items. Please try again.'
                 );
-              } else {
-                Alert.alert(
-                  'No Items to Clean',
-                  'You have no expired auction items to delete.'
-                );
+              } finally {
+                setLoading(false);
               }
-            } catch (error) {
-              console.error('Cleanup error:', error);
-              Alert.alert(
-                'Cleanup Failed',
-                'Could not delete expired items. Please try again.'
-              );
-            } finally {
-              setLoading(false);
-            }
+            })();
           },
         },
       ]
@@ -65,10 +98,11 @@ export default function CleanupExpiredScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <EnhancedHeader scrollY={scrollY} />
 
         <ScrollView
+          style={{ backgroundColor: colors.background }}
           contentContainerStyle={styles.scrollContent}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -77,42 +111,42 @@ export default function CleanupExpiredScreen() {
           scrollEventThrottle={16}
         >
           {/* Page Header */}
-          <View style={styles.pageHeader}>
+          <Animated.View style={[styles.pageHeader, { backgroundColor: colors.surface, opacity: headerOpacity, transform: [{ scale: headerScale }] }]}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-              <Ionicons name="arrow-back" size={24} color="#1A202C" />
+              <Ionicons name="arrow-back" size={24} color={isDark ? '#B794F4' : '#6A0DAD'} />
             </TouchableOpacity>
-            <Text style={styles.pageTitle}>Cleanup Expired</Text>
-          </View>
+            <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Cleanup Expired</Text>
+          </Animated.View>
 
         {/* Info Card */}
-        <View style={styles.infoCard}>
-          <View style={styles.iconCircle}>
+        <View style={[styles.infoCard, { backgroundColor: colors.surface }]}>
+          <View style={[styles.iconCircle, { backgroundColor: isDark ? '#331111' : '#FFEBEE' }]}>
             <Ionicons name="trash-outline" size={32} color="#F44336" />
           </View>
-          <Text style={styles.infoTitle}>Clean Up Your Listings</Text>
-          <Text style={styles.infoText}>
+          <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>Clean Up Your Listings</Text>
+          <Text style={[styles.infoText, { color: colors.textSecondary }]}>
             Remove expired auction items that didn&#39;t sell. This helps keep your seller profile clean and organized.
           </Text>
 
           <View style={styles.infoSection}>
-            <Text style={styles.infoSectionTitle}>What gets deleted:</Text>
+            <Text style={[styles.infoSectionTitle, { color: colors.textPrimary }]}>What gets deleted:</Text>
             <View style={styles.bulletPoint}>
               <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-              <Text style={styles.bulletText}>Expired auctions with no bids</Text>
+              <Text style={[styles.bulletText, { color: colors.textSecondary }]}>Expired auctions with no bids</Text>
             </View>
             <View style={styles.bulletPoint}>
               <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-              <Text style={styles.bulletText}>Auctions that didn&#39;t meet reserve price</Text>
+              <Text style={[styles.bulletText, { color: colors.textSecondary }]}>Auctions that didn&#39;t meet reserve price</Text>
             </View>
             <View style={styles.bulletPoint}>
               <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-              <Text style={styles.bulletText}>Associated images and files</Text>
+              <Text style={[styles.bulletText, { color: colors.textSecondary }]}>Associated images and files</Text>
             </View>
           </View>
 
-          <View style={styles.warningBox}>
+          <View style={[styles.warningBox, { backgroundColor: isDark ? '#2d2410' : '#FFF3E0' }]}>
             <Ionicons name="warning" size={20} color="#FF9800" />
-            <Text style={styles.warningText}>
+            <Text style={[styles.warningText, { color: isDark ? '#FFB74D' : '#E65100' }]}>
               This action cannot be undone. Active auctions and sold items will not be affected.
             </Text>
           </View>
@@ -136,51 +170,51 @@ export default function CleanupExpiredScreen() {
 
         {/* Results Display */}
         {result && (
-          <View style={styles.resultCard}>
-            <View style={styles.resultHeader}>
+          <View style={[styles.resultCard, { backgroundColor: colors.surface, borderColor: isDark ? '#333' : '#E2E8F0' }]}>
+            <View style={[styles.resultHeader, { borderBottomColor: isDark ? '#333' : '#E2E8F0' }]}>
               <Ionicons
                 name={result.deleted_items > 0 ? 'checkmark-circle' : 'information-circle'}
                 size={28}
                 color={result.deleted_items > 0 ? '#4CAF50' : '#2196F3'}
               />
-              <Text style={styles.resultTitle}>Cleanup Results</Text>
+              <Text style={[styles.resultTitle, { color: colors.textPrimary }]}>Cleanup Results</Text>
             </View>
 
             <View style={styles.statRow}>
-              <Text style={styles.statLabel}>Items Deleted:</Text>
-              <Text style={styles.statValue}>{result.deleted_items}</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Items Deleted:</Text>
+              <Text style={[styles.statValue, { color: colors.textPrimary }]}>{result.deleted_items}</Text>
             </View>
 
             <View style={styles.statRow}>
-              <Text style={styles.statLabel}>Files Removed:</Text>
-              <Text style={styles.statValue}>{result.deleted_files.length}</Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Files Removed:</Text>
+              <Text style={[styles.statValue, { color: colors.textPrimary }]}>{result.deleted_files.length}</Text>
             </View>
 
             {result.failed_files.length > 0 && (
               <View style={styles.statRow}>
-                <Text style={styles.statLabel}>Failed Files:</Text>
+                <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Failed Files:</Text>
                 <Text style={[styles.statValue, styles.statValueError]}>
                   {result.failed_files.length}
                 </Text>
               </View>
             )}
 
-            <Text style={styles.resultTimestamp}>
+            <Text style={[styles.resultTimestamp, { color: colors.textSecondary }]}>
               Last cleanup: {new Date().toLocaleString()}
             </Text>
           </View>
         )}
 
         {/* Tips Section */}
-        <View style={styles.tipsCard}>
-          <Text style={styles.tipsTitle}>💡 Pro Tips</Text>
-          <Text style={styles.tipText}>
+        <View style={[styles.tipsCard, { backgroundColor: isDark ? '#0d1f2d' : '#E6F7FF' }]}>
+          <Text style={[styles.tipsTitle, { color: colors.textPrimary }]}>💡 Pro Tips</Text>
+          <Text style={[styles.tipText, { color: colors.textSecondary }]}>
             • Run cleanup regularly to keep your listings organized
           </Text>
-          <Text style={styles.tipText}>
+          <Text style={[styles.tipText, { color: colors.textSecondary }]}>
             • Consider relisting items with price adjustments instead of deleting
           </Text>
-          <Text style={styles.tipText}>
+          <Text style={[styles.tipText, { color: colors.textSecondary }]}>
             • Review your expired auctions in &#34;My Auctions&#34; before cleanup
           </Text>
         </View>

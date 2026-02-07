@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -18,11 +18,11 @@ import { API_BASE_URL } from '@/config';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '../components/EnhancedHeader';
 import { LinearGradient } from 'expo-linear-gradient';
 import GlobalFooter from "@/app/components/GlobalFooter";
+import { useTheme } from '@/app/theme/ThemeContext';
 
 interface Settings {
   maintenance_mode: boolean;
   allow_new_registrations: boolean;
-  min_bid_increment: number;
   max_item_images: number;
   auction_extension_minutes: number;
   featured_item_cost: number;
@@ -30,12 +30,15 @@ interface Settings {
 
 export default function SystemSettingsScreen() {
   const router = useRouter();
+  const { theme, colors } = useTheme();
+  const isDark = theme === 'dark';
   const scrollY = new Animated.Value(0);
+  const headerOpacity = useRef(new Animated.Value(0)).current;
+  const headerScale = useRef(new Animated.Value(1)).current;
 
   const [settings, setSettings] = useState<Settings>({
     maintenance_mode: false,
     allow_new_registrations: true,
-    min_bid_increment: 1.00,
     max_item_images: 10,
     auction_extension_minutes: 5,
     featured_item_cost: 9.99,
@@ -43,6 +46,32 @@ export default function SystemSettingsScreen() {
 
   useEffect(() => {
     loadSettings();
+  }, []);
+
+  useEffect(() => {
+    // Fade in header title and arrow
+    setTimeout(() => {
+      Animated.timing(headerOpacity, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+      }).start(() => {
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(headerScale, {
+              toValue: 1.05,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(headerScale, {
+              toValue: 1,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
+      });
+    }, 500);
   }, []);
 
   const loadSettings = async () => {
@@ -83,32 +112,32 @@ export default function SystemSettingsScreen() {
   };
 
   const SettingRow = ({ title, subtitle, children }: any) => (
-    <View style={styles.settingRow}>
+    <View style={[styles.settingRow, { borderBottomColor: isDark ? '#333' : '#F0F0F0' }]}>
       <View style={styles.settingText}>
-        <Text style={styles.settingTitle}>{title}</Text>
-        {subtitle && <Text style={styles.settingSubtitle}>{subtitle}</Text>}
+        <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>{title}</Text>
+        {subtitle && <Text style={[styles.settingSubtitle, { color: colors.textSecondary }]}>{subtitle}</Text>}
       </View>
       {children}
     </View>
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ headerShown: false }} />
       <EnhancedHeader scrollY={scrollY} />
 
       <Animated.ScrollView
-        style={styles.scrollView}
+        style={[styles.scrollView, { backgroundColor: colors.background }]}
         contentContainerStyle={styles.scrollContent}
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
         scrollEventThrottle={16}
       >
-        <View style={styles.pageHeader}>
+        <Animated.View style={[styles.pageHeader, { backgroundColor: colors.surface, opacity: headerOpacity, transform: [{ scale: headerScale }] }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+            <Ionicons name="arrow-back" size={24} color={isDark ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
-          <Text style={styles.pageTitle}>System Settings</Text>
-        </View>
+          <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>System Settings</Text>
+        </Animated.View>
         <LinearGradient
           colors={['#607D8B', '#455A64']}
           start={{ x: 0, y: 0 }}
@@ -122,8 +151,8 @@ export default function SystemSettingsScreen() {
         </LinearGradient>
 
         {/* Platform Settings */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Platform</Text>
+        <View style={[styles.section, { backgroundColor: colors.surface, borderColor: isDark ? '#333' : 'transparent' }]}>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Platform</Text>
 
           <SettingRow
             title="Maintenance Mode"
@@ -132,7 +161,8 @@ export default function SystemSettingsScreen() {
             <Switch
               value={settings.maintenance_mode}
               onValueChange={(value) => updateSetting('maintenance_mode', value)}
-              trackColor={{ false: '#ccc', true: '#6A0DAD' }}
+              thumbColor={settings.maintenance_mode ? '#6A0DAD' : '#F3F4F6'}
+              trackColor={{ false: isDark ? '#555' : '#ccc', true: '#A78BFA' }}
             />
           </SettingRow>
 
@@ -143,41 +173,36 @@ export default function SystemSettingsScreen() {
             <Switch
               value={settings.allow_new_registrations}
               onValueChange={(value) => updateSetting('allow_new_registrations', value)}
-              trackColor={{ false: '#ccc', true: '#6A0DAD' }}
+              thumbColor={settings.allow_new_registrations ? '#6A0DAD' : '#F3F4F6'}
+              trackColor={{ false: isDark ? '#555' : '#ccc', true: '#A78BFA' }}
             />
           </SettingRow>
         </View>
 
         {/* Auction Settings */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Auction Rules</Text>
+        <View style={[styles.section, { backgroundColor: colors.surface, borderColor: isDark ? '#333' : 'transparent' }]}>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Auction Rules</Text>
 
-          <SettingRow
-            title="Min Bid Increment"
-            subtitle="Minimum amount to increase bid"
-          >
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputPrefix}>$</Text>
-              <TextInput
-                style={styles.input}
-                value={settings.min_bid_increment.toString()}
-                onChangeText={(text) => {
-                  const value = parseFloat(text) || 0;
-                  setSettings({ ...settings, min_bid_increment: value });
-                }}
-                onBlur={() => updateSetting('min_bid_increment', settings.min_bid_increment)}
-                keyboardType="decimal-pad"
-              />
+          <View style={[styles.infoBox, { backgroundColor: isDark ? '#1a1a2e' : '#F3E5F5' }]}>
+            <Ionicons name="information-circle" size={20} color="#6A0DAD" />
+            <View style={styles.infoTextContainer}>
+              <Text style={styles.infoTitle}>Tiered Bid Increments (Fixed)</Text>
+              <Text style={[styles.infoText, { color: colors.textSecondary }]}>
+                BidGoat uses industry-standard tiered increments:{'\n'}
+                Under $100: $5 • $100-$499: $25 • $500-$999: $50{'\n'}
+                $1K-$4.9K: $100 • $5K-$9.9K: $250 • $10K-$24.9K: $500{'\n'}
+                $25K+: $1,000
+              </Text>
             </View>
-          </SettingRow>
+          </View>
 
           <SettingRow
             title="Extension Time"
             subtitle="Minutes to extend auction on late bids"
           >
-            <View style={styles.inputContainer}>
+            <View style={[styles.inputContainer, { backgroundColor: isDark ? '#1a1a1a' : '#F5F5F5' }]}>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { color: colors.textPrimary }]}
                 value={settings.auction_extension_minutes.toString()}
                 onChangeText={(text) => {
                   const value = parseInt(text) || 0;
@@ -185,23 +210,24 @@ export default function SystemSettingsScreen() {
                 }}
                 onBlur={() => updateSetting('auction_extension_minutes', settings.auction_extension_minutes)}
                 keyboardType="number-pad"
+                placeholderTextColor={isDark ? '#666' : '#999'}
               />
-              <Text style={styles.inputSuffix}>min</Text>
+              <Text style={[styles.inputSuffix, { color: colors.textSecondary }]}>min</Text>
             </View>
           </SettingRow>
         </View>
 
         {/* Item Settings */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Item Settings</Text>
+        <View style={[styles.section, { backgroundColor: colors.surface, borderColor: isDark ? '#333' : 'transparent' }]}>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Item Settings</Text>
 
           <SettingRow
             title="Max Images Per Item"
             subtitle="Maximum photos sellers can upload"
           >
-            <View style={styles.inputContainer}>
+            <View style={[styles.inputContainer, { backgroundColor: isDark ? '#1a1a1a' : '#F5F5F5' }]}>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { color: colors.textPrimary }]}
                 value={settings.max_item_images.toString()}
                 onChangeText={(text) => {
                   const value = parseInt(text) || 1;
@@ -209,6 +235,7 @@ export default function SystemSettingsScreen() {
                 }}
                 onBlur={() => updateSetting('max_item_images', settings.max_item_images)}
                 keyboardType="number-pad"
+                placeholderTextColor={isDark ? '#666' : '#999'}
               />
             </View>
           </SettingRow>
@@ -217,10 +244,10 @@ export default function SystemSettingsScreen() {
             title="Featured Item Cost"
             subtitle="Price to feature an item"
           >
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputPrefix}>$</Text>
+            <View style={[styles.inputContainer, { backgroundColor: isDark ? '#1a1a1a' : '#F5F5F5' }]}>
+              <Text style={[styles.inputPrefix, { color: colors.textSecondary }]}>$</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { color: colors.textPrimary }]}
                 value={settings.featured_item_cost.toString()}
                 onChangeText={(text) => {
                   const value = parseFloat(text) || 0;
@@ -228,17 +255,18 @@ export default function SystemSettingsScreen() {
                 }}
                 onBlur={() => updateSetting('featured_item_cost', settings.featured_item_cost)}
                 keyboardType="decimal-pad"
+                placeholderTextColor={isDark ? '#666' : '#999'}
               />
             </View>
           </SettingRow>
         </View>
 
         {/* Danger Zone */}
-        <View style={[styles.section, styles.dangerSection]}>
+        <View style={[styles.section, styles.dangerSection, { backgroundColor: colors.surface }]}>
           <Text style={[styles.sectionTitle, { color: '#F44336' }]}>Danger Zone</Text>
 
           <TouchableOpacity
-            style={styles.dangerButton}
+            style={[styles.dangerButton, { borderBottomColor: isDark ? '#331111' : '#FFEBEE' }]}
             onPress={() => router.push('/cleanup-expired' as any)}
           >
             <Ionicons name="trash" size={20} color="#F44336" />
@@ -247,7 +275,7 @@ export default function SystemSettingsScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.dangerButton}
+            style={[styles.dangerButton, { borderBottomColor: isDark ? '#331111' : '#FFEBEE' }]}
             onPress={() => Alert.alert('Coming Soon', 'Database backup feature')}
           >
             <Ionicons name="save" size={20} color="#F44336" />
@@ -315,6 +343,28 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1A1A1A',
     marginBottom: 16,
+  },
+  infoBox: {
+    flexDirection: 'row',
+    backgroundColor: '#F3E5F5',
+    borderLeftWidth: 4,
+    borderLeftColor: '#6A0DAD',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    gap: 12,
+  },
+  infoTextContainer: { flex: 1 },
+  infoTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#6A0DAD',
+    marginBottom: 6,
+  },
+  infoText: {
+    fontSize: 13,
+    color: '#555',
+    lineHeight: 18,
   },
   settingRow: {
     flexDirection: 'row',

@@ -1,3 +1,5 @@
+import { API_BASE_URL } from '@/config';
+
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, Button, Alert, StyleSheet
@@ -7,7 +9,7 @@ import { useLocalSearchParams } from 'expo-router';
 import CountdownTimer from '../../components/CountdownTimer';
 import { playGoatSoundByName } from '@/assets/sounds/officialGoatSoundsSoundtrack';
 
-const API_URL = 'http://10.0.0.170:5000';
+const API_URL = API_BASE_URL;
 
 export default function AuctionScreen() {
   const { auctionId, suggestedBid } = useLocalSearchParams();

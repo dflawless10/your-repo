@@ -7,21 +7,19 @@ import {
   View,
   Dimensions,
 } from 'react-native';
+import Animated, {FadeIn, FadeInDown} from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
+import WinkingGoat from '../assets/winkingGoat.svg';
+import DiamondIcon from '../assets/diamond.svg';
+import {formatTimeWithSeconds, getCountdownColor} from '@/utils/time';
+import { useAppDispatch } from '@/hooks/reduxHooks';
+import {ListedItem, WishlistItem} from '@/types/items';
+import { addToWishlist } from 'app/wishlistslice';
 
 const { width } = Dimensions.get('window');
 const COLUMN_GAP = 12;
 const NUM_COLUMNS = 2;
 const ITEM_WIDTH = (width - 32 - COLUMN_GAP) / NUM_COLUMNS;
-import Animated, {FadeIn, FadeInDown} from 'react-native-reanimated';
-import WinkingGoat from '../assets/winkingGoat.svg';
-import DiamondIcon from '../assets/diamond.svg';
-import { formatTimeWithSeconds } from '@/utils/time';
-import { useAppDispatch } from '@/hooks/reduxHooks';
-import {ListedItem, WishlistItem} from '@/types/items';
-import { addToWishlist } from 'app/wishlistslice';
-import { Ionicons } from '@expo/vector-icons';
-
-import wishlist from 'app/wishlist';
 
 type Props = {
   item: {
@@ -86,18 +84,7 @@ function FavoriteCarouselCard({
     }
   };
 
-  const getCountdownColor = (endTime: string): { color: string; fontWeight: '600' | 'bold' } => {
-    const now = Date.now();
-    const end = new Date(endTime).getTime();
-    const diffHours = (end - now) / (1000 * 60 * 60);
 
-    if (diffHours <= 2) {
-      return { color: '#E53E3E', fontWeight: 'bold' }; // Bright red + bold if ≤2h
-    } else if (diffHours <= 24) {
-      return { color: '#c53030', fontWeight: '600' }; // Red if ≤24h
-    }
-    return { color: '#38a169', fontWeight: '600' }; // Green otherwise
-  };
 
   return (
     <TouchableOpacity onPress={handleCardPress} activeOpacity={0.9}>

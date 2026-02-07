@@ -2,7 +2,7 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import LottieView from 'lottie-react-native';
-import { useColorScheme } from 'react-native';
+import { useTheme } from '@/app/theme/ThemeContext';
 import {Audio, AVPlaybackSource} from 'expo-av';
 
 import sparkleBurst from '@/assets/animations/sparkle-burst.json';
@@ -30,7 +30,7 @@ export default function SparkleTrail({
   mood = 'cheerful',
   milestoneLevel = 0,
 }: SparkleTrailProps) {
-  const theme = useColorScheme() ?? 'light';
+  const { theme } = useTheme();
   const isDark = theme === 'dark';
   const sparkleColor = isDark ? '#B0E0E6' : '#FFD700';
 

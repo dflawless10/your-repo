@@ -1,3 +1,5 @@
+import { API_BASE_URL } from '@/config';
+
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, TextInput, Button, StyleSheet,
@@ -34,7 +36,7 @@ type FormDataFile = {
 
 
 
-const API_URL = 'http://10.0.0.170:5000';
+const API_URL = API_BASE_URL;
 
 function ItemScreen() {
   const buildUploadFormData = async (imageUri: string | null): Promise<FormData> => {

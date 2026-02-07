@@ -2,6 +2,7 @@
 import React from 'react';
 import { View, TextInput, Image, StyleSheet, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import GlobalFooter from "@/app/components/GlobalFooter";
 
 interface SearchBarProps {
   onSearch?: (text: string) => void;
@@ -31,6 +32,7 @@ export default function SearchBar({ onSearch }: SearchBarProps) {
           />
         </View>
       </View>
+
     </Animated.View>
   );
 }

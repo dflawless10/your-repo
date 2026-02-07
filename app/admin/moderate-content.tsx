@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,8 @@ import { API_BASE_URL } from '@/config';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '../components/EnhancedHeader';
 import { LinearGradient } from 'expo-linear-gradient';
 import { PROHIBITED_CONTENT, REPORT_REASONS } from '../config/moderationPolicy';
+import GlobalFooter from "@/app/components/GlobalFooter";
+import { useTheme } from '@/app/theme/ThemeContext';
 
 interface FlaggedItem {
   id: number;
@@ -47,7 +49,11 @@ interface PendingReport {
 
 export default function ModerateContentScreen() {
   const router = useRouter();
+  const { theme, colors } = useTheme();
+  const isDark = theme === 'dark';
   const scrollY = new Animated.Value(0);
+  const headerOpacity = useRef(new Animated.Value(0)).current;
+  const headerScale = useRef(new Animated.Value(1)).current;
 
   const [activeTab, setActiveTab] = useState<'flagged' | 'reports'>('flagged');
   const [flaggedItems, setFlaggedItems] = useState<FlaggedItem[]>([]);
@@ -58,6 +64,32 @@ export default function ModerateContentScreen() {
   useEffect(() => {
     loadData();
   }, [activeTab]);
+
+  useEffect(() => {
+    // Fade in header title and arrow
+    setTimeout(() => {
+      Animated.timing(headerOpacity, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+      }).start(() => {
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(headerScale, {
+              toValue: 1.05,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(headerScale, {
+              toValue: 1,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
+      });
+    }, 500);
+  }, []);
 
   const loadData = async () => {
     try {
@@ -93,7 +125,7 @@ export default function ModerateContentScreen() {
     loadData();
   };
 
-  const handleApproveItem = async (itemId: number) => {
+  const handleApproveItem = (itemId: number) => {
     Alert.alert(
       'Approve Item',
       'Are you sure this item is safe and does not violate policies?',
@@ -101,27 +133,30 @@ export default function ModerateContentScreen() {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Approve',
-          onPress: async () => {
-            try {
-              const token = await AsyncStorage.getItem('jwtToken');
-              const response = await fetch(`${API_BASE_URL}/api/admin/flagged-items/${itemId}/approve`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${token}` },
-              });
-              if (response.ok) {
-                Alert.alert('Success', 'Item approved');
-                loadData();
+          onPress: () => {
+            (async () => {
+              try {
+                const token = await AsyncStorage.getItem('jwtToken');
+                const response = await fetch(`${API_BASE_URL}/api/admin/flagged-items/${itemId}/approve`, {
+                  method: 'POST',
+                  headers: { Authorization: `Bearer ${token}` },
+                });
+                if (response.ok) {
+                  Alert.alert('Success', 'Item approved');
+                  await loadData();
+                }
+              } catch (error) {
+                console.error('Failed to approve item:', error);
+                Alert.alert('Error', 'Failed to approve item');
               }
-            } catch (error) {
-              Alert.alert('Error', 'Failed to approve item');
-            }
+            })();
           },
         },
       ]
     );
   };
 
-  const handleRemoveItem = async (itemId: number) => {
+  const handleRemoveItem = (itemId: number) => {
     Alert.alert(
       'Remove Item',
       'This will permanently remove the item from the platform.',
@@ -130,20 +165,23 @@ export default function ModerateContentScreen() {
         {
           text: 'Remove',
           style: 'destructive',
-          onPress: async () => {
-            try {
-              const token = await AsyncStorage.getItem('jwtToken');
-              const response = await fetch(`${API_BASE_URL}/api/admin/flagged-items/${itemId}/remove`, {
-                method: 'DELETE',
-                headers: { Authorization: `Bearer ${token}` },
-              });
-              if (response.ok) {
-                Alert.alert('Success', 'Item removed');
-                loadData();
+          onPress: () => {
+            (async () => {
+              try {
+                const token = await AsyncStorage.getItem('jwtToken');
+                const response = await fetch(`${API_BASE_URL}/api/admin/flagged-items/${itemId}/remove`, {
+                  method: 'DELETE',
+                  headers: { Authorization: `Bearer ${token}` },
+                });
+                if (response.ok) {
+                  Alert.alert('Success', 'Item removed');
+                  await loadData();
+                }
+              } catch (error) {
+                console.error('Failed to remove item:', error);
+                Alert.alert('Error', 'Failed to remove item');
               }
-            } catch (error) {
-              Alert.alert('Error', 'Failed to remove item');
-            }
+            })();
           },
         },
       ]
@@ -189,14 +227,14 @@ export default function ModerateContentScreen() {
     const severityIcon = getSeverityIcon(item.violation_severity);
 
     return (
-      <View key={item.id} style={styles.card}>
+      <View key={item.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: isDark ? '#333' : '#E0E0E0' }]}>
         <View style={styles.cardHeader}>
           {item.item_image && (
             <Image source={{ uri: item.item_image }} style={styles.itemImage} />
           )}
           <View style={styles.cardHeaderText}>
             <View style={styles.itemNameRow}>
-              <Text style={styles.itemName}>{item.item_name}</Text>
+              <Text style={[styles.itemName, { color: colors.textPrimary }]}>{item.item_name}</Text>
               {item.violation_severity && (
                 <View style={[styles.severityBadge, { backgroundColor: severityColor }]}>
                   <Text style={styles.severityText}>{item.violation_severity.toUpperCase()}</Text>
@@ -212,8 +250,8 @@ export default function ModerateContentScreen() {
                 <Text style={styles.policyText}>Policy: {item.violation_type}</Text>
               </View>
             )}
-            <Text style={styles.meta}>Reported by {item.reported_by}</Text>
-            <Text style={styles.meta}>{new Date(item.reported_at).toLocaleDateString()}</Text>
+            <Text style={[styles.meta, { color: colors.textSecondary }]}>Reported by {item.reported_by}</Text>
+            <Text style={[styles.meta, { color: colors.textSecondary }]}>{new Date(item.reported_at).toLocaleDateString()}</Text>
           </View>
         </View>
 
@@ -256,7 +294,7 @@ export default function ModerateContentScreen() {
     const severityColor = reasonDetails?.severity === 'high' ? '#F44336' : reasonDetails?.severity === 'medium' ? '#FF9800' : '#FBC02D';
 
     return (
-      <View key={report.id} style={styles.card}>
+      <View key={report.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: isDark ? '#333' : '#E0E0E0' }]}>
         <View style={styles.cardHeader}>
           <View style={styles.cardHeaderText}>
             <View style={styles.reportTypeRow}>
@@ -269,13 +307,13 @@ export default function ModerateContentScreen() {
                 </View>
               )}
             </View>
-            <Text style={styles.itemName}>{report.target_name}</Text>
+            <Text style={[styles.itemName, { color: colors.textPrimary }]}>{report.target_name}</Text>
             <Text style={[styles.reason, { color: severityColor }]}>
               <Ionicons name="warning" size={14} color={severityColor} /> {reasonDetails?.label || report.reason}
             </Text>
-            {report.details && <Text style={styles.details}>{report.details}</Text>}
-            <Text style={styles.meta}>Reported by {report.reported_by}</Text>
-            <Text style={styles.meta}>{new Date(report.created_at).toLocaleDateString()}</Text>
+            {report.details && <Text style={[styles.details, { color: colors.textSecondary }]}>{report.details}</Text>}
+            <Text style={[styles.meta, { color: colors.textSecondary }]}>Reported by {report.reported_by}</Text>
+            <Text style={[styles.meta, { color: colors.textSecondary }]}>{new Date(report.created_at).toLocaleDateString()}</Text>
           </View>
         </View>
 
@@ -310,12 +348,12 @@ export default function ModerateContentScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ headerShown: false }} />
       <EnhancedHeader scrollY={scrollY} />
 
       <Animated.ScrollView
-        style={styles.scrollView}
+        style={[styles.scrollView, { backgroundColor: colors.background }]}
         contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20 }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -327,23 +365,23 @@ export default function ModerateContentScreen() {
         }
       >
         {/* Page Header with Back Arrow */}
-        <View style={styles.pageHeader}>
+        <Animated.View style={[styles.pageHeader, { backgroundColor: colors.surface, opacity: headerOpacity, transform: [{ scale: headerScale }] }]}>
           <TouchableOpacity
             onPress={() => router.back()}
             style={styles.backButton}
           >
-            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+            <Ionicons name="arrow-back" size={24} color={isDark ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
-          <Text style={styles.pageTitle}>Moderate Content</Text>
-        </View>
+          <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Moderate Content</Text>
+        </Animated.View>
 
         {/* Tab Selector */}
-      <View style={styles.tabContainer}>
+      <View style={[styles.tabContainer, { backgroundColor: colors.surface, borderBottomColor: isDark ? '#333' : '#E0E0E0' }]}>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'flagged' && styles.tabActive]}
           onPress={() => setActiveTab('flagged')}
         >
-          <Text style={[styles.tabText, activeTab === 'flagged' && styles.tabTextActive]}>
+          <Text style={[styles.tabText, { color: isDark ? '#999' : '#666' }, activeTab === 'flagged' && styles.tabTextActive]}>
             Flagged Items ({flaggedItems.length})
           </Text>
         </TouchableOpacity>
@@ -351,7 +389,7 @@ export default function ModerateContentScreen() {
           style={[styles.tab, activeTab === 'reports' && styles.tabActive]}
           onPress={() => setActiveTab('reports')}
         >
-          <Text style={[styles.tabText, activeTab === 'reports' && styles.tabTextActive]}>
+          <Text style={[styles.tabText, { color: isDark ? '#999' : '#666' }, activeTab === 'reports' && styles.tabTextActive]}>
             Reports ({reports.length})
           </Text>
         </TouchableOpacity>
@@ -377,8 +415,8 @@ export default function ModerateContentScreen() {
           ) : (
             <View style={styles.emptyState}>
               <Ionicons name="checkmark-circle" size={64} color="#4CAF50" />
-              <Text style={styles.emptyTitle}>No Flagged Items</Text>
-              <Text style={styles.emptySubtitle}>All clear! No items require moderation.</Text>
+              <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No Flagged Items</Text>
+              <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>All clear! No items require moderation.</Text>
             </View>
           )
         ) : (
@@ -387,14 +425,15 @@ export default function ModerateContentScreen() {
           ) : (
             <View style={styles.emptyState}>
               <Ionicons name="checkmark-circle" size={64} color="#4CAF50" />
-              <Text style={styles.emptyTitle}>No Pending Reports</Text>
-              <Text style={styles.emptySubtitle}>All reports have been handled.</Text>
+              <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No Pending Reports</Text>
+              <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>All reports have been handled.</Text>
             </View>
           )
         )}
 
         <View style={{ height: 40 }} />
       </Animated.ScrollView>
+      <GlobalFooter />
     </View>
   );
 }
@@ -404,9 +443,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8F9FA',
   },
-  scrollView: {
-    flex: 1,
-  },
+
   pageHeader: {
     flexDirection: 'row',
     alignItems: 'center',

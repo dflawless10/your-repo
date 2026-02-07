@@ -14,8 +14,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { API_BASE_URL } from '@/config';
 
-const API_URL = 'http://10.0.0.170:5000';
+const API_URL = API_BASE_URL;
 
 interface FavoriteItem {
   id: number;
@@ -216,7 +217,7 @@ export default function JewelryBoxScreen() {
           ) : (
             <View style={styles.unsoldBadge}>
               <Ionicons name="close-circle" size={16} color="#e53e3e" />
-              <Text style={styles.unsoldText}>Didn't Sell</Text>
+              <Text style={styles.unsoldText}>Didn&#39;t Sell</Text>
             </View>
           )}
 

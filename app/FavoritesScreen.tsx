@@ -1,3 +1,5 @@
+import { API_BASE_URL } from '@/config';
+
 import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
@@ -22,10 +24,6 @@ import {AuctionItem, WishlistItem} from '@/types/items';
 import {addToWishlist} from "@/app/wishlistslice";
 import {useAppDispatch} from "@/hooks/reduxHooks";
 import {Ionicons} from "@expo/vector-icons";
-
-
-
-const API_BASE_URL = 'http://10.0.0.170:5000';
 
 const FavoritesScreen = () => {
   const [favorites, setFavorites] = useState<AuctionItem[]>([]);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import { API_BASE_URL } from '@/config';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '../components/EnhancedHeader';
 import { LinearGradient } from 'expo-linear-gradient';
 import GlobalFooter from "@/app/components/GlobalFooter";
+import { useTheme } from '@/app/theme/ThemeContext';
 
 interface User {
   user_id: number;
@@ -37,7 +38,11 @@ interface User {
 
 export default function UserManagementScreen() {
   const router = useRouter();
+  const { theme, colors } = useTheme();
+  const isDark = theme === 'dark';
   const scrollY = new Animated.Value(0);
+  const headerOpacity = useRef(new Animated.Value(0)).current;
+  const headerScale = useRef(new Animated.Value(1)).current;
 
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
@@ -46,39 +51,7 @@ export default function UserManagementScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'admin' | 'seller' | 'banned'>('all');
 
-  useEffect(() => {
-    loadUsers();
-  }, []);
-
-  useEffect(() => {
-    filterUsers();
-  }, [users, searchQuery, filterType]);
-
-  const loadUsers = async () => {
-    try {
-      const token = await AsyncStorage.getItem('jwtToken');
-      const response = await fetch(`${API_BASE_URL}/api/admin/users`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setUsers(data.users || []);
-      }
-    } catch (error) {
-      console.error('Error loading users:', error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  const handleRefresh = () => {
-    setRefreshing(true);
-    loadUsers();
-  };
-
-  const filterUsers = () => {
+  const filterUsers = React.useCallback(() => {
     let filtered = users;
 
     // Apply search filter
@@ -105,6 +78,64 @@ export default function UserManagementScreen() {
     }
 
     setFilteredUsers(filtered);
+  }, [users, searchQuery, filterType]);
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  useEffect(() => {
+    filterUsers();
+  }, [filterUsers]);
+
+  useEffect(() => {
+    // Fade in header title and arrow
+    setTimeout(() => {
+      Animated.timing(headerOpacity, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+      }).start(() => {
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(headerScale, {
+              toValue: 1.05,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(headerScale, {
+              toValue: 1,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
+      });
+    }, 500);
+  }, []);
+
+  const loadUsers = async () => {
+    try {
+      const token = await AsyncStorage.getItem('jwtToken');
+      const response = await fetch(`${API_BASE_URL}/api/admin/users`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(data.users || []);
+      }
+    } catch (error) {
+      console.error('Error loading users:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    loadUsers();
   };
 
   const handleBanUser = async (userId: number, currentlyBanned: boolean) => {
@@ -117,25 +148,28 @@ export default function UserManagementScreen() {
         {
           text: action,
           style: currentlyBanned ? 'default' : 'destructive',
-          onPress: async () => {
-            try {
-              const token = await AsyncStorage.getItem('jwtToken');
-              const response = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/ban`, {
-                method: 'POST',
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ ban: !currentlyBanned }),
-              });
+          onPress: () => {
+            (async () => {
+              try {
+                const token = await AsyncStorage.getItem('jwtToken');
+                const response = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/ban`, {
+                  method: 'POST',
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({ ban: !currentlyBanned }),
+                });
 
-              if (response.ok) {
-                Alert.alert('Success', `User ${action.toLowerCase()}ned`);
-                loadUsers();
+                if (response.ok) {
+                  Alert.alert('Success', `User ${action.toLowerCase()}ned`);
+                  await loadUsers();
+                }
+              } catch (error) {
+                console.error('Failed to ban/unban user:', error);
+                Alert.alert('Error', `Failed to ${action.toLowerCase()} user`);
               }
-            } catch (error) {
-              Alert.alert('Error', `Failed to ${action.toLowerCase()} user`);
-            }
+            })();
           },
         },
       ]
@@ -150,21 +184,24 @@ export default function UserManagementScreen() {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Confirm',
-          onPress: async () => {
-            try {
-              const token = await AsyncStorage.getItem('jwtToken');
-              const response = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/toggle-admin`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${token}` },
-              });
+          onPress: () => {
+            (async () => {
+              try {
+                const token = await AsyncStorage.getItem('jwtToken');
+                const response = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/toggle-admin`, {
+                  method: 'POST',
+                  headers: { Authorization: `Bearer ${token}` },
+                });
 
-              if (response.ok) {
-                Alert.alert('Success', 'Admin status updated');
-                loadUsers();
+                if (response.ok) {
+                  Alert.alert('Success', 'Admin status updated');
+                  await loadUsers();
+                }
+              } catch (error) {
+                console.error('Failed to toggle admin status:', error);
+                Alert.alert('Error', 'Failed to update admin status');
               }
-            } catch (error) {
-              Alert.alert('Error', 'Failed to update admin status');
-            }
+            })();
           },
         },
       ]
@@ -172,19 +209,19 @@ export default function UserManagementScreen() {
   };
 
   const renderUser = (user: User) => (
-    <View key={user.user_id} style={styles.userCard}>
+    <View style={[styles.userCard, { backgroundColor: colors.surface, borderColor: isDark ? '#333' : '#E0E0E0' }]}>
       <View style={styles.userHeader}>
         {user.avatar_url ? (
           <Image source={{ uri: user.avatar_url }} style={styles.avatar} />
         ) : (
-          <View style={styles.avatarPlaceholder}>
-            <Ionicons name="person" size={24} color="#999" />
+          <View style={[styles.avatarPlaceholder, { backgroundColor: isDark ? '#1a1a1a' : '#f0f0f0' }]}>
+            <Ionicons name="person" size={24} color={isDark ? '#666' : '#999'} />
           </View>
         )}
 
         <View style={styles.userInfo}>
           <View style={styles.userNameRow}>
-            <Text style={styles.username}>{user.username}</Text>
+            <Text style={[styles.username, { color: colors.textPrimary }]}>{user.username}</Text>
             {user.is_admin && (
               <View style={[styles.badge, { backgroundColor: '#F44336' }]}>
                 <Text style={styles.badgeText}>ADMIN</Text>
@@ -202,19 +239,22 @@ export default function UserManagementScreen() {
             )}
           </View>
 
-          <Text style={styles.userEmail}>{user.email}</Text>
-          <Text style={styles.userName}>{user.firstname} {user.lastname}</Text>
+          <Text style={[styles.userEmail, { color: colors.textSecondary }]}>{user.email}</Text>
+          <Text style={[styles.userName, { color: colors.textSecondary }]}>{`${user.firstname} ${user.lastname}`}</Text>
 
           <View style={styles.userStats}>
-            <Text style={styles.statText}>
-              <Ionicons name="cube" size={12} /> {user.total_items} items
-            </Text>
-            <Text style={styles.statText}>
-              <Ionicons name="cash" size={12} /> ${user.total_sales} sales
-            </Text>
-            <Text style={styles.statText}>
-              <Ionicons name="calendar" size={12} /> {new Date(user.created_at).toLocaleDateString()}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 12 }}>
+              <Ionicons name="cube" size={12} color={isDark ? '#999' : '#666'} style={{ marginRight: 4 }} />
+              <Text style={[styles.statText, { color: isDark ? '#999' : '#666' }]}>{`${user.total_items} items`}</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 12 }}>
+              <Ionicons name="cash" size={12} color={isDark ? '#999' : '#666'} style={{ marginRight: 4 }} />
+              <Text style={[styles.statText, { color: isDark ? '#999' : '#666' }]}>{`$${user.total_sales} sales`}</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="calendar" size={12} color={isDark ? '#999' : '#666'} style={{ marginRight: 4 }} />
+              <Text style={[styles.statText, { color: isDark ? '#999' : '#666' }]}>{new Date(user.created_at).toLocaleDateString()}</Text>
+            </View>
           </View>
         </View>
       </View>
@@ -240,24 +280,27 @@ export default function UserManagementScreen() {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.actionButton, styles.viewButton]}
-          onPress={() => router.push(`/seller/${user.user_id}` as any)}
-        >
-          <Ionicons name="eye" size={16} color="#666" />
-          <Text style={[styles.actionButtonText, { color: '#666' }]}>View Profile</Text>
-        </TouchableOpacity>
+        {user.is_seller && (
+          <TouchableOpacity
+            style={[styles.actionButton, styles.viewButton]}
+            onPress={() => router.push(`/seller/${user.user_id}` as any)}
+          >
+            <Ionicons name="eye" size={16} color={isDark ? '#999' : '#666'} />
+            <Text style={[styles.actionButtonText, { color: isDark ? '#999' : '#666' }]}>View Seller Profile</Text>
+          </TouchableOpacity>
+        )}
       </View>
+
     </View>
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ headerShown: false }} />
       <EnhancedHeader scrollY={scrollY} />
 
       <Animated.ScrollView
-        style={styles.scrollView}
+        style={[styles.scrollView, { backgroundColor: colors.background }]}
         contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20 }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -269,29 +312,30 @@ export default function UserManagementScreen() {
         }
       >
         {/* Page Header with Back Arrow */}
-        <View style={styles.pageHeader}>
+        <Animated.View style={[styles.pageHeader, { backgroundColor: colors.surface, opacity: headerOpacity, transform: [{ scale: headerScale }] }]}>
           <TouchableOpacity
             onPress={() => router.back()}
             style={styles.backButton}
           >
-            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+            <Ionicons name="arrow-back" size={24} color={isDark ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
-          <Text style={styles.pageTitle}>User Management</Text>
-        </View>
+          <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>User Management</Text>
+        </Animated.View>
 
         {/* Search and Filter */}
-        <View style={styles.searchContainer}>
-        <View style={styles.searchInputContainer}>
-          <Ionicons name="search" size={20} color="#999" />
+        <View style={[styles.searchContainer, { backgroundColor: colors.surface }]}>
+        <View style={[styles.searchInputContainer, { backgroundColor: colors.background, borderColor: isDark ? '#333' : '#E0E0E0' }]}>
+          <Ionicons name="search" size={20} color={isDark ? '#666' : '#999'} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: colors.textPrimary }]}
             placeholder="Search users..."
+            placeholderTextColor={isDark ? '#666' : '#999'}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={20} color="#999" />
+              <Ionicons name="close-circle" size={20} color={isDark ? '#666' : '#999'} />
             </TouchableOpacity>
           )}
         </View>
@@ -333,17 +377,17 @@ export default function UserManagementScreen() {
         </LinearGradient>
 
         {/* Results */}
-        <Text style={styles.resultsCount}>
-          {filteredUsers.length} {filteredUsers.length === 1 ? 'user' : 'users'} found
+        <Text style={[styles.resultsCount, { color: colors.textSecondary }]}>
+          {`${filteredUsers.length} ${filteredUsers.length === 1 ? 'user' : 'users'} found`}
         </Text>
 
         {filteredUsers.length > 0 ? (
-          filteredUsers.map(renderUser)
+          filteredUsers.map((user) => <React.Fragment key={user.user_id}>{renderUser(user)}</React.Fragment>)
         ) : (
           <View style={styles.emptyState}>
-            <Ionicons name="people" size={64} color="#D1D5DB" />
-            <Text style={styles.emptyTitle}>No Users Found</Text>
-            <Text style={styles.emptySubtitle}>Try adjusting your search or filter</Text>
+            <Ionicons name="people" size={64} color={isDark ? '#444' : '#D1D5DB'} />
+            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No Users Found</Text>
+            <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>Try adjusting your search or filter</Text>
           </View>
         )}
 
@@ -359,9 +403,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8F9FA',
   },
-  scrollView: {
-    flex: 1,
-  },
+
   pageHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -431,7 +473,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingTop: Platform.OS === 'ios' ? 290 : 290,
+    paddingTop: 290,
     paddingHorizontal: 16,
     paddingBottom: 40,
   },

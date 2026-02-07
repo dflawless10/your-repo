@@ -14,8 +14,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '@/config';
-import EnhancedHeader from './components/EnhancedHeader';
+import EnhancedHeader, { HEADER_MAX_HEIGHT } from './components/EnhancedHeader';
 import GlobalFooter from "@/app/components/GlobalFooter";
+import { useTheme } from '@/app/theme/ThemeContext';
 
 
 interface Notification {
@@ -30,6 +31,7 @@ interface Notification {
 
 export default function NotificationsScreen() {
   const router = useRouter();
+  const { theme, colors } = useTheme();
   const scrollY = new Animated.Value(0);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -171,7 +173,11 @@ export default function NotificationsScreen() {
 
   const renderNotification = ({ item }: { item: Notification }) => (
     <TouchableOpacity
-      style={[styles.notificationCard, !item.is_read && styles.unreadCard]}
+      style={[
+        styles.notificationCard,
+        { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' },
+        !item.is_read && [styles.unreadCard, { backgroundColor: theme === 'dark' ? '#2C2C3E' : '#F5F3FF' }]
+      ]}
       onPress={() => handleNotificationPress(item)}
       activeOpacity={0.7}
     >
@@ -190,46 +196,56 @@ export default function NotificationsScreen() {
 
       <View style={styles.contentContainer}>
         <View style={styles.headerRow}>
-          <Text style={styles.title} numberOfLines={1}>
+          <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
             {item.title}
           </Text>
           {!item.is_read && <View style={styles.unreadDot} />}
         </View>
-        <Text style={styles.message} numberOfLines={2}>
+        <Text style={[styles.message, { color: theme === 'dark' ? '#9CA3AF' : '#666' }]} numberOfLines={2}>
           {item.message}
         </Text>
-        <Text style={styles.timestamp}>{formatTimestamp(item.created_at)}</Text>
+        <Text style={[styles.timestamp, { color: theme === 'dark' ? '#666' : '#999' }]}>{formatTimestamp(item.created_at)}</Text>
       </View>
 
-      <Ionicons name="chevron-forward" size={20} color="#CCC" />
+      <Ionicons name="chevron-forward" size={20} color={theme === 'dark' ? '#666' : '#CCC'} />
     </TouchableOpacity>
   );
 
   if (loading) {
     return (
-      <View style={styles.container}>
-        <EnhancedHeader scrollY={scrollY} />
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <EnhancedHeader scrollY={scrollY} onSearch={() => {}} />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#6A0DAD" />
+          <ActivityIndicator size="large" color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
         </View>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <EnhancedHeader scrollY={scrollY} />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <EnhancedHeader scrollY={scrollY} onSearch={() => {}} />
 
-      <View style={styles.content}>
+      {/* Page Header with Back Button */}
+      <Animated.View style={[styles.pageHeader, {
+        backgroundColor: colors.background,
+        borderBottomColor: theme === 'dark' ? '#333' : '#E5E5E5'
+      }]}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+        </TouchableOpacity>
+        <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Notifications</Text>
+      </Animated.View>
+
+      <View style={[styles.content, { backgroundColor: colors.background }]}>
         {/* Header Stats */}
-        <View style={styles.statsHeader}>
-          <Text style={styles.headerTitle}>Notifications</Text>
-          {unreadCount > 0 && (
-            <View style={styles.unreadBadge}>
+        {unreadCount > 0 && (
+          <View style={[styles.statsHeader, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F9FAFB' }]}>
+            <View style={[styles.unreadBadge, { backgroundColor: theme === 'dark' ? '#3730A3' : '#6A0DAD' }]}>
               <Text style={styles.unreadBadgeText}>{unreadCount} unread</Text>
             </View>
-          )}
-        </View>
+          </View>
+        )}
 
         <FlatList
           data={notifications}
@@ -245,9 +261,9 @@ export default function NotificationsScreen() {
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Ionicons name="notifications-off-outline" size={64} color="#CCC" />
-              <Text style={styles.emptyTitle}>No notifications yet</Text>
-              <Text style={styles.emptySubtitle}>
+              <Ionicons name="notifications-off-outline" size={64} color={theme === 'dark' ? '#666' : '#CCC'} />
+              <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No notifications yet</Text>
+              <Text style={[styles.emptySubtitle, { color: theme === 'dark' ? '#9CA3AF' : '#666' }]}>
                 When you have new activity, you&#39;ll see it here
               </Text>
             </View>
@@ -267,11 +283,29 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+  },
+  pageHeader: {
+    position: 'absolute',
+    top: HEADER_MAX_HEIGHT,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    zIndex: 10,
+  },
+  backButton: {
+    marginRight: 12,
+  },
+  pageTitle: {
+    fontSize: 20,
+    fontWeight: '700',
   },
   content: {
     flex: 1,
-    marginTop: Platform.OS === 'ios' ? 110 : 110,
+    marginTop: HEADER_MAX_HEIGHT + 50,
   },
   loadingContainer: {
     flex: 1,
@@ -288,6 +322,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
+    marginBottom: 2,
   },
   headerTitle: {
     fontSize: 24,

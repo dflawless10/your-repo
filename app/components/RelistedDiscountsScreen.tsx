@@ -6,6 +6,7 @@ import { differenceInSeconds, parseISO } from "date-fns";
 import { useRouter } from "expo-router";
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
 import GlobalFooter from "@/app/components/GlobalFooter";
+import { useTheme } from '@/app/theme/ThemeContext';
 
 interface Props {
   items: ListedItem[];
@@ -106,8 +107,11 @@ const KARAT_OPTIONS = ['10K', '14K', '18K', '20K', '22K', '24K'];
   }
 
 export default function RelistedDiscountsScreen({ items }: Props) {
+  const { theme, colors } = useTheme();
   const router = useRouter();
   const scrollY = useRef(new RNAnimated.Value(0)).current;
+  const headerOpacity = useRef(new RNAnimated.Value(0)).current;
+  const headerScale = useRef(new RNAnimated.Value(1)).current;
 
   // Filter states
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
@@ -119,6 +123,33 @@ export default function RelistedDiscountsScreen({ items }: Props) {
   const [showEndingSoon, setShowEndingSoon] = useState(false);
   const [showActiveOnly, setShowActiveOnly] = useState(false);
   const [activeFilterTab, setActiveFilterTab] = useState<string | null>(null);
+
+  // Fade in header title and arrow animation
+  React.useEffect(() => {
+    setTimeout(() => {
+      RNAnimated.timing(headerOpacity, {
+        toValue: 1,
+        duration: 2000, // 2 seconds - slow and dramatic
+        useNativeDriver: true,
+      }).start(() => {
+        // After fade-in completes, start pulsing animation
+        RNAnimated.loop(
+          RNAnimated.sequence([
+            RNAnimated.timing(headerScale, {
+              toValue: 1.05,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+            RNAnimated.timing(headerScale, {
+              toValue: 1,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
+      });
+    }, 500); // 500ms delay - let screen render fully first
+  }, []);
 
 
 
@@ -239,37 +270,45 @@ export default function RelistedDiscountsScreen({ items }: Props) {
 
   if (!items || items.length === 0) {
     return (
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
         <EnhancedHeader scrollY={scrollY} />
-        <View style={styles.headerTitleContainer}>
-          <Text style={styles.heroTitle}>🔄 Relisted & Reduced</Text>
-          <Text style={styles.headerSubtitle}>Your Second Chance at Great Deals</Text>
+        <View style={[styles.headerTitleContainer, { backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
+          <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>🔄 Relisted & Reduced</Text>
+          <Text style={[styles.headerSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]}>Your Second Chance at Great Deals</Text>
         </View>
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No relisted discounts available right now.</Text>
+        <View style={[styles.emptyContainer, { backgroundColor: colors.background }]}>
+          <Text style={[styles.emptyText, { color: colors.textPrimary }]}>No relisted discounts available right now.</Text>
         </View>
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <EnhancedHeader scrollY={scrollY} />
 
-      <View style={styles.headerTitleContainer}>
+      <RNAnimated.View style={[
+        styles.headerTitleContainer,
+        {
+          opacity: headerOpacity,
+          transform: [{ scale: headerScale }],
+          backgroundColor: colors.background,
+          borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0'
+        }
+      ]}>
         <View style={styles.titleRow}>
           <TouchableOpacity
             onPress={() => router.back()}
             style={styles.backButton}
           >
-            <Ionicons name="arrow-back" size={24} color="#1a1a1a" />
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
           <View style={styles.titleTextContainer}>
-            <Text style={styles.heroTitle}>🔄 Relisted & Reduced</Text>
-            <Text style={styles.headerSubtitle}>Your Second Chance at Great Deals</Text>
+            <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>🔄 Relisted & Reduced</Text>
+            <Text style={[styles.headerSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]}>Your Second Chance at Great Deals</Text>
           </View>
         </View>
-      </View>
+      </RNAnimated.View>
 
       <RNAnimated.ScrollView
         onScroll={RNAnimated.event(
@@ -281,10 +320,10 @@ export default function RelistedDiscountsScreen({ items }: Props) {
         contentContainerStyle={styles.contentContainer}
       >
       {/* Filter Section */}
-      <View style={styles.filtersSection}>
+      <View style={[styles.filtersSection, { backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#e5e5e5' }]}>
         {/* Results Count & Clear */}
         <View style={styles.filterHeader}>
-          <Text style={styles.resultsCount}>
+          <Text style={[styles.resultsCount, { color: colors.textPrimary }]}>
             {filteredItems.length} item{filteredItems.length === 1 ? '' : 's'}
           </Text>
           {hasActiveFilters && (
@@ -297,20 +336,36 @@ export default function RelistedDiscountsScreen({ items }: Props) {
         {/* Filter Tabs Row 1: Main Categories */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterTabsRow}>
           <TouchableOpacity
-            style={[styles.filterTab, activeFilterTab === 'category' && styles.filterTabActive]}
+            style={[
+              styles.filterTab,
+              { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F5F5', borderColor: theme === 'dark' ? '#FF6B6B' : '#FF6B6B' },
+              activeFilterTab === 'category' && [styles.filterTabActive, { backgroundColor: '#FF6B6B' }]
+            ]}
             onPress={() => setActiveFilterTab(activeFilterTab === 'category' ? null : 'category')}
           >
-            <Text style={[styles.filterTabText, activeFilterTab === 'category' && styles.filterTabTextActive]}>
+            <Text style={[
+              styles.filterTabText,
+              { color: theme === 'dark' && activeFilterTab !== 'category' ? '#ECEDEE' : '#333' },
+              activeFilterTab === 'category' && styles.filterTabTextActive
+            ]}>
               Category {selectedCategory !== 'All' && '•'}
             </Text>
           </TouchableOpacity>
 
           {selectedCategory !== 'All' && availableTypes.length > 0 && (
             <TouchableOpacity
-              style={[styles.filterTab, activeFilterTab === 'type' && styles.filterTabActive]}
+              style={[
+                styles.filterTab,
+                { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F5F5' },
+                activeFilterTab === 'type' && [styles.filterTabActive, { backgroundColor: '#FF6B6B' }]
+              ]}
               onPress={() => setActiveFilterTab(activeFilterTab === 'type' ? null : 'type')}
             >
-              <Text style={[styles.filterTabText, activeFilterTab === 'type' && styles.filterTabTextActive]}>
+              <Text style={[
+                styles.filterTabText,
+                { color: theme === 'dark' && activeFilterTab !== 'type' ? '#ECEDEE' : '#333' },
+                activeFilterTab === 'type' && styles.filterTabTextActive
+              ]}>
                 Type {selectedType !== 'All' && '•'}
               </Text>
             </TouchableOpacity>
@@ -318,30 +373,54 @@ export default function RelistedDiscountsScreen({ items }: Props) {
 
           {selectedType !== 'All' && availableStyles.length > 0 && (
             <TouchableOpacity
-              style={[styles.filterTab, activeFilterTab === 'style' && styles.filterTabActive]}
+              style={[
+                styles.filterTab,
+                { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F5F5' },
+                activeFilterTab === 'style' && [styles.filterTabActive, { backgroundColor: '#FF6B6B' }]
+              ]}
               onPress={() => setActiveFilterTab(activeFilterTab === 'style' ? null : 'style')}
             >
-              <Text style={[styles.filterTabText, activeFilterTab === 'style' && styles.filterTabTextActive]}>
+              <Text style={[
+                styles.filterTabText,
+                { color: theme === 'dark' && activeFilterTab !== 'style' ? '#ECEDEE' : '#333' },
+                activeFilterTab === 'style' && styles.filterTabTextActive
+              ]}>
                 Style {selectedStyle !== 'All' && '•'}
               </Text>
             </TouchableOpacity>
           )}
 
           <TouchableOpacity
-            style={[styles.filterTab, activeFilterTab === 'material' && styles.filterTabActive]}
+            style={[
+              styles.filterTab,
+              { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F5F5' },
+              activeFilterTab === 'material' && [styles.filterTabActive, { backgroundColor: '#FF6B6B' }]
+            ]}
             onPress={() => setActiveFilterTab(activeFilterTab === 'material' ? null : 'material')}
           >
-            <Text style={[styles.filterTabText, activeFilterTab === 'material' && styles.filterTabTextActive]}>
+            <Text style={[
+              styles.filterTabText,
+              { color: theme === 'dark' && activeFilterTab !== 'material' ? '#ECEDEE' : '#333' },
+              activeFilterTab === 'material' && styles.filterTabTextActive
+            ]}>
               Material {selectedMaterial !== 'All' && '•'}
             </Text>
           </TouchableOpacity>
 
           {selectedMaterial === 'Gold' && (
             <TouchableOpacity
-              style={[styles.filterTab, activeFilterTab === 'goldColor' && styles.filterTabActive]}
+              style={[
+                styles.filterTab,
+                { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F5F5' },
+                activeFilterTab === 'goldColor' && [styles.filterTabActive, { backgroundColor: '#FF6B6B' }]
+              ]}
               onPress={() => setActiveFilterTab(activeFilterTab === 'goldColor' ? null : 'goldColor')}
             >
-              <Text style={[styles.filterTabText, activeFilterTab === 'goldColor' && styles.filterTabTextActive]}>
+              <Text style={[
+                styles.filterTabText,
+                { color: theme === 'dark' && activeFilterTab !== 'goldColor' ? '#ECEDEE' : '#333' },
+                activeFilterTab === 'goldColor' && styles.filterTabTextActive
+              ]}>
                 Gold Color {selectedGoldColor !== 'All' && '•'}
               </Text>
             </TouchableOpacity>
@@ -349,20 +428,36 @@ export default function RelistedDiscountsScreen({ items }: Props) {
 
           {selectedGoldColor !== 'All' && (
             <TouchableOpacity
-              style={[styles.filterTab, activeFilterTab === 'karat' && styles.filterTabActive]}
+              style={[
+                styles.filterTab,
+                { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F5F5' },
+                activeFilterTab === 'karat' && [styles.filterTabActive, { backgroundColor: '#FF6B6B' }]
+              ]}
               onPress={() => setActiveFilterTab(activeFilterTab === 'karat' ? null : 'karat')}
             >
-              <Text style={[styles.filterTabText, activeFilterTab === 'karat' && styles.filterTabTextActive]}>
+              <Text style={[
+                styles.filterTabText,
+                { color: theme === 'dark' && activeFilterTab !== 'karat' ? '#ECEDEE' : '#333' },
+                activeFilterTab === 'karat' && styles.filterTabTextActive
+              ]}>
                 Karat {selectedKarat !== 'All' && '•'}
               </Text>
             </TouchableOpacity>
           )}
 
           <TouchableOpacity
-            style={[styles.filterTab, activeFilterTab === 'status' && styles.filterTabActive]}
+            style={[
+              styles.filterTab,
+              { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F5F5' },
+              activeFilterTab === 'status' && [styles.filterTabActive, { backgroundColor: '#FF6B6B' }]
+            ]}
             onPress={() => setActiveFilterTab(activeFilterTab === 'status' ? null : 'status')}
           >
-            <Text style={[styles.filterTabText, activeFilterTab === 'status' && styles.filterTabTextActive]}>
+            <Text style={[
+              styles.filterTabText,
+              { color: theme === 'dark' && activeFilterTab !== 'status' ? '#ECEDEE' : '#333' },
+              activeFilterTab === 'status' && styles.filterTabTextActive
+            ]}>
               Status {(showEndingSoon || showActiveOnly) && '•'}
             </Text>
           </TouchableOpacity>
@@ -374,10 +469,18 @@ export default function RelistedDiscountsScreen({ items }: Props) {
             {['All', ...Object.keys(FILTER_HIERARCHY)].map((category) => (
               <TouchableOpacity
                 key={category}
-                style={[styles.filterPill, selectedCategory === category && styles.filterPillActive]}
+                style={[
+                  styles.filterPill,
+                  { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#3C3C3E' : '#E0E0E0' },
+                  selectedCategory === category && [styles.filterPillActive, { backgroundColor: '#FF6B6B' }]
+                ]}
                 onPress={() => { handleCategoryChange(category); setActiveFilterTab(null); }}
               >
-                <Text style={[styles.filterPillText, selectedCategory === category && styles.filterPillTextActive]}>
+                <Text style={[
+                  styles.filterPillText,
+                  { color: theme === 'dark' && selectedCategory !== category ? '#ECEDEE' : '#666' },
+                  selectedCategory === category && styles.filterPillTextActive
+                ]}>
                   {category}
                 </Text>
               </TouchableOpacity>
@@ -495,7 +598,7 @@ export default function RelistedDiscountsScreen({ items }: Props) {
         return (
           <TouchableOpacity
             key={item.id}
-            style={styles.card}
+            style={[styles.card, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}
             onPress={() => router.push(`/item/${item.id}`)}
           >
             <Image source={{ uri: item.photo_url }} style={styles.image} />
@@ -509,7 +612,7 @@ export default function RelistedDiscountsScreen({ items }: Props) {
 
             {/* Relist badge */}
             {item.relist_count && item.relist_count > 0 && (
-              <Text style={styles.relistBadge}>
+              <Text style={[styles.relistBadge, { color: theme === 'dark' ? '#999' : '#555' }]}>
                 🔄 Relisted {item.relist_count} times (last: {item.relisted_at})
               </Text>
             )}
@@ -529,7 +632,7 @@ export default function RelistedDiscountsScreen({ items }: Props) {
             })()}
 
             {/* Item name */}
-            <Text style={styles.itemName}>{item.name}</Text>
+            <Text style={[styles.itemName, { color: colors.textPrimary }]}>{item.name}</Text>
 
             {/* Price row - Show correct pricing based on auction status */}
             {(() => {
@@ -558,21 +661,21 @@ export default function RelistedDiscountsScreen({ items }: Props) {
                 // ENDED, no bids: Show starting price
                 return (
                   <View style={styles.priceRow}>
-                    <Text style={styles.price}>
+                    <Text style={[styles.price, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>
                       ${item.price.toLocaleString()}
                     </Text>
-                    <Text style={styles.noBidsText}>(No bids)</Text>
+                    <Text style={[styles.noBidsText, { color: theme === 'dark' ? '#999' : '#999' }]}>(No bids)</Text>
                   </View>
                 );
               } else {
                 // ACTIVE: Show current bid or starting price
                 return (
                   <View style={styles.priceRow}>
-                    <Text style={styles.price}>
+                    <Text style={[styles.price, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>
                       ${(item.highest_bid || item.price).toLocaleString()}
                     </Text>
                     {item.highest_bid && item.highest_bid > item.price && (
-                      <Text style={styles.bidIndicator}>({item.bid_count || 0} bids)</Text>
+                      <Text style={[styles.bidIndicator, { color: theme === 'dark' ? '#999' : '#666' }]}>({item.bid_count || 0} bids)</Text>
                     )}
                   </View>
                 );
@@ -596,7 +699,7 @@ export default function RelistedDiscountsScreen({ items }: Props) {
 
             {/* Auction countdown */}
             {item.auction_ends_at && (
-              <Text style={styles.countdown}>
+              <Text style={[styles.countdown, { color: theme === 'dark' ? '#999' : '#444' }]}>
                 Ends at: {new Date(item.auction_ends_at).toLocaleString()}
               </Text>
             )}
@@ -606,7 +709,7 @@ export default function RelistedDiscountsScreen({ items }: Props) {
 
           {filteredItems.length === 0 && (
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No items match your filters. Try adjusting them!</Text>
+              <Text style={[styles.emptyText, { color: colors.textPrimary }]}>No items match your filters. Try adjusting them!</Text>
             </View>
           )}
       </RNAnimated.ScrollView>
@@ -627,9 +730,7 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
     zIndex: 999,
     elevation: 15,
   },
@@ -647,11 +748,9 @@ const styles = StyleSheet.create({
   heroTitle: {
     fontSize: 24,
     fontWeight: "bold",
-    color: '#1a1a1a',
   },
   headerSubtitle: {
     fontSize: 14,
-    color: '#666',
     marginTop: 4,
   },
   pageHeader: {
@@ -679,9 +778,7 @@ const styles = StyleSheet.create({
   filtersSection: {
     paddingVertical: 12,
     paddingHorizontal: 0,
-    backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e5e5',
     marginBottom: 16,
   },
   filterHeader: {
@@ -694,7 +791,6 @@ const styles = StyleSheet.create({
   resultsCount: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#333',
   },
   clearButton: {
     fontSize: 14,
@@ -712,7 +808,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginRight: 8,
     borderRadius: 20,
-    backgroundColor: '#F5F5F5',
     borderWidth: 1,
     borderColor: '#FF6B6B',
   },
@@ -723,7 +818,6 @@ const styles = StyleSheet.create({
   filterTabText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#333',
   },
   filterTabTextActive: {
     color: '#FFF',
@@ -737,7 +831,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginRight: 8,
     borderRadius: 20,
-    backgroundColor: '#FFF',
     borderWidth: 1,
     borderColor: '#E0E0E0',
   },
@@ -748,7 +841,6 @@ const styles = StyleSheet.create({
   filterPillText: {
     fontSize: 13,
     fontWeight: '500',
-    color: '#666',
   },
   filterPillTextActive: {
     color: '#FFF',
@@ -758,7 +850,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     padding: 12,
     borderRadius: 12,
-    backgroundColor: "#fff",
     shadowColor: '#000',
     shadowOpacity: 0.1,
     shadowRadius: 8,
@@ -791,7 +882,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   ribbonText: { color: "#fff", fontWeight: "bold", fontSize: 12 },
-  relistBadge: { marginTop: 8, fontSize: 12, color: "#555" },
+  relistBadge: { marginTop: 8, fontSize: 12 },
   statusBadge: {
     marginTop: 6,
     fontSize: 12,
@@ -814,7 +905,7 @@ const styles = StyleSheet.create({
   },
   itemName: { fontSize: 16, fontWeight: "600", marginTop: 8 },
   priceRow: { flexDirection: "row", alignItems: "center", marginTop: 4, flexWrap: "wrap", gap: 6 },
-  price: { fontSize: 18, fontWeight: "bold", color: "#6A0DAD" },
+  price: { fontSize: 18, fontWeight: "bold" },
   soldPrice: {
     color: "#2E7D32",
   },
@@ -825,19 +916,17 @@ const styles = StyleSheet.create({
   },
   noBidsText: {
     fontSize: 14,
-    color: "#999",
     fontStyle: "italic",
   },
   bidIndicator: {
     fontSize: 13,
-    color: "#666",
   },
-  countdown: { marginTop: 6, fontSize: 12, color: "#444" },
+  countdown: { marginTop: 6, fontSize: 12 },
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
   },
-  emptyText: { fontSize: 16, color: "#777", textAlign: "center" },
+  emptyText: { fontSize: 16, textAlign: "center" },
 });

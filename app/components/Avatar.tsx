@@ -35,19 +35,27 @@ export const Avatar: React.FC<AvatarProps> = ({
     normalizedUri.length > 0 &&
     (normalizedUri.startsWith('https://') || normalizedUri.startsWith('http://'));
 
+  // Use key prop for aggressive cache busting
   const imageSource: ImageSourcePropType = canUseRemoteUri
-    ? { uri: normalizedUri, cache: 'reload' }
+    ? { uri: normalizedUri }
     : (fallbackSource ?? require('../../assets/goat-icon.png'));
 
+  console.log('🐐 Avatar component - uri prop:', uri, 'normalizedUri:', normalizedUri, 'failed:', failed, 'canUseRemoteUri:', canUseRemoteUri, 'imageSource:', imageSource, 'cacheKey:', cacheKey);
+
   React.useEffect(() => {
+    console.log('🐐 Avatar useEffect - Resetting failed to false for URI:', normalizedUri);
     setFailed(false);
   }, [normalizedUri, cacheKey]);
 
   const renderImage = (style: any) => (
     <Image
+      key={normalizedUri} // Use the full URI with timestamp as key
       source={imageSource}
       style={[styles.avatar, style]}
-      onError={() => setFailed(true)}
+      onError={(error) => {
+        console.log('🐐 Avatar Image onError - Failed to load:', normalizedUri, 'Error:', error.nativeEvent);
+        setFailed(true);
+      }}
     />
   );
 

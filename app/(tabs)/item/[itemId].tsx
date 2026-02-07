@@ -1,3 +1,5 @@
+import { API_BASE_URL } from '@/config';
+
 import { useLocalSearchParams, useRouter, useFocusEffect} from 'expo-router';
 import {useEffect, useRef, useState, useCallback} from 'react';
 import {
@@ -27,12 +29,14 @@ import { useAppSelector, useAppDispatch } from '@/hooks/reduxHooks';
 import {JewelryItem} from "@/types";
 import  { useCartBackend } from 'hooks/usecartBackend';
 import { addItem } from '@/utils/cartSlice';
-import {Ionicons} from "@expo/vector-icons";
+import {Ionicons, MaterialCommunityIcons} from "@expo/vector-icons";
 import ShimmerPlaceholder from "react-native-shimmer-placeholder";
 import Toast from "react-native-toast-message";
 
 import React from "react";
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
+import { EbayStylePoliciesCard } from '@/app/components/EbayStylePoliciesCard';
+import { useTheme } from '@/app/theme/ThemeContext';
 
 
 
@@ -119,6 +123,8 @@ type ItemDetail = {
     username: string;
     items_sold: number;
     joined: string;
+    city?: string;
+    state?: string;
     is_premium?: boolean;
     rating?: {
       avg_rating: number;
@@ -126,11 +132,12 @@ type ItemDetail = {
       positive_percent: number;
     };
   };
-};
-
-type SimilarItem = Pick<AuctionItem, 'id' | 'title' | 'description' | 'image' | 'price'> & {
-  mascot: { emoji: string };
-  isFavorite: boolean;
+  return_policy?: 'no_returns' | '7_days' | '14_days' | '30_days';
+  return_window_days?: number;
+  buyer_pays_return_shipping?: boolean;
+  restocking_fee_percent?: number;
+  authenticity_guarantee?: boolean;
+  shipping_policy?: string;
 };
 
 const getThumbSize = () => {
@@ -142,7 +149,7 @@ const getThumbSize = () => {
 };
 const THUMB_SIZE = 72;
 
-const API_URL = 'http://10.0.0.170:5000';
+const API_URL = API_BASE_URL;
 const fallbackImage = 'https://via.placeholder.com/300x200.png?text=No+Image+Available';
 
 // Helper functions for similarity calculation
@@ -228,6 +235,7 @@ const calculateWatchScore = (itemName: string, itemTags: string, itemCategory: s
 
 export default function ItemScreen() {
   const { itemId } = useLocalSearchParams();
+  const { theme, colors } = useTheme();
   const [item, setItem] = useState<ItemDetail | null>(null);
   const [bidAmount, setBidAmount] = useState<string>('');
   const [showGoatBah, setShowGoatBah] = useState(false);
@@ -243,6 +251,8 @@ export default function ItemScreen() {
   const [newPrice, setNewPrice] = useState<string>('');
   const [showCostModal, setShowCostModal] = useState(false);
   const [showShippingModal, setShowShippingModal] = useState(false);
+  const [costBreakdownExpanded, setCostBreakdownExpanded] = useState(false);
+  const [shippingExpanded, setShippingExpanded] = useState(false);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const [aboutExpanded, setAboutExpanded] = useState(false);
   const [movementExpanded, setMovementExpanded] = useState(false);
@@ -257,8 +267,12 @@ export default function ItemScreen() {
   const [showAuctionHelp, setShowAuctionHelp] = useState(false);
   const [showBuyItNowHelp, setShowBuyItNowHelp] = useState(false);
   const [showMustSellHelp, setShowMustSellHelp] = useState(false);
+  const [currentTime, setCurrentTime] = useState(Date.now());
+  const [sellerInfoExpanded, setSellerInfoExpanded] = useState(false);
+  // Modals removed - policies now route to seller profile
   const scrollY = useRef(new RNAnimated.Value(0)).current;
   const scrollViewRef = useRef<ScrollView>(null);
+  const fadeAnim = useRef(new RNAnimated.Value(0)).current;
 
 
 const { cartItems, addToCart, isInCart } = useCartBackend();
@@ -287,6 +301,20 @@ const { cartItems, addToCart, isInCart } = useCartBackend();
       scrollViewRef.current?.scrollTo({ y: 0, animated: false });
     }
     void loadCurrentUser();
+
+    // Fade in countdown overlay
+    RNAnimated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 800,
+      useNativeDriver: true,
+    }).start();
+
+    // Update countdown every second
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+
+    return () => clearInterval(interval);
   }, [itemId]);
 
   // Scroll to top when screen receives focus (returning from navigation)
@@ -422,25 +450,60 @@ const { cartItems, addToCart, isInCart } = useCartBackend();
   };
 
   const fetchSimilarItems = async (data: any) => {
-    const similarRes = await fetch(`${API_URL}/items/discover`);
-    const allItems = await similarRes.json();
+    try {
+      // Use new dedicated similar items endpoint with smart backend filtering
+      const similarRes = await fetch(`${API_URL}/items/${data.id || data.item_id}/similar`);
 
-    const itemName = String(data.name || '').toLowerCase();
-    const itemTags = String(data.tags || '').toLowerCase();
-    const itemCategory = String(data.category || '').toLowerCase();
-    const itemPrice = data.price || data.buy_it_now || 0;
+      if (!similarRes.ok) {
+        console.log('🐐 Similar items endpoint failed, falling back to discover');
+        // Fallback to old method if new endpoint fails
+        const discoverRes = await fetch(`${API_URL}/items/discover`);
+        const allItems = await discoverRes.json();
 
-    const scoredItems = allItems
-      .map((item: any) => ({ item, score: calculateSimilarityScore(data, itemName, itemTags, itemCategory, itemPrice)(item) }))
-      .filter((scored: any) => scored.score > 0)
-      .sort((a: any, b: any) => b.score - a.score)
-      .slice(0, 6);
+        const itemName = String(data.name || '').toLowerCase();
+        const itemTags = String(data.tags || '').toLowerCase();
+        const itemCategory = String(data.category || '').toLowerCase();
+        const itemPrice = data.price || data.buy_it_now || 0;
 
-    console.log('🐐 Item being matched:', { name: itemName, category: itemCategory, tags: itemTags.substring(0, 80) });
+        const currentItemId = data.id || data.item_id;
+        const now = Date.now();
+        const scoredItems = allItems
+          .map((item: any) => ({ item, score: calculateSimilarityScore(data, itemName, itemTags, itemCategory, itemPrice)(item) }))
+          .filter((scored: any) => {
+            const itemId = scored.item.id || scored.item.item_id;
+            const isPreview = scored.item.preview === true || scored.item.preview === 1;
+            // Check if item is in review period (review_ends_at is in the future)
+            const isInReview = scored.item.review_ends_at && new Date(scored.item.review_ends_at).getTime() > now;
+            return scored.score > 0 && itemId !== currentItemId && !isPreview && !isInReview;
+          })
+          .sort((a: any, b: any) => b.score - a.score)
+          .slice(0, 6);
 
-    const filtered = scoredItems.map((scored: any) => mapToAuctionItem(scored.item));
-    console.log('🐐 Similar items fetched:', filtered.length);
-    setSimilarItems(filtered);
+        const filtered = scoredItems.map((scored: any) => mapToAuctionItem(scored.item));
+        console.log('🐐 Similar items (fallback):', filtered.length, '(excluded current item', currentItemId, 'preview items, and items in review)');
+        setSimilarItems(filtered);
+        return;
+      }
+
+      const similarItems = await similarRes.json();
+      const currentItemId = data.id || data.item_id;
+      const now = Date.now();
+      const mapped = similarItems
+        .filter((item: any) => {
+          const itemId = item.id || item.item_id;
+          const isPreview = item.preview === true || item.preview === 1;
+          // Check if item is in review period (review_ends_at is in the future)
+          const isInReview = item.review_ends_at && new Date(item.review_ends_at).getTime() > now;
+          return itemId !== currentItemId && !isPreview && !isInReview;
+        })
+        .map((item: any) => mapToAuctionItem(item));
+
+      console.log('🐐 Similar items fetched:', mapped.length, 'for item', currentItemId, '(excluded current item, preview items, and items in review)');
+      setSimilarItems(mapped);
+    } catch (error) {
+      console.error('🐐 Error fetching similar items:', error);
+      setSimilarItems([]);
+    }
   };
 
   const fetchItem = async () => {
@@ -620,9 +683,6 @@ const { cartItems, addToCart, isInCart } = useCartBackend();
   }
 };
 
-console.log('🧪 item snapshot:', item);
-
-
 const handleBuyNow = async () => {
   if (!item?.buy_it_now) return;
 
@@ -735,10 +795,22 @@ const handlePriceAdjustment = async () => {
     });
 
     if (response.ok) {
-      Alert.alert('Success', 'Price updated successfully!');
       setShowPriceAdjustment(false);
       setNewPrice('');
-      await fetchItem(); // Refresh item data
+
+      Alert.alert(
+        'Success',
+        'Price updated successfully! Choose a selling strategy to relist.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Navigate to My Auctions screen to show updated price and choose strategy
+              router.push('/MyAuctionScreen');
+            }
+          }
+        ]
+      );
     } else {
       Alert.alert('Error', 'Failed to update price');
     }
@@ -888,14 +960,13 @@ const handleAddToCart = async () => {
       return;
     }
 
-    // All other jewelry (bracelets, necklaces, rings, earrings, etc.) - route to general listing
-    // Pass listingType in the route path using Expo Router's push with params
+    // All other jewelry (bracelets, necklaces, rings, earrings, etc.) - route to appropriate modern listing screen
     if (listingType === 'buy_it_now') {
-      router.push('/listing/create?listingType=buy_it_now' as any);
+      router.push('/list-item' as any);
     } else if (listingType === 'must_sell') {
-      router.push('/listing/create?listingType=must_sell' as any);
+      router.push('/MustSellScreen' as any);
     } else {
-      router.push('/listing/create?listingType=auction' as any);
+      router.push('/CreateAuctionScreen' as any);
     }
   };
 
@@ -923,6 +994,91 @@ const handleAddToCart = async () => {
     }
   };
 
+  const renderAuctionEndedContent = () => {
+    // User won the auction
+    if (item.is_highest_bidder) {
+      return (
+        <>
+          <Ionicons name="trophy" size={56} color="#FFD700" />
+          <Text style={[styles.winnerTitle, { color: colors.textPrimary }]}>🎉 Congratulations! You Won! 🎉</Text>
+          <View style={styles.finalBidSection}>
+            <Text style={[styles.finalBidLabel, { color: colors.textSecondary }]}>Winning Bid</Text>
+            <Text style={[styles.finalBidValue, { color: colors.textPrimary }]}>${item.highest_bid?.toLocaleString()}</Text>
+            {(!item.reserve_price || (item.highest_bid && item.highest_bid >= item.reserve_price)) && (
+              <View style={styles.soldBadge}>
+                <Text style={styles.soldBadgeText}>SOLD</Text>
+              </View>
+            )}
+          </View>
+          <Text style={[styles.winnerMessage, { color: colors.textSecondary }]}>
+            The seller will contact you shortly to arrange payment and shipping.
+          </Text>
+        </>
+      );
+    }
+
+    // Buy It Now item sold
+    if ((item.is_sold || item.status === 'sold') && item.buy_it_now) {
+      return (
+        <>
+          <Ionicons name="checkmark-circle" size={56} color="#2E7D32" />
+          <Text style={[styles.winnerTitle, { color: colors.textPrimary }]}>💰 Item Sold</Text>
+          <View style={styles.finalBidSection}>
+            <Text style={[styles.finalBidLabel, { color: colors.textSecondary }]}>Sale Price</Text>
+            <Text style={[styles.finalBidValue, { color: colors.textPrimary }]}>${(item.buy_it_now || 0).toLocaleString()}</Text>
+            <View style={styles.soldBadge}>
+              <Text style={styles.soldBadgeText}>SOLD</Text>
+            </View>
+          </View>
+          <Text style={[styles.auctionEndedSubtext, { color: colors.textSecondary }]}>
+            This item has been purchased and is no longer available.
+          </Text>
+        </>
+      );
+    }
+
+    // Regular auction ended
+    const reserveMet = item.reserve_price && item.highest_bid !== undefined && item.highest_bid >= item.reserve_price;
+    const reserveNotMet = item.reserve_price && item.highest_bid !== undefined && item.highest_bid < item.reserve_price;
+
+    return (
+      <>
+        <Ionicons name="checkmark-circle" size={56} color="#718096" />
+        <Text style={[styles.auctionEndedTitle, { color: colors.textPrimary }]}>Auction Ended</Text>
+
+        {item.highest_bid && item.highest_bid > 0 ? (
+          <View style={styles.finalBidSection}>
+            <Text style={[styles.finalBidLabel, { color: colors.textSecondary }]}>Final Bid</Text>
+            <Text style={[styles.finalBidValue, { color: colors.textPrimary }]}>${item.highest_bid.toLocaleString()}</Text>
+            {reserveMet && (
+              <View style={styles.soldBadge}>
+                <Text style={styles.soldBadgeText}>SOLD</Text>
+              </View>
+            )}
+            {reserveNotMet && (
+              <View style={styles.reserveNotMetBadge}>
+                <Text style={styles.reserveNotMetText}>RESERVE NOT MET</Text>
+              </View>
+            )}
+            {!item.reserve_price && (
+              <View style={styles.soldBadge}>
+                <Text style={styles.soldBadgeText}>SOLD</Text>
+              </View>
+            )}
+          </View>
+        ) : (
+          <Text style={[styles.auctionEndedText, { color: colors.textSecondary }]}>
+            No bids were placed on this auction.
+          </Text>
+        )}
+
+        <Text style={[styles.auctionEndedSubtext, { color: colors.textSecondary }]}>
+          This auction is no longer available for bidding.
+        </Text>
+      </>
+    );
+  };
+
   const getDisplayPrice = () => {
     if (typeof item.buy_it_now === 'number') {
       return item.buy_it_now;
@@ -930,7 +1086,7 @@ const handleAddToCart = async () => {
     if (typeof item.highest_bid === 'number') {
       return item.highest_bid;
     }
-    return item.price;
+    return item.price || 0;
   };
 
   const displayPrice = getDisplayPrice();
@@ -940,62 +1096,67 @@ const handleAddToCart = async () => {
       return <ShimmerPlaceholder />;
     }
 
+    console.log('🐐 renderSimilarItemsContent - similarItems:', similarItems.length, 'items:', similarItems);
+
     if (similarItems.length > 0) {
       return (
-        <FlatList
-          data={similarItems}
-          horizontal
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={({ item: similarItem }) => (
-            <TouchableOpacity
-              style={styles.similarCard}
-              onPress={() => router.push(`/item/${similarItem.id}`)}
-              activeOpacity={0.85}
-            >
-              <View style={styles.similarImageContainer}>
-                <Image
-                  source={{ uri: similarItem.photo_url || fallbackImage }}
-                  style={styles.similarCardImage}
-                  contentFit="cover"
-                  transition={150}
-                  cachePolicy="memory-disk"
-                />
-                <View style={styles.similarBadge}>
-                  <Ionicons name="star" size={12} color="#FFD700" />
-                </View>
-              </View>
-              <View style={styles.similarCardContent}>
-                <Text style={styles.similarCardTitle} numberOfLines={2}>
-                  {similarItem.name}
-                </Text>
-                <View style={styles.similarPriceRow}>
-                  <Text style={styles.similarCardPrice}>
-                    ${(similarItem.price ?? 0).toFixed(2)}
-                  </Text>
-                  <View style={styles.similarArrow}>
-                    <Ionicons name="arrow-forward" size={14} color="#6A0DAD" />
+        <View style={{ height: 280 }}>
+          <FlatList
+            data={similarItems}
+            horizontal
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={({ item: similarItem }) => (
+              <TouchableOpacity
+                style={[styles.similarCard, { backgroundColor: theme === 'dark' ? '#1a1a1a' : '#fff', borderColor: theme === 'dark' ? '#333' : '#f0f0f0' }]}
+                onPress={() => router.push(`/item/${similarItem.id}`)}
+                activeOpacity={0.85}
+              >
+                <View style={[styles.similarImageContainer, { backgroundColor: theme === 'dark' ? '#2a2a2a' : '#f5f5f5' }]}>
+                  <Image
+                    source={{ uri: similarItem.photo_url || fallbackImage }}
+                    style={styles.similarCardImage}
+                    contentFit="cover"
+                    transition={150}
+                    cachePolicy="memory-disk"
+                  />
+                  <View style={styles.similarBadge}>
+                    <Ionicons name="star" size={12} color="#FFD700" />
                   </View>
                 </View>
-              </View>
-            </TouchableOpacity>
-          )}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.similarItemsList}
-        />
+                <View style={[styles.similarCardContent, { backgroundColor: theme === 'dark' ? '#1a1a1a' : '#fff' }]}>
+                  <Text style={[styles.similarCardTitle, { color: colors.textPrimary }]} numberOfLines={2}>
+                    {similarItem.name}
+                  </Text>
+                  <View style={styles.similarPriceRow}>
+                    <Text style={[styles.similarCardPrice, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>
+                      ${(similarItem.price ?? 0).toFixed(2)}
+                    </Text>
+                    <View style={[styles.similarArrow, { backgroundColor: theme === 'dark' ? '#2d1f3d' : '#f0e6ff' }]}>
+                      <Ionicons name="arrow-forward" size={14} color={theme === 'dark' ? '#BB86FC' : '#6A0DAD'} />
+                    </View>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            )}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.similarItemsList}
+            nestedScrollEnabled
+          />
+        </View>
       );
     }
 
     return (
       <View style={styles.noSimilarContainer}>
-        <Ionicons name="search-outline" size={48} color="#CBD5E0" />
-        <Text style={styles.noSimilarItems}>No similar items found</Text>
-        <Text style={styles.noSimilarSubtext}>Check back soon for more treasures!</Text>
+        <Ionicons name="search-outline" size={48} color={theme === 'dark' ? '#4A5568' : '#CBD5E0'} />
+        <Text style={[styles.noSimilarItems, { color: colors.textSecondary }]}>No similar items found</Text>
+        <Text style={[styles.noSimilarSubtext, { color: theme === 'dark' ? '#6B7280' : '#A0AEC0' }]}>Check back soon for more treasures!</Text>
       </View>
     );
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff' }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <EnhancedHeader scrollY={scrollY} onSearch={() => {}} />
         {/* Back Button */}
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -1008,7 +1169,7 @@ const handleAddToCart = async () => {
       top: HEADER_MAX_HEIGHT + 8,
       left: 16,
       zIndex: 999,
-      backgroundColor: 'white',
+      backgroundColor: theme === 'dark' ? '#1C1C1E' : 'white',
       paddingVertical: 6,
       paddingHorizontal: 12,
       borderRadius: 8,
@@ -1019,7 +1180,7 @@ const handleAddToCart = async () => {
       elevation: 3,
     }}
   >
-    <Text style={{ fontSize: 16, color: '#4b3f72', fontWeight: '600' }}>← Back</Text>
+    <Text style={{ fontSize: 16, color: theme === 'dark' ? '#B794F4' : '#4b3f72', fontWeight: '600' }}>← Back</Text>
   </TouchableOpacity>
        {/* Cart Button */}
   <View style={styles.floatingCart}>
@@ -1033,11 +1194,11 @@ const handleAddToCart = async () => {
         contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT, paddingBottom: 100 }}
       >
         {/* Image Gallery */}
-        <View style={styles.imageGalleryContainer}>
+        <View style={[styles.imageGalleryContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}>
           <TouchableOpacity
             onPress={() => router.push({
               pathname: '/FullImageScreen',
-              params: { mediaArray: JSON.stringify(allImages), index: '0' }
+              params: { mediaArray: JSON.stringify(allImages), index: '0', title: item.name }
             })}
           >
             <Image
@@ -1049,34 +1210,157 @@ const handleAddToCart = async () => {
               priority="high"
             />
 
-            {/* SOLD Banner Overlay for Ended Auctions */}
-            {isAuctionEnded() && item.highest_bid && item.highest_bid > 0 && (
-              <View style={styles.soldBannerOverlay}>
-                <View style={styles.soldBannerDiagonal}>
-                  <Text style={styles.soldBannerText}>
-                    {item.is_highest_bidder ? 'YOU WON' : 'SOLD'}
-                  </Text>
-                </View>
-              </View>
-            )}
+            {/* Auction Status Banner Overlays */}
+            {(() => {
+              const auctionEnded = isAuctionEnded();
+              const isSold = item.is_sold || item.status === 'sold';
+              const hasBids = (item.bid_count ?? 0) > 0;
+              const hasReserve = !!item.reserve_price;
+              const reserveMet = item.highest_bid && item.reserve_price && item.highest_bid >= item.reserve_price;
+              const isBuyItNow = item.buy_it_now && item.buy_it_now > 0;
+              const isMustSell = item.is_must_sell || item.selling_strategy === 'must_sell';
+
+              // 1. SOLD - Item successfully sold
+              if (isSold || (auctionEnded && hasBids && (!hasReserve || reserveMet))) {
+                return (
+                  <View style={styles.soldBannerOverlay}>
+                    <View style={[styles.soldBannerDiagonal, { backgroundColor: '#48BB78' }]}>
+                      <Text style={styles.soldBannerText}>
+                        {item.is_highest_bidder ? 'YOU WON' : 'SOLD'}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              }
+
+              // 2. RESERVE NOT MET - Auction ended with bids but didn't meet reserve
+              if (auctionEnded && hasBids && hasReserve && !reserveMet) {
+                return (
+                  <View style={styles.soldBannerOverlay}>
+                    <View style={[styles.soldBannerDiagonal, { backgroundColor: '#EF4444' }]}>
+                      <Text style={styles.soldBannerText}>RESERVE NOT MET</Text>
+                    </View>
+                  </View>
+                );
+              }
+
+              // 3. NOT SOLD - Buy It Now or Must Sell that didn't sell
+              if (auctionEnded && !isSold && (isBuyItNow || isMustSell)) {
+                return (
+                  <View style={styles.soldBannerOverlay}>
+                    <View style={[styles.soldBannerDiagonal, { backgroundColor: '#6B7280' }]}>
+                      <Text style={styles.soldBannerText}>NOT SOLD</Text>
+                    </View>
+                  </View>
+                );
+              }
+
+              // 4. AUCTION ENDED - Regular auction ended with no bids
+              if (auctionEnded && !hasBids && !isBuyItNow && !isMustSell) {
+                return (
+                  <View style={styles.soldBannerOverlay}>
+                    <View style={[styles.soldBannerDiagonal, { backgroundColor: '#6B7280' }]}>
+                      <Text style={styles.soldBannerText}>AUCTION ENDED</Text>
+                    </View>
+                  </View>
+                );
+              }
+
+              return null;
+            })()}
 
             {/* PRICE DROP Badge - Bottom Left for Converted Items */}
-            {item.original_price && item.buy_it_now && item.original_price > item.buy_it_now && !isAuctionEnded() && (
+            {item.original_price && item.buy_it_now && item.original_price > item.buy_it_now && !isAuctionEnded() ? (
               <View style={styles.priceDropBadge}>
                 <Ionicons name="flash" size={14} color="#FFF" />
                 <Text style={styles.priceDropBadgeText}>
                   PRICE DROP
                 </Text>
               </View>
-            )}
+            ) : null}
+
+            {/* Countdown Timer Overlay - Live countdown with seconds */}
+            {!isAuctionEnded() && !item.is_sold && item.status !== 'sold' && item.auction_ends_at && (() => {
+              const endTime = new Date(item.auction_ends_at).getTime();
+              const timeLeft = endTime - currentTime;
+              const hoursLeft = timeLeft / (1000 * 60 * 60);
+
+              if (timeLeft > 0) {
+                const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
+
+                // Dynamic color based on time remaining
+                let iconColor = '#38a169'; // Green for >24h
+                let borderColor = '#38a169';
+
+                if (hoursLeft <= 2) {
+                  iconColor = '#E53E3E'; // Bright red for ≤2h
+                  borderColor = '#E53E3E';
+                } else if (hoursLeft <= 24) {
+                  iconColor = '#c53030'; // Red for ≤24h
+                  borderColor = '#c53030';
+                }
+
+                // Format time display
+                let timeDisplay = '';
+
+                // For Buy It Now and Must Sell, show the date
+                if (item.is_must_sell || item.selling_strategy === 'must_sell') {
+                  const formattedDate = new Date(item.auction_ends_at).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                  });
+                  timeDisplay = `Bid Before ${formattedDate}`;
+                } else if (item.buy_it_now && item.buy_it_now > 0) {
+                  // Buy It Now items - show date
+                  const formattedDate = new Date(item.auction_ends_at).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                  });
+                  timeDisplay = `Buy Before ${formattedDate}`;
+                } else {
+                  // Regular auction - show countdown
+                  if (days >= 2) {
+                    timeDisplay = `${days}d ${hours}h`;
+                  } else {
+                    const totalHours = Math.floor(timeLeft / 3600000);
+                    timeDisplay = `${totalHours}h ${minutes}m ${seconds}s`;
+                  }
+                }
+
+                return (
+                  <RNAnimated.View style={[
+                    styles.countdownOverlayCentered,
+                    { opacity: fadeAnim, borderLeftColor: borderColor }
+                  ]}>
+                    <View style={styles.countdownContent}>
+                      <MaterialCommunityIcons
+                        name="clock-outline"
+                        size={16}
+                        color="#666"
+                        style={{ marginRight: 6 }}
+                      />
+                      <Text style={[styles.countdownCenteredText, { color: iconColor, fontWeight: hoursLeft <= 2 ? '700' as const : '600' as const }]}>
+                        {timeDisplay}
+                      </Text>
+                    </View>
+                  </RNAnimated.View>
+                );
+              }
+              return null;
+            })()}
           </TouchableOpacity>
 
           {/* Thumbnail Strip */}
-          {allImages.length > 1 && (
+          {allImages.length > 1 ? (
             <FlatList
               horizontal
               showsHorizontalScrollIndicator={false}
-              style={styles.thumbnailScroll}
+              style={[styles.thumbnailScroll, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}
               contentContainerStyle={{ paddingHorizontal: 12, gap: 8 }}
               data={allImages}
               keyExtractor={(item, idx) => `${item}-${idx}`}
@@ -1084,7 +1368,7 @@ const handleAddToCart = async () => {
                 <TouchableOpacity
                   onPress={() => router.push({
                     pathname: '/FullImageScreen',
-                    params: { mediaArray: JSON.stringify(allImages), index: String(idx) }
+                    params: { mediaArray: JSON.stringify(allImages), index: String(idx), title: item.name }
                   })}
                   style={[styles.thumbnail, idx === 0 && styles.thumbnailActive]}
                 >
@@ -1101,19 +1385,41 @@ const handleAddToCart = async () => {
               maxToRenderPerBatch={2}
               windowSize={5}
             />
-          )}
+          ) : null}
 
 
 
         </View>
 
+        {/* Must Sell Banner with Info - Right after image, before content */}
+        {(item.is_must_sell || item.selling_strategy === 'must_sell') && !isAuctionEnded() && (
+          <View style={styles.mustSellBanner}>
+            <View style={styles.mustSellContent}>
+              <Ionicons name="flash" size={20} color="#FFF" />
+              <Text style={styles.mustSellBannerText}>MUST SELL - Highest Bidder Wins!</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  Alert.alert(
+                    '⚡ Must Sell Listing',
+                    'This is a Must Sell auction! The seller is committed to selling to the highest bidder when the auction ends, regardless of the final price. No reserve price - your bid could win!\n\n• Starts at $0.00\n• Highest bidder wins\n• No minimum price\n• Great deals possible!',
+                    [{ text: 'Got it!', style: 'default' }]
+                  );
+                }}
+                style={styles.mustSellInfoButton}
+              >
+                <Ionicons name="information-circle" size={18} color="#FFF" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         {/* Content Container */}
-        <View style={styles.contentContainer}>
+        <View style={[styles.contentContainer, { backgroundColor: colors.background }]}>
 
 
           {/* Title */}
           <View style={styles.headerSection}>
-            <Text style={styles.itemTitle}>{item.name || 'Unnamed'}</Text>
+            <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>{item.name || 'Unnamed'}</Text>
           </View>
 
           {/* Price Cards */}
@@ -1122,33 +1428,50 @@ const handleAddToCart = async () => {
             {!item.buy_it_now && (
               <View style={[
                 styles.priceCard,
+                { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' },
                 (item.highest_bid && item.highest_bid > item.price) ? styles.highestBidCard : null
               ]}>
                 {item.highest_bid && item.highest_bid > item.price ? (
                   <>
-                    <Text style={styles.priceLabel}>💰 Highest Bid</Text>
+                    <Text style={[styles.priceLabel, { color: colors.textPrimary }]}>💰 Highest Bid</Text>
                     <Text style={[styles.priceValue, styles.highestBidValue]}>${item.highest_bid}</Text>
 
                   </>
                 ) : (
                   <>
-                    <Text style={styles.priceLabel}>
-                      {item.selling_strategy === 'must_sell' ? '⚡ Must Sell' : 'Starting Bid'}
+                    <Text style={[styles.priceLabel, { color: colors.textPrimary }]}>
+                      {(item.is_must_sell || item.selling_strategy === 'must_sell') ? '⚡ Must Sell' : 'Starting Bid'}
                     </Text>
-                    <Text style={styles.priceValue}>
-                      {item.selling_strategy === 'must_sell' && item.price === 0 ? 'Best Offer' : `$${item.price}`}
+                    <Text style={[styles.priceValue, { color: colors.textPrimary }]}>
+                      {(item.is_must_sell || item.selling_strategy === 'must_sell') && item.price === 0 ? 'Best Offer' : `$${item.price}`}
                     </Text>
-                    <Text style={styles.noBidsText}>
-                      {item.selling_strategy === 'must_sell' ? 'Highest bidder wins!' : 'No bids yet'}
-                    </Text>
+                    {/* Watching and Bids Stats */}
+                    <View style={styles.inlineStatsRow}>
+                      {(item.watching_count ?? 0) > 0 && (
+                        <View style={styles.inlineStat}>
+                          <Ionicons name="eye" size={16} color="#6A0DAD" />
+                          <Text style={styles.inlineStatText}>{item.watching_count} watching</Text>
+                        </View>
+                      )}
+                      {(item.bid_count ?? 0) > 0 ? (
+                        <View style={styles.inlineStat}>
+                          <Ionicons name="flash" size={16} color="#FF6B35" />
+                          <Text style={styles.inlineStatText}>{item.bid_count} {item.bid_count === 1 ? 'bid' : 'bids'}</Text>
+                        </View>
+                      ) : (
+                        <Text style={styles.noBidsText}>
+                          {(item.is_must_sell || item.selling_strategy === 'must_sell') ? 'Highest bidder wins!' : 'No bids yet'}
+                        </Text>
+                      )}
+                    </View>
                   </>
                 )}
               </View>
             )}
             {!!item.buy_it_now && (
-              <View style={[styles.priceCard, styles.buyNowCard]}>
-                <Text style={styles.priceLabel}>Buy It Now</Text>
-                <Text style={[styles.priceValue, styles.buyNowPrice]}>${item.buy_it_now}</Text>
+              <View style={[styles.priceCard, styles.buyNowCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
+                <Text style={[styles.priceLabel, { color: colors.textPrimary }]}>Buy It Now</Text>
+                <Text style={[styles.priceValue, styles.buyNowPrice, { color: colors.textPrimary }]}>${item.buy_it_now}</Text>
 
                 {/* Show old price if this was converted from auction with price drop */}
                 {item.original_price && item.original_price > item.buy_it_now && (
@@ -1159,7 +1482,7 @@ const handleAddToCart = async () => {
           </View>
 
           {/* Price Drop Deal Card - Show for converted items with savings */}
-          {item.original_price && item.buy_it_now && item.original_price > item.buy_it_now && (
+          {item.original_price && item.buy_it_now && item.original_price > item.buy_it_now ? (
             <View style={styles.priceDropDealCard}>
               <View style={styles.dealCardHeader}>
                 <Ionicons name="pricetag" size={28} color="#FF6B35" />
@@ -1204,84 +1527,103 @@ const handleAddToCart = async () => {
                 <Text style={styles.urgencyText}>Seller motivated - Priced to sell!</Text>
               </View>
             </View>
-          )}
+          ) : null}
 
           {/* Seller Info - Moved up for trust & credibility */}
-          <View style={styles.sellerInfoCard}>
-            <View style={styles.sellerInfoHeader}>
-              <Ionicons name="person-circle" size={24} color="#6A0DAD" />
-              <Text style={styles.sectionTitle}>Seller Info</Text>
-            </View>
-            
-            {!!item.seller?.username && (
-              <Text style={styles.sellerUsername}>@{item.seller.username}</Text>
-            )}
-
-            {/* Seller Rating with Stars */}
-            {item.seller?.rating && item.seller?.rating?.review_count > 0 && (
-              <View style={styles.sellerRatingRow}>
-                <View style={styles.starsContainer}>
-                  {[...Array(5)].map((_, i) => (
-                    <Ionicons
-                      key={i}
-                      name={i < Math.round(item.seller?.rating?.avg_rating ?? 0) ? "star" : "star-outline"}
-                      size={16}
-                      color="#FFD700"
-                    />
-                  ))}
-                </View>
-                <Text style={styles.ratingText}>
-                  {item.seller?.rating?.avg_rating?.toFixed(1)} ({item.seller?.rating?.review_count} {item.seller?.rating?.review_count === 1 ? 'review' : 'reviews'})
-                </Text>
+          <View style={[styles.sellerInfoCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
+            <TouchableOpacity
+              onPress={() => setSellerInfoExpanded(!sellerInfoExpanded)}
+              style={styles.sellerInfoHeader}
+            >
+              <View style={styles.sellerInfoHeaderLeft}>
+                <Ionicons name="person-circle" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Seller Info</Text>
               </View>
-            )}
-            {item.seller?.rating && item.seller?.rating?.positive_percent > 0 && (
-              <Text style={styles.positiveText}>
-                ✓ {item.seller?.rating?.positive_percent}% positive feedback
-              </Text>
-            )}
-
-            <View style={styles.sellerStats}>
-              {typeof item.seller?.items_sold === 'number' && (
-                <View style={styles.sellerStatItem}>
-                  <Ionicons name="cart" size={16} color="#718096" />
-                  <Text style={styles.sellerStatText}>{item.seller.items_sold} sold</Text>
-                </View>
-              )}
-              {!!item.seller?.joined && (
-                <View style={styles.sellerStatItem}>
-                  <Ionicons name="calendar" size={16} color="#718096" />
-                  <Text style={styles.sellerStatText}>Joined {item.seller.joined}</Text>
-                </View>
-              )}
-            </View>
-
-            <TouchableOpacity onPress={handleViewSeller} style={styles.viewSellerButton}>
-              <Text style={styles.viewSellerButtonText}>View Full Profile</Text>
-              <Ionicons name="chevron-forward" size={16} color="#6A0DAD" />
+              <Ionicons
+                name={sellerInfoExpanded ? "chevron-down" : "chevron-forward"}
+                size={20}
+                color="#9CA3AF"
+              />
             </TouchableOpacity>
+
+            {sellerInfoExpanded && (
+              <>
+                {item.seller?.username && item.seller.username !== 'null' ? (
+                  <Text style={[styles.sellerUsername, { color: colors.textPrimary }]}>@{item.seller.username}</Text>
+                ) : null}
+
+                {/* Seller Rating with Stars */}
+                {item.seller?.rating && item.seller?.rating?.review_count > 0 ? (
+                  <View style={styles.sellerRatingRow}>
+                    <View style={styles.starsContainer}>
+                      {[...new Array(5)].map((_, i) => (
+                        <Ionicons
+                          key={i}
+                          name={i < Math.round(item.seller?.rating?.avg_rating ?? 0) ? "star" : "star-outline"}
+                          size={16}
+                          color="#FFD700"
+                        />
+                      ))}
+                    </View>
+                    <Text style={[styles.ratingText, { color: colors.textPrimary }]}>
+                      {item.seller?.rating?.avg_rating?.toFixed(1)} ({item.seller?.rating?.review_count} {item.seller?.rating?.review_count === 1 ? 'review' : 'reviews'})
+                    </Text>
+                  </View>
+                ) : null}
+                {item.seller?.rating && item.seller?.rating?.positive_percent > 0 ? (
+                  <Text style={[styles.positiveText, { color: theme === 'dark' ? '#6EE7B7' : '#2F855A' }]}>
+                    ✓ {item.seller?.rating?.positive_percent}% positive feedback
+                  </Text>
+                ) : null}
+
+                <View style={styles.sellerStats}>
+                  {typeof item.seller?.items_sold === 'number' ? (
+                    <View style={styles.sellerStatItem}>
+                      <Ionicons name="cart" size={16} color={theme === 'dark' ? '#9CA3AF' : '#718096'} />
+                      <Text style={[styles.sellerStatText, { color: theme === 'dark' ? '#9CA3AF' : '#718096' }]}>{item.seller.items_sold} sold</Text>
+                    </View>
+                  ) : null}
+                  {item.seller?.joined && item.seller.joined !== 'null' ? (
+                    <View style={styles.sellerStatItem}>
+                      <Ionicons name="calendar" size={16} color={theme === 'dark' ? '#9CA3AF' : '#718096'} />
+                      <Text style={[styles.sellerStatText, { color: theme === 'dark' ? '#9CA3AF' : '#718096' }]}>Joined {item.seller.joined}</Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                {/* Seller Policy Links - Navigate to seller profile */}
+                <View style={[styles.sellerPolicyLinks, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F9FAFB' }]}>
+                  <TouchableOpacity
+                    onPress={handleViewSeller}
+                    style={styles.policyLinkButton}
+                  >
+                    <Ionicons name="airplane-outline" size={18} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+                    <Text style={[styles.policyLinkText, { color: colors.textPrimary }]}>Shipping & Handling</Text>
+                    <Ionicons name="chevron-forward" size={14} color={theme === 'dark' ? '#666' : '#9CA3AF'} />
+                  </TouchableOpacity>
+
+                  <View style={[styles.policyDivider, { backgroundColor: theme === 'dark' ? '#3C3C3E' : '#E5E7EB' }]} />
+
+                  <TouchableOpacity
+                    onPress={handleViewSeller}
+                    style={styles.policyLinkButton}
+                  >
+                    <Ionicons name="return-up-back-outline" size={18} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+                    <Text style={[styles.policyLinkText, { color: colors.textPrimary }]}>Returns & Refunds</Text>
+                    <Ionicons name="chevron-forward" size={14} color={theme === 'dark' ? '#666' : '#9CA3AF'} />
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity onPress={handleViewSeller} style={[styles.viewSellerButton, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F3FF' }]}>
+                  <Text style={[styles.viewSellerButtonText, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>View Full Profile</Text>
+                  <Ionicons name="chevron-forward" size={16} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+                </TouchableOpacity>
+              </>
+            )}
           </View>
 
-          {/* Watching Count & Activity Stats - Only show for active auctions */}
-          {!isAuctionEnded() && ((item.watching_count ?? 0) > 0 || (item.bid_count ?? 0) > 0) && (
-            <View style={styles.activityStatsBar}>
-              {(item.watching_count ?? 0) > 0 && (
-                <View style={styles.statItem}>
-                  <Ionicons name="eye" size={18} color="#6A0DAD" />
-                  <Text style={styles.statText}>{item.watching_count} watching</Text>
-                </View>
-              )}
-              {(item.bid_count ?? 0) > 0 && (
-                <View style={styles.statItem}>
-                  <Ionicons name="flash" size={18} color="#FF6B35" />
-                  <Text style={styles.statText}>{item.bid_count} {item.bid_count === 1 ? 'bid' : 'bids'}</Text>
-                </View>
-              )}
-            </View>
-          )}
-
           {/* Ended Auction - Show total bid count as historical info */}
-          {isAuctionEnded() && (item.bid_count ?? 0) > 0 && (
+          {(isAuctionEnded() && (item.bid_count ?? 0) > 0) ? (
             <View style={styles.endedStatsBar}>
               <View style={styles.statItem}>
                 <Ionicons name="hammer" size={18} color="#718096" />
@@ -1290,66 +1632,28 @@ const handleAddToCart = async () => {
                 </Text>
               </View>
             </View>
-          )}
+          ) : null}
 
           {/* Big Countdown Timer (for active auctions) */}
-          {!!item.auction_ends_at && !item.buy_it_now && (() => {
-            const now = new Date().getTime();
-            const endTime = new Date(item.auction_ends_at).getTime();
-            const timeLeft = endTime - now;
-            const hoursLeft = timeLeft / (1000 * 60 * 60);
-
-            if (timeLeft > 0) {
-              const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
-              const hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-              const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
-
-              return (
-                <View style={[styles.countdownCard, hoursLeft <= 24 && styles.countdownUrgent]}>
-                  <Text style={styles.countdownLabel}>
-                    {hoursLeft <= 2 ? '🔥 ENDING SOON' : '⏰ Time Remaining'}
-                  </Text>
-                  <View style={styles.countdownNumbers}>
-                    {days > 0 && (
-                      <View style={styles.countdownBlock}>
-                        <Text style={styles.countdownValue}>{days}</Text>
-                        <Text style={styles.countdownUnit}>days</Text>
-                      </View>
-                    )}
-                    <View style={styles.countdownBlock}>
-                      <Text style={styles.countdownValue}>{hours}</Text>
-                      <Text style={styles.countdownUnit}>hrs</Text>
-                    </View>
-                    <View style={styles.countdownBlock}>
-                      <Text style={styles.countdownValue}>{minutes}</Text>
-                      <Text style={styles.countdownUnit}>min</Text>
-                    </View>
-                  </View>
-                </View>
-              );
-            }
-            return null;
-          })()}
-
           {/* Minimum Next Bid (for auction items with bids) - Only show if auction is still active */}
-          {!item.buy_it_now && !!item.min_next_bid && (item.bid_count ?? 0) > 0 && !isAuctionEnded() && (
-            <View style={styles.minBidCard}>
-              <Text style={styles.minBidLabel}>Minimum Next Bid</Text>
-              <Text style={styles.minBidValue}>${item.min_next_bid.toLocaleString()}</Text>
-              <Text style={styles.minBidHint}>Your bid must be at least this amount</Text>
+          {(!item.buy_it_now && !!item.min_next_bid && (item.bid_count ?? 0) > 0 && !isAuctionEnded()) ? (
+            <View style={[styles.minBidCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
+              <Text style={[styles.minBidLabel, { color: colors.textPrimary }]}>Minimum Next Bid</Text>
+              <Text style={[styles.minBidValue, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>${item.min_next_bid.toLocaleString()}</Text>
+              <Text style={[styles.minBidHint, { color: theme === 'dark' ? '#9CA3AF' : '#718096' }]}>Your bid must be at least this amount</Text>
             </View>
-          )}
+          ) : null}
 
           {/* Auction Info - Important Details */}
-          <View style={styles.auctionInfoCard}>
+          <View style={[styles.auctionInfoCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>🕒 Listed</Text>
-              <Text style={styles.infoValue}>{formattedDate}</Text>
+              <Text style={[styles.infoLabel, { color: colors.textPrimary }]}>🕒 Listed</Text>
+              <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{formattedDate}</Text>
             </View>
             {!!item.buy_it_now && !!item.auction_ends_at && (
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>🎁 Buy Before</Text>
-                <Text style={styles.infoValue}>
+                <Text style={[styles.infoLabel, { color: colors.textPrimary }]}>🎁 Buy Before</Text>
+                <Text style={[styles.infoValue, { color: colors.textPrimary }]}>
                   {safeFormat(item.auction_ends_at, 'PPP')}
                 </Text>
               </View>
@@ -1453,36 +1757,36 @@ const handleAddToCart = async () => {
 
           {/* Seller Description - Collapsible eBay Style */}
           <TouchableOpacity
-            style={styles.descriptionCard}
+            style={[styles.descriptionCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}
             onPress={() => setDescriptionExpanded(!descriptionExpanded)}
             activeOpacity={0.7}
           >
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Seller Description</Text>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Seller Description</Text>
               <Ionicons
                 name={descriptionExpanded ? "chevron-up" : "chevron-down"}
                 size={20}
-                color="#6A0DAD"
+                color={theme === 'dark' ? '#B794F4' : '#6A0DAD'}
               />
             </View>
 
             {descriptionExpanded ? (
-              <Text style={styles.descriptionText}>
+              <Text style={[styles.descriptionText, { color: colors.textPrimary }]}>
                 {item.description || 'No description available'}
               </Text>
             ) : (
-              <Text style={styles.seeMoreText}>See seller&apos;s description</Text>
+              <Text style={[styles.seeMoreText, { color: theme === 'dark' ? '#9CA3AF' : '#666' }]}>See seller&apos;s description</Text>
             )}
           </TouchableOpacity>
 
           {/* Technical Specifications / About this item - Collapsible eBay Style */}
           <TouchableOpacity
-            style={styles.aboutCard}
+            style={[styles.aboutCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}
             onPress={() => setAboutExpanded(!aboutExpanded)}
             activeOpacity={0.7}
           >
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>
+           <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
                 {(item.category === '2' || item.tags?.toLowerCase().includes('watch'))
                   ? 'Technical Specifications'
                   : item.diamond_specifications
@@ -1492,10 +1796,9 @@ const handleAddToCart = async () => {
               <Ionicons
                 name={aboutExpanded ? "chevron-up" : "chevron-down"}
                 size={20}
-                color="#6A0DAD"
+                color={theme === 'dark' ? '#B794F4' : '#6A0DAD'}
               />
             </View>
-
             {aboutExpanded ? (
               <View style={styles.aboutTable}>
                 {/* 🐐 WATCH TECHNICAL SPECIFICATIONS WITH COLLAPSIBLE GROUPS */}
@@ -1587,12 +1890,12 @@ const handleAddToCart = async () => {
                     <View>
                       {/* BASIC DESCRIPTION - Always visible */}
                       {basicInfo.length > 0 && (
-                        <View style={styles.basicDescriptionSection}>
-                          <Text style={styles.basicDescriptionTitle}>Basic Description</Text>
+                        <View style={[styles.basicDescriptionSection, { borderBottomColor: theme === 'dark' ? '#48484A' : '#E2E8F0' }]}>
+                          <Text style={[styles.basicDescriptionTitle, { color: colors.textPrimary }]}>Basic Description</Text>
                           {basicInfo.map((spec, index) => (
                             <View key={`basic-${index}`} style={styles.aboutRow}>
-                              <Text style={styles.aboutLabel}>{spec.label}</Text>
-                              <Text style={styles.aboutValue}>{formatValue(spec.value)}</Text>
+                              <Text style={[styles.aboutLabel, { color: colors.textSecondary }]}>{spec.label}</Text>
+                              <Text style={[styles.aboutValue, { color: colors.textPrimary }]}>{formatValue(spec.value)}</Text>
                             </View>
                           ))}
                         </View>
@@ -1600,25 +1903,25 @@ const handleAddToCart = async () => {
 
                       {/* COLLAPSIBLE GROUP: Movement */}
                       {movementSpecs.length > 0 && (
-                        <View style={styles.collapsibleGroup}>
+                        <View style={[styles.collapsibleGroup, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC' }]}>
                           <TouchableOpacity
-                            style={styles.groupHeader}
+                            style={[styles.groupHeader, { backgroundColor: theme === 'dark' ? '#3A3A3C' : '#EDF2F7', borderBottomColor: theme === 'dark' ? '#48484A' : '#E2E8F0' }]}
                             onPress={() => setMovementExpanded(!movementExpanded)}
                             activeOpacity={0.7}
                           >
-                            <Text style={styles.groupHeaderText}>Movement</Text>
+                            <Text style={[styles.groupHeaderText, { color: colors.textPrimary }]}>Movement</Text>
                             <Ionicons
                               name={movementExpanded ? "remove" : "add"}
                               size={20}
-                              color="#6A0DAD"
+                              color={theme === 'dark' ? '#B794F4' : '#6A0DAD'}
                             />
                           </TouchableOpacity>
                           {movementExpanded && (
-                            <View style={styles.groupContent}>
+                            <View style={[styles.groupContent, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFFFFF' }]}>
                               {movementSpecs.map((spec, index) => (
                                 <View key={`movement-${index}`} style={styles.aboutRow}>
-                                  <Text style={styles.aboutLabel}>{spec.label}</Text>
-                                  <Text style={styles.aboutValue}>{formatValue(spec.value)}</Text>
+                                  <Text style={[styles.aboutLabel, { color: colors.textSecondary }]}>{spec.label}</Text>
+                                  <Text style={[styles.aboutValue, { color: colors.textPrimary }]}>{formatValue(spec.value)}</Text>
                                 </View>
                               ))}
                             </View>
@@ -1628,25 +1931,25 @@ const handleAddToCart = async () => {
 
                       {/* COLLAPSIBLE GROUP: The Case */}
                       {caseSpecs.length > 0 && (
-                        <View style={styles.collapsibleGroup}>
+                        <View style={[styles.collapsibleGroup, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC' }]}>
                           <TouchableOpacity
-                            style={styles.groupHeader}
+                            style={[styles.groupHeader, { backgroundColor: theme === 'dark' ? '#3A3A3C' : '#EDF2F7', borderBottomColor: theme === 'dark' ? '#48484A' : '#E2E8F0' }]}
                             onPress={() => setCaseExpanded(!caseExpanded)}
                             activeOpacity={0.7}
                           >
-                            <Text style={styles.groupHeaderText}>The Case</Text>
+                            <Text style={[styles.groupHeaderText, { color: colors.textPrimary }]}>The Case</Text>
                             <Ionicons
                               name={caseExpanded ? "remove" : "add"}
                               size={20}
-                              color="#6A0DAD"
+                              color={theme === 'dark' ? '#B794F4' : '#6A0DAD'}
                             />
                           </TouchableOpacity>
                           {caseExpanded && (
-                            <View style={styles.groupContent}>
+                            <View style={[styles.groupContent, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFFFFF' }]}>
                               {caseSpecs.map((spec, index) => (
                                 <View key={`case-${index}`} style={styles.aboutRow}>
-                                  <Text style={styles.aboutLabel}>{spec.label}</Text>
-                                  <Text style={styles.aboutValue}>{formatValue(spec.value)}</Text>
+                                  <Text style={[styles.aboutLabel, { color: colors.textSecondary }]}>{spec.label}</Text>
+                                  <Text style={[styles.aboutValue, { color: colors.textPrimary }]}>{formatValue(spec.value)}</Text>
                                 </View>
                               ))}
                             </View>
@@ -1656,25 +1959,25 @@ const handleAddToCart = async () => {
 
                       {/* COLLAPSIBLE GROUP: Band */}
                       {bandSpecs.length > 0 && (
-                        <View style={styles.collapsibleGroup}>
+                        <View style={[styles.collapsibleGroup, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC' }]}>
                           <TouchableOpacity
-                            style={styles.groupHeader}
+                            style={[styles.groupHeader, { backgroundColor: theme === 'dark' ? '#3A3A3C' : '#EDF2F7', borderBottomColor: theme === 'dark' ? '#48484A' : '#E2E8F0' }]}
                             onPress={() => setBandExpanded(!bandExpanded)}
                             activeOpacity={0.7}
                           >
-                            <Text style={styles.groupHeaderText}>Band</Text>
+                            <Text style={[styles.groupHeaderText, { color: colors.textPrimary }]}>Band</Text>
                             <Ionicons
                               name={bandExpanded ? "remove" : "add"}
                               size={20}
-                              color="#6A0DAD"
+                              color={theme === 'dark' ? '#B794F4' : '#6A0DAD'}
                             />
                           </TouchableOpacity>
                           {bandExpanded && (
-                            <View style={styles.groupContent}>
+                            <View style={[styles.groupContent, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFFFFF' }]}>
                               {bandSpecs.map((spec, index) => (
                                 <View key={`band-${index}`} style={styles.aboutRow}>
-                                  <Text style={styles.aboutLabel}>{spec.label}</Text>
-                                  <Text style={styles.aboutValue}>{formatValue(spec.value)}</Text>
+                                  <Text style={[styles.aboutLabel, { color: colors.textSecondary }]}>{spec.label}</Text>
+                                  <Text style={[styles.aboutValue, { color: colors.textPrimary }]}>{formatValue(spec.value)}</Text>
                                 </View>
                               ))}
                             </View>
@@ -1684,25 +1987,25 @@ const handleAddToCart = async () => {
 
                       {/* COLLAPSIBLE GROUP: Other */}
                       {otherSpecs.length > 0 && (
-                        <View style={styles.collapsibleGroup}>
+                        <View style={[styles.collapsibleGroup, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC' }]}>
                           <TouchableOpacity
-                            style={styles.groupHeader}
+                            style={[styles.groupHeader, { backgroundColor: theme === 'dark' ? '#3A3A3C' : '#EDF2F7', borderBottomColor: theme === 'dark' ? '#48484A' : '#E2E8F0' }]}
                             onPress={() => setOtherExpanded(!otherExpanded)}
                             activeOpacity={0.7}
                           >
-                            <Text style={styles.groupHeaderText}>Other</Text>
+                            <Text style={[styles.groupHeaderText, { color: colors.textPrimary }]}>Other</Text>
                             <Ionicons
                               name={otherExpanded ? "remove" : "add"}
                               size={20}
-                              color="#6A0DAD"
+                              color={theme === 'dark' ? '#B794F4' : '#6A0DAD'}
                             />
                           </TouchableOpacity>
                           {otherExpanded && (
-                            <View style={styles.groupContent}>
+                            <View style={[styles.groupContent, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFFFFF' }]}>
                               {otherSpecs.map((spec, index) => (
                                 <View key={`other-${index}`} style={styles.aboutRow}>
-                                  <Text style={styles.aboutLabel}>{spec.label}</Text>
-                                  <Text style={styles.aboutValue}>{formatValue(spec.value)}</Text>
+                                  <Text style={[styles.aboutLabel, { color: colors.textSecondary }]}>{spec.label}</Text>
+                                  <Text style={[styles.aboutValue, { color: colors.textPrimary }]}>{formatValue(spec.value)}</Text>
                                 </View>
                               ))}
                             </View>
@@ -1733,6 +2036,7 @@ const handleAddToCart = async () => {
                       { label: 'Carat Weight', value: diamondSpecs.carat ? `${diamondSpecs.carat} ct` : null },
                       { label: 'Color', value: diamondSpecs.color },
                       { label: 'Clarity', value: diamondSpecs.clarity },
+                      { label: 'Item Number', value: `#${item.id}` },
                     ].filter(spec => formatValue(spec.value) !== null);
 
                     // COLLAPSIBLE GROUPS
@@ -1753,12 +2057,12 @@ const handleAddToCart = async () => {
                       <View>
                         {/* BASIC DESCRIPTION - Always visible */}
                         {basicInfo.length > 0 && (
-                          <View style={styles.basicDescriptionSection}>
-                            <Text style={styles.basicDescriptionTitle}>Basic Description</Text>
+                          <View style={[styles.basicDescriptionSection, { borderBottomColor: theme === 'dark' ? '#48484A' : '#E2E8F0' }]}>
+                            <Text style={[styles.basicDescriptionTitle, { color: colors.textPrimary }]}>Basic Description</Text>
                             {basicInfo.map((spec, index) => (
                               <View key={`basic-${index}`} style={styles.aboutRow}>
-                                <Text style={styles.aboutLabel}>{spec.label}</Text>
-                                <Text style={styles.aboutValue}>{formatValue(spec.value)}</Text>
+                                <Text style={[styles.aboutLabel, { color: theme === 'dark' ? '#9CA3AF' : '#666' }]}>{spec.label}</Text>
+                                <Text style={[styles.aboutValue, { color: colors.textPrimary }]}>{formatValue(spec.value)}</Text>
                               </View>
                             ))}
                           </View>
@@ -1766,53 +2070,25 @@ const handleAddToCart = async () => {
 
                         {/* COLLAPSIBLE GROUP: Certification & Sourcing */}
                         {certSourcingSpecs.length > 0 && (
-                          <View style={styles.collapsibleGroup}>
+                          <View style={[styles.collapsibleGroup, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F9FAFB' }]}>
                             <TouchableOpacity
                               style={styles.groupHeader}
                               onPress={() => setDiamondCertExpanded(!diamondCertExpanded)}
                               activeOpacity={0.7}
                             >
-                              <Text style={styles.groupHeaderText}>Certification & Sourcing</Text>
+                              <Text style={[{ color: colors.textPrimary }, styles.groupHeaderText]}>Certification & Sourcing</Text>
                               <Ionicons
                                 name={diamondCertExpanded ? "remove" : "add"}
                                 size={20}
-                                color="#6A0DAD"
+                                color={theme === 'dark' ? '#B794F4' : '#6A0DAD'}
                               />
                             </TouchableOpacity>
                             {diamondCertExpanded && (
-                              <View style={styles.groupContent}>
+                              <View style={[styles.groupContent, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFFFFF' }]}>
                                 {certSourcingSpecs.map((spec, index) => (
                                   <View key={`cert-${index}`} style={styles.aboutRow}>
-                                    <Text style={styles.aboutLabel}>{spec.label}</Text>
-                                    <Text style={styles.aboutValue}>{formatValue(spec.value)}</Text>
-                                  </View>
-                                ))}
-                              </View>
-                            )}
-                          </View>
-                        )}
-
-                        {/* COLLAPSIBLE GROUP: Shipping & Details */}
-                        {shippingDetailsSpecs.length > 0 && (
-                          <View style={styles.collapsibleGroup}>
-                            <TouchableOpacity
-                              style={styles.groupHeader}
-                              onPress={() => setDiamondShippingExpanded(!diamondShippingExpanded)}
-                              activeOpacity={0.7}
-                            >
-                              <Text style={styles.groupHeaderText}>Shipping & Details</Text>
-                              <Ionicons
-                                name={diamondShippingExpanded ? "remove" : "add"}
-                                size={20}
-                                color="#6A0DAD"
-                              />
-                            </TouchableOpacity>
-                            {diamondShippingExpanded && (
-                              <View style={styles.groupContent}>
-                                {shippingDetailsSpecs.map((spec, index) => (
-                                  <View key={`shipping-${index}`} style={styles.aboutRow}>
-                                    <Text style={styles.aboutLabel}>{spec.label}</Text>
-                                    <Text style={styles.aboutValue}>{formatValue(spec.value)}</Text>
+                                    <Text style={[styles.aboutLabel, { color: theme === 'dark' ? '#9CA3AF' : '#666' }]}>{spec.label}</Text>
+                                    <Text style={[styles.aboutValue, { color: colors.textPrimary }]}>{formatValue(spec.value)}</Text>
                                   </View>
                                 ))}
                               </View>
@@ -1830,23 +2106,23 @@ const handleAddToCart = async () => {
                 {!(item.category === '2' || item.tags?.toLowerCase().includes('watch')) && !item.diamond_specifications && (
                   <>
                     <View style={styles.aboutRow}>
-                      <Text style={styles.aboutLabel}>Category</Text>
-                      <Text style={styles.aboutValue}>{item.category || 'Not specified'}</Text>
+                      <Text style={[styles.aboutLabel, { color: theme === 'dark' ? '#9CA3AF' : '#666' }]}>Category</Text>
+                      <Text style={[styles.aboutValue, { color: colors.textPrimary }]}>{item.category || 'Not specified'}</Text>
                     </View>
                     <View style={styles.aboutRow}>
-                      <Text style={styles.aboutLabel}>Rarity</Text>
-                      <Text style={styles.aboutValue}>{item.rarity || 'common'}</Text>
+                      <Text style={[styles.aboutLabel, { color: theme === 'dark' ? '#9CA3AF' : '#666' }]}>Rarity</Text>
+                      <Text style={[styles.aboutValue, { color: colors.textPrimary }]}>{item.rarity || 'common'}</Text>
                     </View>
                     {!!item.weight_lbs && (
                       <View style={styles.aboutRow}>
-                        <Text style={styles.aboutLabel}>Shipping Weight</Text>
-                        <Text style={styles.aboutValue}>{item.weight_lbs} lbs</Text>
+                        <Text style={[styles.aboutLabel, { color: colors.textSecondary }]}>Shipping Weight</Text>
+                        <Text style={[styles.aboutValue, { color: colors.textPrimary }]}>{item.weight_lbs} lbs</Text>
                       </View>
                     )}
                     {!!item.tags && (
                       <View style={styles.aboutRow}>
-                        <Text style={styles.aboutLabel}>Tags</Text>
-                        <Text style={styles.aboutValue}>{item.tags}</Text>
+                        <Text style={[styles.aboutLabel, { color: colors.textSecondary }]}>Tags</Text>
+                        <Text style={[styles.aboutValue, { color: colors.textPrimary }]}>{item.tags}</Text>
                       </View>
                     )}
                   </>
@@ -1855,8 +2131,8 @@ const handleAddToCart = async () => {
                 {/* Common fields for all items (only show Item Number if no diamond specs) */}
                 {!!item.listedAt && (
                   <View style={styles.aboutRow}>
-                    <Text style={styles.aboutLabel}>Listed</Text>
-                    <Text style={styles.aboutValue}>
+                    <Text style={[styles.aboutLabel, { color: colors.textSecondary }]}>Listed</Text>
+                    <Text style={[styles.aboutValue, { color: colors.textPrimary }]}>
                       {new Date(item.listedAt).toLocaleDateString('en-US', {
                         year: 'numeric',
                         month: 'long',
@@ -1867,55 +2143,64 @@ const handleAddToCart = async () => {
                 )}
 
                 {/* Only show relist count if NOT a price drop conversion */}
-                {(item.relist_count ?? 0) > 0 && !(item.original_price && item.buy_it_now && item.original_price > item.buy_it_now) && (
+                {(item.relist_count ?? 0) > 0 && !(item.original_price && item.buy_it_now && item.original_price > item.buy_it_now) ? (
                   <View style={styles.aboutRow}>
-                    <Text style={styles.aboutLabel}>Times Relisted</Text>
-                    <Text style={styles.aboutValue}>{item.relist_count}</Text>
+                    <Text style={[styles.aboutLabel, { color: colors.textSecondary }]}>Times Relisted</Text>
+                    <Text style={[styles.aboutValue, { color: colors.textPrimary }]}>{item.relist_count}</Text>
                   </View>
-                )}
+                ) : null}
 
                 {/* Only show Item Number here if NOT a diamond (diamonds have it in their collapsible group) */}
-                {!item.diamond_specifications && (
+                {item.diamond_specifications ? null : (
                   <View style={styles.aboutRow}>
-                    <Text style={styles.aboutLabel}>Item Number</Text>
-                    <Text style={styles.aboutValue}>#{item.id}</Text>
+                    <Text style={[styles.aboutLabel, { color: colors.textSecondary }]}>Item Number</Text>
+                    <Text style={[styles.aboutValue, { color: colors.textPrimary }]}>#{item.id}</Text>
                   </View>
                 )}
               </View>
             ) : (
-              <Text style={styles.seeMoreText}>See product details</Text>
+              <Text style={[styles.seeMoreText, { color: colors.textSecondary }]}>See product details</Text>
             )}
           </TouchableOpacity>
 
           {/* Sell a Similar Item Link */}
           <TouchableOpacity
-            style={styles.sellSimilarCard}
+            style={[styles.sellSimilarCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}
             onPress={handleSellSimilar}
             activeOpacity={0.7}
           >
             <Ionicons name="pricetag-outline" size={20} color="#FF6B35" />
-            <Text style={styles.sellSimilarText}>Have a similar item? Get item value here</Text>
+            <Text style={[styles.sellSimilarText, { color: colors.textPrimary }]}>
+              {`Have a similar item? ${
+                (String(item.category || '').toLowerCase() === '1' ||
+                 String(item.category || '').toLowerCase() === '2' ||
+                 String(item.category || '').toLowerCase() === 'diamonds' ||
+                 String(item.category || '').toLowerCase() === 'watches')
+                  ? 'Get item value here'
+                  : 'List it here'
+              }`}
+            </Text>
             <Ionicons name="chevron-forward" size={20} color="#FF6B35" />
           </TouchableOpacity>
 
-          {!!(item.original_price && item.price && item.original_price > item.price) && (
+          {(item.original_price && item.price && item.original_price > item.price) ? (
   <View style={styles.ribbon}>
     <Text style={styles.ribbonText}>
       {Math.round(((item.original_price - item.price) / item.original_price) * 100)}% OFF
     </Text>
   </View>
-)}
+) : null}
 
 
           {/* Recent Bids / Bid History */}
           {item.recent_bids && item.recent_bids.length > 0 && (
-            <View style={styles.section}>
+            <View style={[styles.section, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
               <View style={styles.sectionHeaderRow}>
-                <Text style={styles.sectionTitle}>
+                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
                   {isAuctionEnded() ? 'Bid History' : 'Recent Bids'}
                 </Text>
-                <TouchableOpacity onPress={() => setShowRecentBidsHelp(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                  <Ionicons name="help-circle" size={20} color="#6A0DAD" />
+                <TouchableOpacity onPress={() => setShowRecentBidsHelp(true)} hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}>
+                  <Ionicons name="help-circle" size={20} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
                 </TouchableOpacity>
               </View>
               {item.recent_bids.map((bid, index) => (
@@ -1923,6 +2208,23 @@ const handleAddToCart = async () => {
                   🏷️ ${bid.amount} by {bid.username || `User #${bid.user_id}`} — {formatDistanceToNow(new Date(bid.timestamp), { addSuffix: true })}
                 </Text>
               ))}
+              <TouchableOpacity
+                style={styles.viewMoreLink}
+                onPress={() => {
+                  console.log('Navigating to bid history for item:', item.id);
+                  if (item.id) {
+                    router.push({
+                      pathname: '/bid-history/[itemId]',
+                      params: { itemId: item.id.toString() }
+                    } as any);
+                  } else {
+                    console.error('No item id available!');
+                  }
+                }}
+              >
+                <Text style={styles.viewMoreText}>View All Bids</Text>
+                <Ionicons name="chevron-forward" size={16} color="#6A0DAD" />
+              </TouchableOpacity>
             </View>
           )}
 
@@ -1933,11 +2235,11 @@ const handleAddToCart = async () => {
 
           {/* Enhanced Bid Input - Only show for auction items and if auction hasn't ended */}
           {!item.buy_it_now && !isAuctionEnded() && (
-            <View style={styles.bidCard}>
+            <View style={[styles.bidCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
               <View style={styles.bidCardHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Ionicons name="hammer" size={20} color="#6A0DAD" />
-                  <Text style={styles.bidCardTitle}>Place Your Bid</Text>
+                  <Ionicons name="hammer" size={20} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+                  <Text style={[styles.bidCardTitle, { color: colors.textPrimary }]}>Place Your Bid</Text>
                 </View>
                 <TouchableOpacity onPress={() => setShowBiddingHelp(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                   <Ionicons name="help-circle" size={20} color="#6A0DAD" />
@@ -2042,12 +2344,12 @@ const handleAddToCart = async () => {
               {/* Add to Cart - Only for Buy It Now items */}
               {!!item.buy_it_now && (
                 <TouchableOpacity
-                  style={styles.secondaryActionButton}
+                  style={[styles.secondaryActionButton, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F3F4F6' }]}
                   onPress={handleAddToCart}
                   activeOpacity={0.8}
                 >
-                <Ionicons name="bag-add-outline" size={20} color="#6A0DAD" />
-                <Text style={styles.secondaryActionText}>Add to Cart</Text>
+                <Ionicons name="bag-add-outline" size={20} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+                <Text style={[styles.secondaryActionText, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>Add to Cart</Text>
               </TouchableOpacity>
             )}
 
@@ -2055,82 +2357,30 @@ const handleAddToCart = async () => {
             <View style={styles.secondaryActionsRow}>
               {/* Favorite - Hide if already favorited */}
               {!item.is_favorited && (
-                <TouchableOpacity 
-                  style={styles.iconActionButton}
+                <TouchableOpacity
+                  style={[styles.iconActionButton, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F9FAFB' }]}
                   onPress={handleFavorite}
                   activeOpacity={0.8}
                 >
                   <Ionicons name="heart-outline" size={22} color="#E53E3E" />
-                  <Text style={styles.iconActionText}>Favorite</Text>
+                  <Text style={[styles.iconActionText, { color: colors.textPrimary }]}>Favorite</Text>
                 </TouchableOpacity>
               )}
 
               {/* Share */}
               <TouchableOpacity
-                style={styles.iconActionButton}
+                style={[styles.iconActionButton, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F9FAFB' }]}
                 onPress={handleShare}
                 activeOpacity={0.8}
               >
-                <Ionicons name="share-social-outline" size={22} color="#6A0DAD" />
-                <Text style={styles.iconActionText}>Share</Text>
+                <Ionicons name="share-social-outline" size={22} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+                <Text style={[styles.iconActionText, { color: colors.textPrimary }]}>Share</Text>
               </TouchableOpacity>
             </View>
           </View>
           ) : (
             <View style={styles.auctionEndedContainer}>
-              {/* Show winner celebration if user won */}
-              {item.is_highest_bidder ? (
-                <>
-                  <Ionicons name="trophy" size={56} color="#FFD700" />
-                  <Text style={styles.winnerTitle}>🎉 Congratulations! You Won! 🎉</Text>
-                  <View style={styles.finalBidSection}>
-                    <Text style={styles.finalBidLabel}>Winning Bid</Text>
-                    <Text style={styles.finalBidValue}>${item.highest_bid?.toLocaleString()}</Text>
-                    {(!item.reserve_price || (item.highest_bid && item.highest_bid >= item.reserve_price)) && (
-                      <View style={styles.soldBadge}>
-                        <Text style={styles.soldBadgeText}>SOLD</Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text style={styles.winnerMessage}>
-                    The seller will contact you shortly to arrange payment and shipping.
-                  </Text>
-                </>
-              ) : (
-                <>
-                  <Ionicons name="checkmark-circle" size={56} color="#718096" />
-                  <Text style={styles.auctionEndedTitle}>Auction Ended</Text>
-
-                  {/* Show final bid result */}
-                  {item.highest_bid && item.highest_bid > 0 ? (
-                    <View style={styles.finalBidSection}>
-                      <Text style={styles.finalBidLabel}>Final Bid</Text>
-                      <Text style={styles.finalBidValue}>${item.highest_bid.toLocaleString()}</Text>
-                      {item.reserve_price && item.highest_bid >= item.reserve_price ? (
-                        <View style={styles.soldBadge}>
-                          <Text style={styles.soldBadgeText}>SOLD</Text>
-                        </View>
-                      ) : item.reserve_price && item.highest_bid < item.reserve_price ? (
-                        <View style={styles.reserveNotMetBadge}>
-                          <Text style={styles.reserveNotMetText}>RESERVE NOT MET</Text>
-                        </View>
-                      ) : (
-                        <View style={styles.soldBadge}>
-                          <Text style={styles.soldBadgeText}>SOLD</Text>
-                        </View>
-                      )}
-                    </View>
-                  ) : (
-                    <Text style={styles.auctionEndedText}>
-                      No bids were placed on this auction.
-                    </Text>
-                  )}
-
-                  <Text style={styles.auctionEndedSubtext}>
-                    This auction is no longer available for bidding.
-                  </Text>
-                </>
-              )}
+              {renderAuctionEndedContent()}
             </View>
           )}
 
@@ -2144,76 +2394,107 @@ const handleAddToCart = async () => {
         </View>
       )}
 
-      <TouchableOpacity 
-        style={styles.feeBreakdown} 
-        onPress={() => setShowCostModal(true)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.feeHeader}>
-          <Text style={styles.feeTitle}>💰 Cost Breakdown</Text>
-          <Ionicons name="information-circle" size={20} color="#FF6B35" />
-        </View>
-        <View style={styles.feeRow}>
-          <Text style={styles.feeLabel}>
-            {item.buy_it_now ? 'Buy It Now Price' : 'Current Bid'}
-          </Text>
-          <Text style={styles.feeValue}>
-  {displayPrice === null ? 'Price not available' : `$${displayPrice.toFixed(2)}`}
-</Text>
-        </View>
-        <View style={styles.feeRow}>
-          <Text style={styles.feeLabel}>+ Shipping (buyer pays)</Text>
-          <Text style={styles.feeNote}>Calculated at checkout</Text>
-        </View>
-        <View style={styles.feeRow}>
-          <Text style={styles.feeLabel}>+ Insurance (optional)</Text>
-          <Text style={styles.feeNote}>Calculated at checkout</Text>
-        </View>
-        <View style={styles.feeDivider} />
-        <View style={styles.feeRow}>
-          <Text style={styles.feeTotalLabel}>You Pay</Text>
-          <Text style={styles.feeTotalValue}>
-  {displayPrice === null ? 'Price not available' : `$${displayPrice.toFixed(2)}+`}
-</Text>
-        </View>
-        <Text style={styles.feeDisclaimer}>
-          💡 Sellers earn {item.seller?.is_premium ? '92%' : '89%'} after BidGoat fees
-        </Text>
-        <Text style={styles.tapToLearnMore}>Tap to learn more</Text>
-      </TouchableOpacity>
+      <View style={[styles.feeBreakdown, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF5E6', borderColor: theme === 'dark' ? '#444' : '#FFD580' }]}>
+        <TouchableOpacity
+          onPress={() => setCostBreakdownExpanded(!costBreakdownExpanded)}
+          style={styles.feeHeader}
+          activeOpacity={0.7}
+        >
+          <View style={styles.feeHeaderLeft}>
+            <Text style={[styles.feeTitle, { color: colors.textPrimary }]}>💰 Cost Breakdown</Text>
+          </View>
+          <Ionicons
+            name={costBreakdownExpanded ? "chevron-down" : "chevron-forward"}
+            size={20}
+            color={theme === 'dark' ? '#888' : '#9CA3AF'}
+          />
+        </TouchableOpacity>
+
+        {costBreakdownExpanded && (
+          <TouchableOpacity
+            onPress={() => setShowCostModal(true)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.feeRow}>
+              <Text style={[styles.feeLabel, { color: colors.textSecondary }]}>
+                {item.buy_it_now ? 'Buy It Now Price' : 'Current Bid'}
+              </Text>
+              <Text style={[styles.feeValue, { color: colors.textPrimary }]}>
+                {displayPrice === null ? 'Price not available' : `$${displayPrice.toFixed(2)}`}
+              </Text>
+            </View>
+            <View style={styles.feeRow}>
+              <Text style={[styles.feeLabel, { color: colors.textSecondary }]}>+ Shipping (buyer pays)</Text>
+              <Text style={[styles.feeNote, { color: colors.textTertiary }]}>Calculated at checkout</Text>
+            </View>
+            <View style={styles.feeRow}>
+              <Text style={[styles.feeLabel, { color: colors.textSecondary }]}>+ Insurance (optional)</Text>
+              <Text style={[styles.feeNote, { color: colors.textTertiary }]}>Calculated at checkout</Text>
+            </View>
+            <View style={styles.feeDivider} />
+            <View style={styles.feeRow}>
+              <Text style={[styles.feeTotalLabel, { color: colors.textPrimary }]}>You Pay</Text>
+              <Text style={[styles.feeTotalValue, { color: colors.textPrimary }]}>
+                {displayPrice === null ? 'Price not available' : `$${displayPrice.toFixed(2)}+`}
+              </Text>
+            </View>
+            <Text style={[styles.feeDisclaimer, { color: colors.textSecondary }]}>
+              💡 Sellers earn {item.seller?.is_premium ? '92%' : '89%'} after BidGoat fees
+            </Text>
+            <View style={styles.tapToLearnMoreContainer}>
+              <Text style={[styles.tapToLearnMore, { color: theme === 'dark' ? '#B794F4' : '#FF6B35' }]}>Tap for detailed breakdown</Text>
+              <Ionicons name="information-circle" size={16} color="#FF6B35" />
+            </View>
+          </TouchableOpacity>
+        )}
+      </View>
 
       {/* Item Condition */}
       {!!item.condition && item.condition !== 'Not specified' && (
-        <View style={styles.conditionCard}>
-          <Text style={styles.conditionLabel}>Condition</Text>
-          <Text style={styles.conditionValue}>{item.condition}</Text>
+        <View style={[styles.conditionCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
+          <Text style={[styles.conditionLabel, { color: colors.textSecondary }]}>Condition</Text>
+          <Text style={[styles.conditionValue, { color: colors.textPrimary }]}>{item.condition}</Text>
         </View>
       )}
 
-      <TouchableOpacity 
-        style={styles.shippingSection} 
-        onPress={() => setShowShippingModal(true)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.shippingSectionHeader}>
-          <Text style={styles.sectionTitle}>🚚 Shipping & Delivery</Text>
-          <Ionicons name="information-circle" size={20} color="#6A0DAD" />
-        </View>
-        <Text style={styles.shippingText}>📦 Shipping calculated at checkout based on weight ({item.weight_lbs || 1} lbs)</Text>
-        <Text style={styles.shippingText}>🔒 Buyer Protection included</Text>
-        <Text style={styles.shippingText}>💳 Payments: Credit Card, PayPal, Apple Pay</Text>
-        <Text style={styles.tapToLearnMore}>Tap for carrier options & details</Text>
-      </TouchableOpacity>
+      {/* Shipping Section */}
+      <View style={[styles.shippingSection, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
+        <TouchableOpacity
+          onPress={() => setShippingExpanded(!shippingExpanded)}
+          style={styles.shippingSectionHeader}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>🚚 Shipping & Delivery</Text>
+          <Ionicons
+            name={shippingExpanded ? "chevron-down" : "chevron-forward"}
+            size={20}
+            color={theme === 'dark' ? '#666' : '#9CA3AF'}
+          />
+        </TouchableOpacity>
 
+        {shippingExpanded && (
+          <TouchableOpacity
+            onPress={() => setShowShippingModal(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.shippingText, { color: colors.textPrimary }]}>📦 Shipping calculated at checkout based on weight ({item.weight_lbs || 1} lbs)</Text>
+            <Text style={[styles.shippingText, { color: colors.textPrimary }]}>🔒 Buyer Protection included</Text>
+            <Text style={[styles.shippingText, { color: colors.textPrimary }]}>💳 Payments: Credit Card, PayPal, Apple Pay</Text>
+            <View style={styles.tapToLearnMoreContainer}>
+              <Text style={[styles.tapToLearnMore, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>Tap for carrier options & details</Text>
+              <Ionicons name="information-circle" size={16} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+            </View>
+          </TouchableOpacity>
+        )}
+      </View>
 
-
-      <View style={styles.similarSection}>
+      <View style={[styles.similarSection, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
   <View style={styles.similarHeader}>
     <View style={styles.similarTitleRow}>
-      <Ionicons name="sparkles" size={24} color="#6A0DAD" />
-      <Text style={styles.similarSectionTitle}>Similar Items You&apos;ll Love</Text>
+      <Ionicons name="sparkles" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+      <Text style={[styles.similarSectionTitle, { color: colors.textPrimary }]}>Similar Items You&apos;ll Love</Text>
     </View>
-    <Text style={styles.similarSubtitle}>
+    <Text style={[styles.similarSubtitle, { color: theme === 'dark' ? '#9CA3AF' : '#666' }]}>
       {similarItems.length > 0 ? `${similarItems.length} items` : 'Curated just for you'}
     </Text>
   </View>
@@ -2231,25 +2512,42 @@ const handleAddToCart = async () => {
           onRequestClose={() => setShowPriceAdjustment(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Adjust Price</Text>
-              <Text style={styles.modalSubtitle}>
+            <View style={[styles.modalContent, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Adjust Price</Text>
+              <Text style={[styles.modalSubtitle, { color: theme === 'dark' ? '#9CA3AF' : '#666' }]}>
                 Lower your price to attract more buyers
               </Text>
 
-              {item?.original_price && item.original_price > item.price && (
-                <View style={styles.discountInfo}>
-                  <Text style={styles.discountLabel}>Original Price: ${item.original_price}</Text>
-                  <Text style={styles.discountLabel}>Current Price: ${item.price}</Text>
-                  <Text style={styles.discountSavings}>
-                    Already discounted {Math.round(((item.original_price - item.price) / item.original_price) * 100)}%
+              <View style={[styles.discountInfo, { backgroundColor: theme === 'dark' ? '#2C2410' : '#fef3c7' }]}>
+                {item?.original_price && item.original_price !== item.price ? (
+                  <>
+                    <Text style={[styles.discountLabel, { color: theme === 'dark' ? '#FCD34D' : '#92400e' }]}>
+                      Original Price: ${item.original_price.toLocaleString()}
+                    </Text>
+                    <Text style={[styles.discountLabel, { color: theme === 'dark' ? '#FCD34D' : '#92400e' }]}>
+                      Current Price: ${item.price.toLocaleString()}
+                    </Text>
+                    {item.original_price > item.price && (
+                      <Text style={[styles.discountSavings, { color: theme === 'dark' ? '#FBBF24' : '#b45309' }]}>
+                        Already discounted {Math.round(((item.original_price - item.price) / item.original_price) * 100)}%
+                      </Text>
+                    )}
+                  </>
+                ) : (
+                  <Text style={[styles.discountLabel, { color: theme === 'dark' ? '#FCD34D' : '#92400e' }]}>
+                    Current Price: ${item.price.toLocaleString()}
                   </Text>
-                </View>
-              )}
+                )}
+              </View>
 
               <TextInput
-                style={styles.priceInput}
+                style={[styles.priceInput, {
+                  backgroundColor: theme === 'dark' ? '#2C2C2E' : '#FFF',
+                  borderColor: theme === 'dark' ? '#3C3C3E' : '#d1d5db',
+                  color: colors.textPrimary
+                }]}
                 placeholder="Enter new price"
+                placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
                 keyboardType="decimal-pad"
                 value={newPrice}
                 onChangeText={setNewPrice}
@@ -2284,9 +2582,9 @@ const handleAddToCart = async () => {
           onRequestClose={() => setShowCostModal(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
+            <View style={[styles.modalContent, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>💰 Cost Breakdown</Text>
+                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>💰 Cost Breakdown</Text>
                 <TouchableOpacity onPress={() => setShowCostModal(false)}>
                   <Ionicons name="close" size={24} color="#666" />
                 </TouchableOpacity>
@@ -2297,76 +2595,76 @@ const handleAddToCart = async () => {
                 <View style={styles.modalSection}>
                   <Text style={styles.modalSectionTitle}>Your Purchase</Text>
                   <View style={styles.modalRow}>
-                    <Text style={styles.modalLabel}>{item.buy_it_now ? 'Buy It Now Price' : 'Current Bid'}</Text>
-                    <Text style={styles.modalValue}>${displayPrice.toFixed(2)}</Text>
+                    <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>{item.buy_it_now ? 'Buy It Now Price' : 'Current Bid'}</Text>
+                    <Text style={[styles.modalValue, { color: colors.textPrimary }]}>${displayPrice.toFixed(2)}</Text>
                   </View>
                 </View>
 
                 {/* Shipping */}
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>Shipping Costs</Text>
-                  <Text style={styles.modalDescription}>
+                  <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>Shipping Costs</Text>
+                  <Text style={[styles.modalDescription, { color: colors.textSecondary }]}>
                     Shipping is calculated at checkout based on item weight ({item.weight_lbs || 1} lbs) and your delivery address.
                   </Text>
-                  <View style={styles.weightTable}>
-                    <Text style={styles.tableHeader}>Weight-Based Rates (USPS Priority)</Text>
+                  <View style={[styles.weightTable, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F9FAFB' }]}>
+                    <Text style={[styles.tableHeader, { color: colors.textPrimary }]}>Weight-Based Rates (USPS Priority)</Text>
                     <View style={styles.tableRow}>
-                      <Text style={styles.tableCell}>0-1 lbs</Text>
-                      <Text style={styles.tableCell}>$8-$12</Text>
+                      <Text style={[styles.tableCell, { color: colors.textSecondary }]}>0-1 lbs</Text>
+                      <Text style={[styles.tableCell, { color: colors.textSecondary }]}>$8-$12</Text>
                     </View>
                     <View style={styles.tableRow}>
-                      <Text style={styles.tableCell}>1-3 lbs</Text>
-                      <Text style={styles.tableCell}>$12-$18</Text>
+                      <Text style={[styles.tableCell, { color: colors.textSecondary }]}>1-3 lbs</Text>
+                      <Text style={[styles.tableCell, { color: colors.textSecondary }]}>$12-$18</Text>
                     </View>
                     <View style={styles.tableRow}>
-                      <Text style={styles.tableCell}>3-5 lbs</Text>
-                      <Text style={styles.tableCell}>$18-$25</Text>
+                      <Text style={[styles.tableCell, { color: colors.textSecondary }]}>3-5 lbs</Text>
+                      <Text style={[styles.tableCell, { color: colors.textSecondary }]}>$18-$25</Text>
                     </View>
                     <View style={styles.tableRow}>
-                      <Text style={styles.tableCell}>5+ lbs</Text>
-                      <Text style={styles.tableCell}>$25+</Text>
+                      <Text style={[styles.tableCell, { color: colors.textSecondary }]}>5+ lbs</Text>
+                      <Text style={[styles.tableCell, { color: colors.textSecondary }]}>$25+</Text>
                     </View>
                   </View>
                 </View>
 
                 {/* Insurance */}
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>Insurance (Optional)</Text>
-                  <Text style={styles.modalDescription}>
+                  <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>Insurance (Optional)</Text>
+                  <Text style={[styles.modalDescription, { color: colors.textSecondary }]}>
                     Protect your purchase with shipping insurance. Recommended for high-value items.
                   </Text>
                   <View style={styles.insuranceInfo}>
                     <Ionicons name="shield-checkmark" size={20} color="#48BB78" />
-                    <Text style={styles.insuranceText}>Covers loss, theft, or damage during transit</Text>
+                    <Text style={[styles.insuranceText, { color: colors.textSecondary }]}>Covers loss, theft, or damage during transit</Text>
                   </View>
                 </View>
 
                 {/* Seller Fees Info */}
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>How Sellers Are Paid</Text>
-                  <Text style={styles.modalDescription}>
+                  <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>How Sellers Are Paid</Text>
+                  <Text style={[styles.modalDescription, { color: colors.textSecondary }]}>
                     {item.seller?.is_premium ? (
-                      <>Premium sellers keep <Text style={styles.highlightText}>92%</Text> of the sale price (8% total fees: 5% commission + 3% payment processing).</>
+                      <>Premium sellers keep <Text style={[styles.highlightText, { color: theme === 'dark' ? '#48BB78' : '#2F855A' }]}>92%</Text> of the sale price (8% total fees: 5% commission + 3% payment processing).</>
                     ) : (
-                      <>Regular sellers keep <Text style={styles.highlightText}>89%</Text> of the sale price (11% total fees: 8% commission + 3% payment processing).</>
+                      <>Regular sellers keep <Text style={[styles.highlightText, { color: theme === 'dark' ? '#48BB78' : '#2F855A' }]}>89%</Text> of the sale price (11% total fees: 8% commission + 3% payment processing).</>
                     )}
                   </Text>
-                  <View style={styles.feeExample}>
-                    <Text style={styles.feeExampleTitle}>Example for ${displayPrice.toFixed(2)} sale:</Text>
+                  <View style={[styles.feeExample, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F9FAFB' }]}>
+                    <Text style={[styles.feeExampleTitle, { color: colors.textPrimary }]}>Example for ${displayPrice.toFixed(2)} sale:</Text>
                     <View style={styles.feeExampleRow}>
-                      <Text style={styles.feeExampleLabel}>Sale Price</Text>
-                      <Text style={styles.feeExampleValue}>${displayPrice.toFixed(2)}</Text>
+                      <Text style={[styles.feeExampleLabel, { color: colors.textSecondary }]}>Sale Price</Text>
+                      <Text style={[styles.feeExampleValue, { color: colors.textSecondary }]}>${displayPrice.toFixed(2)}</Text>
                     </View>
                     <View style={styles.feeExampleRow}>
-                      <Text style={styles.feeExampleLabel}>BidGoat Fees</Text>
-                      <Text style={styles.feeExampleValue}>
+                      <Text style={[styles.feeExampleLabel, { color: colors.textSecondary }]}>BidGoat Fees</Text>
+                      <Text style={[styles.feeExampleValue, { color: colors.textSecondary }]}>
                         -${(displayPrice * (item.seller?.is_premium ? 0.08 : 0.11)).toFixed(2)}
                       </Text>
                     </View>
                     <View style={styles.feeDivider} />
                     <View style={styles.feeExampleRow}>
-                      <Text style={styles.feeExampleTotal}>Seller Receives</Text>
-                      <Text style={styles.feeExampleTotal}>
+                      <Text style={[styles.feeExampleTotal, { color: colors.textPrimary }]}>Seller Receives</Text>
+                      <Text style={[styles.feeExampleTotal, { color: colors.textPrimary }]}>
                         ${(displayPrice * (item.seller?.is_premium ? 0.92 : 0.89)).toFixed(2)}
                       </Text>
                     </View>
@@ -2375,22 +2673,22 @@ const handleAddToCart = async () => {
 
                 {/* Payment Methods */}
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>Accepted Payments</Text>
+                  <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>Accepted Payments</Text>
                   <View style={styles.paymentMethods}>
-                    <View style={styles.paymentBadge}>
+                    <View style={[styles.paymentBadge, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F9FAFB' }]}>
                       <Ionicons name="card" size={20} color="#635BFF" />
-                      <Text style={styles.paymentText}>Credit/Debit</Text>
+                      <Text style={[styles.paymentText, { color: colors.textSecondary }]}>Credit/Debit</Text>
                     </View>
-                    <View style={styles.paymentBadge}>
+                    <View style={[styles.paymentBadge, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F9FAFB' }]}>
                       <Ionicons name="logo-paypal" size={20} color="#003087" />
-                      <Text style={styles.paymentText}>PayPal</Text>
+                      <Text style={[styles.paymentText, { color: colors.textSecondary }]}>PayPal</Text>
                     </View>
-                    <View style={styles.paymentBadge}>
-                      <Ionicons name="logo-apple" size={20} color="#000" />
-                      <Text style={styles.paymentText}>Apple Pay</Text>
+                    <View style={[styles.paymentBadge, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F9FAFB' }]}>
+                      <Ionicons name="logo-apple" size={20} color={theme === 'dark' ? '#FFF' : '#000'} />
+                      <Text style={[styles.paymentText, { color: colors.textSecondary }]}>Apple Pay</Text>
                     </View>
                   </View>
-                  <Text style={styles.securePayment}>
+                  <Text style={[styles.securePayment, { color: colors.textTertiary }]}>
                     🔒 All payments are processed securely via Stripe
                   </Text>
                 </View>
@@ -2407,48 +2705,48 @@ const handleAddToCart = async () => {
           onRequestClose={() => setShowShippingModal(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
+            <View style={[styles.modalContent, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>🚚 Shipping & Delivery</Text>
+                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>🚚 Shipping & Delivery</Text>
                 <TouchableOpacity onPress={() => setShowShippingModal(false)}>
-                  <Ionicons name="close" size={24} color="#666" />
+                  <Ionicons name="close" size={24} color={theme === 'dark' ? '#9CA3AF' : '#666'} />
                 </TouchableOpacity>
               </View>
 
               <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
                 {/* Carriers */}
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>Available Carriers</Text>
-                  <Text style={styles.modalDescription}>
+                  <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>Available Carriers</Text>
+                  <Text style={[styles.modalDescription, { color: theme === 'dark' ? '#9CA3AF' : '#666' }]}>
                     Sellers ship via trusted carriers with tracking and insurance options.
                   </Text>
                   <View style={styles.carrierList}>
-                    <View style={styles.carrierItem}>
+                    <View style={[styles.carrierItem, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC' }]}>
                       <Ionicons name="mail" size={24} color="#004B87" />
                       <View style={styles.carrierInfo}>
-                        <Text style={styles.carrierName}>USPS Priority Mail</Text>
-                        <Text style={styles.carrierDelivery}>2-3 business days</Text>
+                        <Text style={[styles.carrierName, { color: colors.textPrimary }]}>USPS Priority Mail</Text>
+                        <Text style={[styles.carrierDelivery, { color: theme === 'dark' ? '#9CA3AF' : '#666' }]}>2-3 business days</Text>
                       </View>
                     </View>
-                    <View style={styles.carrierItem}>
+                    <View style={[styles.carrierItem, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC' }]}>
                       <Ionicons name="airplane" size={24} color="#FF6200" />
                       <View style={styles.carrierInfo}>
-                        <Text style={styles.carrierName}>FedEx</Text>
-                        <Text style={styles.carrierDelivery}>1-3 business days</Text>
+                        <Text style={[styles.carrierName, { color: colors.textPrimary }]}>FedEx</Text>
+                        <Text style={[styles.carrierDelivery, { color: theme === 'dark' ? '#9CA3AF' : '#666' }]}>1-3 business days</Text>
                       </View>
                     </View>
-                    <View style={styles.carrierItem}>
+                    <View style={[styles.carrierItem, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC' }]}>
                       <Ionicons name="cube" size={24} color="#351C15" />
                       <View style={styles.carrierInfo}>
-                        <Text style={styles.carrierName}>UPS Ground</Text>
-                        <Text style={styles.carrierDelivery}>2-5 business days</Text>
+                        <Text style={[styles.carrierName, { color: colors.textPrimary }]}>UPS Ground</Text>
+                        <Text style={[styles.carrierDelivery, { color: theme === 'dark' ? '#9CA3AF' : '#666' }]}>2-5 business days</Text>
                       </View>
                     </View>
-                    <View style={styles.carrierItem}>
+                    <View style={[styles.carrierItem, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC' }]}>
                       <Ionicons name="flash" size={24} color="#FFCC00" />
                       <View style={styles.carrierInfo}>
-                        <Text style={styles.carrierName}>DHL Express</Text>
-                        <Text style={styles.carrierDelivery}>1-2 business days</Text>
+                        <Text style={[styles.carrierName, { color: colors.textPrimary }]}>DHL Express</Text>
+                        <Text style={[styles.carrierDelivery, { color: theme === 'dark' ? '#9CA3AF' : '#666' }]}>1-2 business days</Text>
                       </View>
                     </View>
                   </View>
@@ -2456,10 +2754,10 @@ const handleAddToCart = async () => {
 
                 {/* Item Weight */}
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>This Item</Text>
+                  <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>This Item</Text>
                   <View style={styles.itemWeightCard}>
-                    <Ionicons name="cube-outline" size={32} color="#6A0DAD" />
-                    <Text style={styles.itemWeightText}>
+                    <Ionicons name="cube-outline" size={32} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+                    <Text style={[styles.itemWeightText, { color: colors.textPrimary }]}>
                       Weight: <Text style={styles.itemWeightValue}>{item.weight_lbs || 1} lbs</Text>
                     </Text>
                   </View>
@@ -2467,31 +2765,31 @@ const handleAddToCart = async () => {
 
                 {/* Buyer Protection */}
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>Buyer Protection</Text>
+                  <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>Buyer Protection</Text>
                   <View style={styles.protectionList}>
                     <View style={styles.protectionItem}>
                       <Ionicons name="checkmark-circle" size={20} color="#48BB78" />
-                      <Text style={styles.protectionText}>Full refund if item not as described</Text>
+                      <Text style={[styles.protectionText, { color: colors.textPrimary }]}>Full refund if item not as described</Text>
                     </View>
                     <View style={styles.protectionItem}>
                       <Ionicons name="checkmark-circle" size={20} color="#48BB78" />
-                      <Text style={styles.protectionText}>Coverage for lost or damaged shipments</Text>
+                      <Text style={[styles.protectionText, { color: colors.textPrimary }]}>Coverage for lost or damaged shipments</Text>
                     </View>
                     <View style={styles.protectionItem}>
                       <Ionicons name="checkmark-circle" size={20} color="#48BB78" />
-                      <Text style={styles.protectionText}>Real-time tracking updates</Text>
+                      <Text style={[styles.protectionText, { color: colors.textPrimary }]}>Real-time tracking updates</Text>
                     </View>
                     <View style={styles.protectionItem}>
                       <Ionicons name="checkmark-circle" size={20} color="#48BB78" />
-                      <Text style={styles.protectionText}>24/7 customer support</Text>
+                      <Text style={[styles.protectionText, { color: colors.textPrimary }]}>24/7 customer support</Text>
                     </View>
                   </View>
                 </View>
 
                 {/* International Shipping */}
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>International Shipping</Text>
-                  <Text style={styles.modalDescription}>
+                  <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>International Shipping</Text>
+                  <Text style={[styles.modalDescription, { color: theme === 'dark' ? '#9CA3AF' : '#666' }]}>
                     Most sellers ship within the US only. International shipping availability varies by seller. Contact seller directly for international options.
                   </Text>
                 </View>
@@ -2508,11 +2806,11 @@ const handleAddToCart = async () => {
           onRequestClose={() => setShowBiddingHelp(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
+            <View style={[styles.modalContent, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>🔨 How Bidding Works</Text>
+                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>🔨 How Bidding Works</Text>
                 <TouchableOpacity onPress={() => setShowBiddingHelp(false)}>
-                  <Ionicons name="close" size={24} color="#666" />
+                  <Ionicons name="close" size={24} color={theme === 'dark' ? '#9CA3AF' : '#666'} />
                 </TouchableOpacity>
               </View>
 
@@ -2541,7 +2839,40 @@ const handleAddToCart = async () => {
                 <View style={styles.modalSection}>
                   <Text style={styles.modalSectionTitle}>Bid Increments</Text>
                   <Text style={styles.modalDescription}>
-                    Bids increase automatically based on the current price. This keeps auctions competitive and fair for all bidders.
+                    BidGoat uses industry-standard tiered bid increments based on the current price. This prevents penny-bidding wars and keeps auctions moving fairly.
+                  </Text>
+                  <View style={styles.incrementTable}>
+                    <View style={styles.incrementRow}>
+                      <Text style={styles.incrementPrice}>Under $100</Text>
+                      <Text style={styles.incrementAmount}>$5</Text>
+                    </View>
+                    <View style={styles.incrementRow}>
+                      <Text style={styles.incrementPrice}>$100 - $499</Text>
+                      <Text style={styles.incrementAmount}>$25</Text>
+                    </View>
+                    <View style={styles.incrementRow}>
+                      <Text style={styles.incrementPrice}>$500 - $999</Text>
+                      <Text style={styles.incrementAmount}>$50</Text>
+                    </View>
+                    <View style={styles.incrementRow}>
+                      <Text style={styles.incrementPrice}>$1,000 - $4,999</Text>
+                      <Text style={styles.incrementAmount}>$100</Text>
+                    </View>
+                    <View style={styles.incrementRow}>
+                      <Text style={styles.incrementPrice}>$5,000 - $9,999</Text>
+                      <Text style={styles.incrementAmount}>$250</Text>
+                    </View>
+                    <View style={styles.incrementRow}>
+                      <Text style={styles.incrementPrice}>$10,000 - $24,999</Text>
+                      <Text style={styles.incrementAmount}>$500</Text>
+                    </View>
+                    <View style={styles.incrementRow}>
+                      <Text style={styles.incrementPrice}>$25,000+</Text>
+                      <Text style={styles.incrementAmount}>$1,000</Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.modalDescription, { marginTop: 12, fontSize: 12, fontStyle: 'italic', color: '#666' }]}>
+                    Example: If the current bid is $2,500, the minimum next bid is $2,600 (not $2,501).
                   </Text>
                 </View>
               </ScrollView>
@@ -2557,11 +2888,11 @@ const handleAddToCart = async () => {
           onRequestClose={() => setShowRecentBidsHelp(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
+            <View style={[styles.modalContent, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>📊 Recent Bids</Text>
+                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>📊 Recent Bids</Text>
                 <TouchableOpacity onPress={() => setShowRecentBidsHelp(false)}>
-                  <Ionicons name="close" size={24} color="#666" />
+                  <Ionicons name="close" size={24} color={theme === 'dark' ? '#9CA3AF' : '#666'} />
                 </TouchableOpacity>
               </View>
 
@@ -2599,11 +2930,11 @@ const handleAddToCart = async () => {
           onRequestClose={() => setShowListingTypeModal(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
+            <View style={[styles.modalContent, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>How would you like to list it?</Text>
+                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>How would you like to list it?</Text>
                 <TouchableOpacity onPress={() => setShowListingTypeModal(false)}>
-                  <Ionicons name="close" size={24} color="#666" />
+                  <Ionicons name="close" size={24} color={theme === 'dark' ? '#9CA3AF' : '#666'} />
                 </TouchableOpacity>
               </View>
 
@@ -2692,11 +3023,11 @@ const handleAddToCart = async () => {
           onRequestClose={() => setShowAuctionHelp(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
+            <View style={[styles.modalContent, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>🔨 Classic Auction</Text>
+                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>🔨 Classic Auction</Text>
                 <TouchableOpacity onPress={() => setShowAuctionHelp(false)}>
-                  <Ionicons name="close" size={24} color="#666" />
+                  <Ionicons name="close" size={24} color={theme === 'dark' ? '#9CA3AF' : '#666'} />
                 </TouchableOpacity>
               </View>
 
@@ -2734,11 +3065,11 @@ const handleAddToCart = async () => {
           onRequestClose={() => setShowBuyItNowHelp(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
+            <View style={[styles.modalContent, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>⚡ Buy It Now</Text>
+                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>⚡ Buy It Now</Text>
                 <TouchableOpacity onPress={() => setShowBuyItNowHelp(false)}>
-                  <Ionicons name="close" size={24} color="#666" />
+                  <Ionicons name="close" size={24} color={theme === 'dark' ? '#9CA3AF' : '#666'} />
                 </TouchableOpacity>
               </View>
 
@@ -2778,11 +3109,11 @@ const handleAddToCart = async () => {
           onRequestClose={() => setShowMustSellHelp(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
+            <View style={[styles.modalContent, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>🔥 Must Sell</Text>
+                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>🔥 Must Sell</Text>
                 <TouchableOpacity onPress={() => setShowMustSellHelp(false)}>
-                  <Ionicons name="close" size={24} color="#666" />
+                  <Ionicons name="close" size={24} color={theme === 'dark' ? '#9CA3AF' : '#666'} />
                 </TouchableOpacity>
               </View>
 
@@ -2814,6 +3145,8 @@ const handleAddToCart = async () => {
             </View>
           </View>
         </Modal>
+
+        {/* Policy modals removed - links now navigate to seller profile */}
 
       </View>
 
@@ -2863,6 +3196,41 @@ cartBadge: {
   fontWeight: 'bold',
   color: '#6A0DAD',
 },
+  // Must Sell Banner Styles
+  mustSellBanner: {
+    backgroundColor: '#FF4500',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginHorizontal: 0,
+    marginBottom: 0,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  mustSellContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  mustSellBannerText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    flex: 1,
+    textAlign: 'center',
+  },
+  mustSellInfoButton: {
+    padding: 4,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
 
   arrowCircle: {
   width: 40,
@@ -3327,10 +3695,10 @@ urgencyText: {
   fontWeight: '600',
   fontStyle: 'italic',
 },
-// Price Drop Badge - Bottom Left
+// Price Drop Badge - Top Left
 priceDropBadge: {
   position: 'absolute',
-  bottom: 12,
+  top: 70,
   left: 12,
   backgroundColor: '#FF6B35',
   flexDirection: 'row',
@@ -3344,12 +3712,45 @@ priceDropBadge: {
   shadowOpacity: 0.3,
   shadowRadius: 4,
   elevation: 6,
+  zIndex: 10,
 },
 priceDropBadgeText: {
   fontSize: 11,
   fontWeight: '800',
   color: '#FFF',
   letterSpacing: 0.5,
+},
+countdownOverlayCentered: {
+  position: 'absolute',
+  bottom: 16,
+  alignSelf: 'center',
+  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+  paddingHorizontal: 16,
+  paddingVertical: 10,
+  borderRadius: 12,
+  borderLeftWidth: 4,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.3,
+  shadowRadius: 8,
+  elevation: 8,
+},
+countdownContent: {
+  flexDirection: 'row',
+  alignItems: 'center',
+},
+countdownCenteredText: {
+  fontSize: 15,
+  fontWeight: '700',
+  letterSpacing: 0.5,
+},
+timeText: {
+  color: '#FFF',
+  fontWeight: '600',
+},
+urgentText: {
+  color: '#FFF',
+  fontWeight: '700',
 },
 auctionInfoCard: {
   backgroundColor: '#fff',
@@ -3848,19 +4249,7 @@ noSimilarSubtext: {
   textAlign: 'center',
   fontStyle: 'italic',
 },
-mustSellBanner: {
-  backgroundColor: '#FF4444',
-  padding: 16,
-  borderRadius: 12,
-  marginBottom: 16,
-  borderWidth: 2,
-  borderColor: '#CC0000',
-  shadowColor: '#FF4444',
-  shadowOffset: { width: 0, height: 4 },
-  shadowOpacity: 0.3,
-  shadowRadius: 8,
-  elevation: 6,
-},
+
 mustSellBannerTitle: {
   fontSize: 18,
   fontWeight: '800',
@@ -3898,6 +4287,23 @@ noBidsText: {
   textAlign: 'center',
   fontStyle: 'italic',
 },
+inlineStatsRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginTop: 8,
+  gap: 16,
+},
+inlineStat: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 4,
+},
+inlineStatText: {
+  fontSize: 12,
+  color: '#4A5568',
+  fontWeight: '500',
+},
 // Activity Stats Bar
 activityStatsBar: {
   flexDirection: 'row',
@@ -3932,44 +4338,6 @@ endedStatText: {
   color: '#718096',
 },
 // Countdown Timer
-countdownCard: {
-  backgroundColor: '#E8F5E9',
-  padding: 16,
-  borderRadius: 12,
-  marginBottom: 12,
-  alignItems: 'center',
-},
-countdownUrgent: {
-  backgroundColor: '#FFEBEE',
-},
-countdownLabel: {
-  fontSize: 16,
-  fontWeight: '700',
-  color: '#2E7D32',
-  marginBottom: 12,
-},
-countdownNumbers: {
-  flexDirection: 'row',
-  gap: 12,
-},
-countdownBlock: {
-  alignItems: 'center',
-  backgroundColor: '#FFF',
-  paddingVertical: 12,
-  paddingHorizontal: 16,
-  borderRadius: 8,
-  minWidth: 70,
-},
-countdownValue: {
-  fontSize: 28,
-  fontWeight: '700',
-  color: '#2E7D32',
-},
-countdownUnit: {
-  fontSize: 12,
-  color: '#666',
-  marginTop: 4,
-},
 // Minimum Next Bid
 minBidCard: {
   backgroundColor: '#FFF3E0',
@@ -4135,12 +4503,23 @@ feeHeader: {
   justifyContent: 'space-between',
   marginBottom: 12,
 },
+feeHeaderLeft: {
+  flexDirection: 'row',
+  alignItems: 'center',
+},
 tapToLearnMore: {
   fontSize: 12,
   color: '#6A0DAD',
   fontWeight: '600',
   textAlign: 'center',
   marginTop: 8,
+},
+tapToLearnMoreContainer: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginTop: 8,
+  gap: 4,
 },
 // Shipping Section
 shippingSection: {
@@ -4186,6 +4565,31 @@ modalDescription: {
   color: '#4A5568',
   lineHeight: 20,
   marginBottom: 12,
+},
+incrementTable: {
+  backgroundColor: '#F7FAFC',
+  borderRadius: 8,
+  padding: 12,
+  marginTop: 12,
+  borderWidth: 1,
+  borderColor: '#E2E8F0',
+},
+incrementRow: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  paddingVertical: 8,
+  borderBottomWidth: 1,
+  borderBottomColor: '#E2E8F0',
+},
+incrementPrice: {
+  fontSize: 14,
+  color: '#2D3748',
+  fontWeight: '500',
+},
+incrementAmount: {
+  fontSize: 14,
+  color: '#6A0DAD',
+  fontWeight: '700',
 },
 modalRow: {
   flexDirection: 'row',
@@ -4378,9 +4782,14 @@ sellerInfoCard: {
 },
 sellerInfoHeader: {
   flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: 12,
+},
+sellerInfoHeaderLeft: {
+  flexDirection: 'row',
   alignItems: 'center',
   gap: 8,
-  marginBottom: 12,
 },
 sellerUsername: {
   fontSize: 18,
@@ -4615,6 +5024,103 @@ listingTypeDescription: {
   fontSize: 13,
   color: '#718096',
   lineHeight: 18,
+},
+sellerPolicyLinks: {
+  backgroundColor: '#FFFFFF',
+  borderRadius: 8,
+  marginTop: 12,
+  marginBottom: 8,
+  borderWidth: 1,
+  borderColor: '#E2E8F0',
+  overflow: 'hidden',
+},
+policyLinkButton: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  padding: 14,
+  gap: 10,
+},
+policyLinkText: {
+  flex: 1,
+  fontSize: 14,
+  fontWeight: '500',
+  color: '#1A202C',
+},
+policyDivider: {
+  height: 1,
+  backgroundColor: '#E2E8F0',
+  marginHorizontal: 14,
+},
+policyModalContent: {
+  backgroundColor: '#FFFFFF',
+  borderTopLeftRadius: 20,
+  borderTopRightRadius: 20,
+  maxHeight: '80%',
+  marginTop: 'auto',
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: -3 },
+  shadowOpacity: 0.1,
+  shadowRadius: 5,
+  elevation: 10,
+},
+policyModalHeader: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  padding: 20,
+  borderBottomWidth: 1,
+  borderBottomColor: '#E2E8F0',
+  gap: 12,
+},
+policyModalTitle: {
+  flex: 1,
+  fontSize: 18,
+  fontWeight: '700',
+  color: '#1A202C',
+},
+policyModalScroll: {
+  padding: 20,
+},
+policySection: {
+  marginBottom: 20,
+},
+policySectionTitle: {
+  fontSize: 14,
+  fontWeight: '700',
+  color: '#1A202C',
+  marginBottom: 8,
+},
+policySectionText: {
+  fontSize: 14,
+  color: '#4A5568',
+  lineHeight: 20,
+},
+authenticitySection: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: '#F0FDF4',
+  padding: 12,
+  borderRadius: 8,
+  gap: 10,
+},
+authenticitySectionText: {
+  flex: 1,
+  fontSize: 13,
+  fontWeight: '600',
+  color: '#10B981',
+},
+viewMoreLink: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  paddingVertical: 12,
+  marginTop: 8,
+  gap: 4,
+},
+viewMoreText: {
+  fontSize: 14,
+  fontWeight: '600',
+  color: '#6A0DAD',
 },
 
 });

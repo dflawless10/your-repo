@@ -1,3 +1,5 @@
+import { API_BASE_URL } from '@/config';
+
 /**
  * Layer 3: Admin Moderation Review Panel
  * View and manage flagged content
@@ -20,7 +22,7 @@ import { Ionicons } from '@expo/vector-icons';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
 import GlobalFooter from "@/app/components/GlobalFooter";
 
-const API_URL = 'http://10.0.0.170:5000';
+const API_URL = API_BASE_URL;
 
 interface FlaggedItem {
   item_id: number;

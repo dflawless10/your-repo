@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, Platform, TouchableOpacity, Animated, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
@@ -7,12 +7,42 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import EnhancedHeader, {HEADER_MAX_HEIGHT} from './components/EnhancedHeader';
 import GlobalFooter from "@/app/components/GlobalFooter";
+import { useTheme } from '@/app/theme/ThemeContext';
 
 const { width } = Dimensions.get('window');
 
 export default function AboutScreen() {
   const router = useRouter();
+  const { theme, colors } = useTheme();
   const scrollY = new Animated.Value(0);
+  const headerOpacity = useRef(new Animated.Value(0)).current;
+  const headerScale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    // Fade in header title and arrow
+    setTimeout(() => {
+      Animated.timing(headerOpacity, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+      }).start(() => {
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(headerScale, {
+              toValue: 1.05,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(headerScale, {
+              toValue: 1,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
+      });
+    }, 500);
+  }, []);
 
   const handlePress = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -20,30 +50,29 @@ export default function AboutScreen() {
   };
 
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, { backgroundColor: colors.background }]}>
       <EnhancedHeader scrollY={scrollY} />
 
-       <View style={styles.headerTitleContainer}>
-        <View style={styles.titleWithArrow}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backArrow}
-          >
-            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>About BidGoat</Text>
-        </View>
-      </View>
-
       <Animated.ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.container}
+        style={[styles.scrollView, { backgroundColor: colors.background }]}
+        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20, backgroundColor: colors.background }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
         )}
         scrollEventThrottle={16}
       >
+        {/* Page Header with Back Arrow */}
+        <Animated.View style={[styles.pageHeader, { opacity: headerOpacity, transform: [{ scale: headerScale }], backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E5E5E5' }]}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backArrow}
+          >
+            <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>About BidGoat</Text>
+        </Animated.View>
+
         {/* Hero Section */}
         <LinearGradient
           colors={['#6A0DAD', '#8B5CF6', '#A78BFA']}
@@ -60,67 +89,67 @@ export default function AboutScreen() {
 
         {/* The Hook */}
         <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>What if you could own that?</Text>
-          <Text style={styles.bodyText}>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>What if you could own that?</Text>
+          <Text style={[styles.bodyText, { color: theme === 'dark' ? '#999' : '#4B5563' }]}>
             That Rolex you&#39;ve been eyeing. That diamond necklace that catches the light just right.
             That vintage Cartier piece with a story to tell. What if it wasn&#39;t out of reach?
           </Text>
-          <Text style={styles.bodyText}>
-            <Text style={styles.boldText}>BidGoat changes the game.</Text> We&#39;re not another marketplace.
+          <Text style={[styles.bodyText, { color: theme === 'dark' ? '#999' : '#4B5563' }]}>
+            <Text style={[styles.boldText, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>BidGoat changes the game.</Text> We&#39;re not another marketplace.
             We&#39;re where collectors hunt, dealers compete, and dreams become reality—one bid at a time.
           </Text>
         </View>
 
         {/* Features Grid */}
         <View style={styles.featuresGrid}>
-          <View style={styles.featureCard}>
+          <View style={[styles.featureCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
             <LinearGradient
               colors={['#F59E0B', '#F97316']}
               style={styles.featureIcon}
             >
               <Ionicons name="flash" size={28} color="#FFF" />
             </LinearGradient>
-            <Text style={styles.featureTitle}>Live Auctions</Text>
-            <Text style={styles.featureText}>
+            <Text style={[styles.featureTitle, { color: colors.textPrimary }]}>Live Auctions</Text>
+            <Text style={[styles.featureText, { color: theme === 'dark' ? '#999' : '#6B7280' }]}>
               Real-time bidding wars. Watch prices climb. Feel the adrenaline. Win your trophy.
             </Text>
           </View>
 
-          <View style={styles.featureCard}>
+          <View style={[styles.featureCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
             <LinearGradient
               colors={['#10B981', '#059669']}
               style={styles.featureIcon}
             >
               <Ionicons name="shield-checkmark" size={28} color="#FFF" />
             </LinearGradient>
-            <Text style={styles.featureTitle}>Verified Authenticity</Text>
-            <Text style={styles.featureText}>
+            <Text style={[styles.featureTitle, { color: colors.textPrimary }]}>Verified Authenticity</Text>
+            <Text style={[styles.featureText, { color: theme === 'dark' ? '#999' : '#6B7280' }]}>
               Every piece vetted. Every seller verified. Sleep easy knowing you&#39;re getting the real deal.
             </Text>
           </View>
 
-          <View style={styles.featureCard}>
+          <View style={[styles.featureCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
             <LinearGradient
               colors={['#6366F1', '#4F46E5']}
               style={styles.featureIcon}
             >
               <Ionicons name="trending-down" size={28} color="#FFF" />
             </LinearGradient>
-            <Text style={styles.featureTitle}>Below Market Prices</Text>
-            <Text style={styles.featureText}>
+            <Text style={[styles.featureTitle, { color: colors.textPrimary }]}>Below Market Prices</Text>
+            <Text style={[styles.featureText, { color: theme === 'dark' ? '#999' : '#6B7280' }]}>
               Luxury doesn&#39;t have to break the bank. Start bidding low and win high-end pieces for less.
             </Text>
           </View>
 
-          <View style={styles.featureCard}>
+          <View style={[styles.featureCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
             <LinearGradient
               colors={['#EC4899', '#DB2777']}
               style={styles.featureIcon}
             >
               <Ionicons name="heart" size={28} color="#FFF" />
             </LinearGradient>
-            <Text style={styles.featureTitle}>Instant Gratification</Text>
-            <Text style={styles.featureText}>
+            <Text style={[styles.featureTitle, { color: colors.textPrimary }]}>Instant Gratification</Text>
+            <Text style={[styles.featureText, { color: theme === 'dark' ? '#999' : '#6B7280' }]}>
               Can&#39;t wait? Buy It Now option gets you that piece immediately. No bidding, no waiting.
             </Text>
           </View>
@@ -129,61 +158,61 @@ export default function AboutScreen() {
         {/* Social Proof */}
         <View style={styles.statsSection}>
           <LinearGradient
-            colors={['#F3E8FF', '#FFFFFF']}
+            colors={theme === 'dark' ? ['#2C2C2E', '#1C1C1E'] : ['#F3E8FF', '#FFFFFF']}
             style={styles.statsGradient}
           >
             <View style={styles.statBox}>
-              <Text style={styles.statNumber}>$2.4M+</Text>
-              <Text style={styles.statLabel}>Traded in 2024</Text>
+              <Text style={[styles.statNumber, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>$2.4M+</Text>
+              <Text style={[styles.statLabel, { color: theme === 'dark' ? '#999' : '#6B7280' }]}>Traded in 2024</Text>
             </View>
-            <View style={styles.statDivider} />
+            <View style={[styles.statDivider, { backgroundColor: theme === 'dark' ? '#3C3C3E' : '#E5E7EB' }]} />
             <View style={styles.statBox}>
-              <Text style={styles.statNumber}>10K+</Text>
-              <Text style={styles.statLabel}>Active Collectors</Text>
+              <Text style={[styles.statNumber, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>10K+</Text>
+              <Text style={[styles.statLabel, { color: theme === 'dark' ? '#999' : '#6B7280' }]}>Active Collectors</Text>
             </View>
-            <View style={styles.statDivider} />
+            <View style={[styles.statDivider, { backgroundColor: theme === 'dark' ? '#3C3C3E' : '#E5E7EB' }]} />
             <View style={styles.statBox}>
-              <Text style={styles.statNumber}>4.9★</Text>
-              <Text style={styles.statLabel}>Seller Rating</Text>
+              <Text style={[styles.statNumber, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>4.9★</Text>
+              <Text style={[styles.statLabel, { color: theme === 'dark' ? '#999' : '#6B7280' }]}>Seller Rating</Text>
             </View>
           </LinearGradient>
         </View>
 
         {/* How It Works */}
         <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>How the Hunt Works</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>How the Hunt Works</Text>
 
-          <View style={styles.stepCard}>
-            <View style={styles.stepNumber}>
+          <View style={[styles.stepCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
+            <View style={[styles.stepNumber, { backgroundColor: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>
               <Text style={styles.stepNumberText}>1</Text>
             </View>
             <View style={styles.stepContent}>
-              <Text style={styles.stepTitle}>Discover</Text>
-              <Text style={styles.stepText}>
+              <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>Discover</Text>
+              <Text style={[styles.stepText, { color: theme === 'dark' ? '#999' : '#6B7280' }]}>
                 Browse curated auctions for jewelry, watches, and diamonds. Filter by brand, price, or style.
               </Text>
             </View>
           </View>
 
-          <View style={styles.stepCard}>
-            <View style={styles.stepNumber}>
+          <View style={[styles.stepCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
+            <View style={[styles.stepNumber, { backgroundColor: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>
               <Text style={styles.stepNumberText}>2</Text>
             </View>
             <View style={styles.stepContent}>
-              <Text style={styles.stepTitle}>Bid Smart</Text>
-              <Text style={styles.stepText}>
+              <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>Bid Smart</Text>
+              <Text style={[styles.stepText, { color: theme === 'dark' ? '#999' : '#6B7280' }]}>
                 Place your bid. Set auto-bidding. Get alerts when you&#39;re outbid. Stay in the game.
               </Text>
             </View>
           </View>
 
-          <View style={styles.stepCard}>
-            <View style={styles.stepNumber}>
+          <View style={[styles.stepCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
+            <View style={[styles.stepNumber, { backgroundColor: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>
               <Text style={styles.stepNumberText}>3</Text>
             </View>
             <View style={styles.stepContent}>
-              <Text style={styles.stepTitle}>Win & Own</Text>
-              <Text style={styles.stepText}>
+              <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>Win & Own</Text>
+              <Text style={[styles.stepText, { color: theme === 'dark' ? '#999' : '#6B7280' }]}>
                 Auction closes. You win. Secure checkout. Authenticated delivery. Pure joy.
               </Text>
             </View>
@@ -228,17 +257,17 @@ export default function AboutScreen() {
 
         {/* Testimonial */}
         <View style={styles.testimonialSection}>
-          <Text style={styles.testimonialQuote}>
+          <Text style={[styles.testimonialQuote, { color: theme === 'dark' ? '#ECEDEE' : '#374151' }]}>
             &#34;I snagged a 1.2 carat diamond ring for 40% below retail. The authentication was flawless.
             BidGoat turned me from a window shopper into a collector.&#34;
           </Text>
-          <Text style={styles.testimonialAuthor}>— Sarah M., Miami</Text>
+          <Text style={[styles.testimonialAuthor, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>— Sarah M., Miami</Text>
         </View>
 
         {/* Final CTA */}
         <View style={styles.ctaSection}>
-          <Text style={styles.ctaTitle}>Your Next Treasure Awaits</Text>
-          <Text style={styles.ctaSubtitle}>
+          <Text style={[styles.ctaTitle, { color: colors.textPrimary }]}>Your Next Treasure Awaits</Text>
+          <Text style={[styles.ctaSubtitle, { color: theme === 'dark' ? '#999' : '#6B7280' }]}>
             Join thousands of collectors who&#39;ve discovered the thrill of bidding smart and winning big.
           </Text>
 
@@ -261,10 +290,10 @@ export default function AboutScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.secondaryButton}
+            style={[styles.secondaryButton, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F3F4F6', borderColor: theme === 'dark' ? '#3C3C3E' : '#E5E7EB' }]}
             onPress={handlePress}
           >
-            <Text style={styles.secondaryButtonText}>Browse Auctions First</Text>
+            <Text style={[styles.secondaryButtonText, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>Browse Auctions First</Text>
           </TouchableOpacity>
         </View>
 
@@ -280,21 +309,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8F9FA',
   },
-  headerTitleContainer: {
-    position: 'absolute',
-    top: HEADER_MAX_HEIGHT,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-    zIndex: 100,
-  },
-  titleWithArrow: {
+  pageHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 40,
+    paddingBottom: 8,
   },
   backArrow: {
     marginRight: 12,
@@ -303,14 +323,9 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1A1A1A',
   },
   scrollView: {
     flex: 1,
-  },
-  container: {
-    paddingTop: Platform.OS === 'ios' ? 180 : 180,
-    paddingBottom: 40,
   },
 
   // Hero Section
@@ -348,7 +363,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 26,
     fontWeight: '700',
-    color: '#1A1A1A',
     marginBottom: 16,
     letterSpacing: -0.5,
   },
@@ -394,7 +408,6 @@ const styles = StyleSheet.create({
   featureTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1A1A1A',
     marginBottom: 8,
     textAlign: 'center',
   },
@@ -476,7 +489,6 @@ const styles = StyleSheet.create({
   stepTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1A1A1A',
     marginBottom: 6,
   },
   stepText: {
@@ -524,7 +536,6 @@ const styles = StyleSheet.create({
   testimonialQuote: {
     fontSize: 17,
     lineHeight: 28,
-    color: '#374151',
     fontStyle: 'italic',
     textAlign: 'center',
     marginBottom: 16,
@@ -544,7 +555,6 @@ const styles = StyleSheet.create({
   ctaTitle: {
     fontSize: 28,
     fontWeight: '800',
-    color: '#1A1A1A',
     textAlign: 'center',
     marginBottom: 12,
     letterSpacing: -0.5,
@@ -585,14 +595,11 @@ const styles = StyleSheet.create({
     width: '100%',
     paddingVertical: 16,
     borderRadius: 12,
-    backgroundColor: '#F3F4F6',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
   },
   secondaryButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#6A0DAD',
     textAlign: 'center',
   },
 });

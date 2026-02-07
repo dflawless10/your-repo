@@ -7,10 +7,10 @@
     "icon": "./assets/images/icon.png",
     "scheme": "bidgoatmobile",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "owner": "dflawless",
     "extra": {
-      "API_URL": "http://10.0.0.170:5000",
+      "API_URL": "https://unwicked-unanachronously-lorenzo.ngrok-free.dev",
       "EXPO_DEV_SERVER": "http://10.0.0.170:8081",
       "router": {},
       "eas": {
@@ -18,9 +18,11 @@
       }
     },
     "ios": {
+      "icon": "./assets/images/icon.png",
       "supportsTablet": true
     },
     "android": {
+      "icon": "./assets/images/icon.png",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -29,12 +31,18 @@
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
-      ]
+      ],
+      "package": "com.dflawless.BidGoatMobile"
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon-96x96.png",
+      "splash": {
+        "image": "./assets/images/apple-touch-icon.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#ffffff"
+      }
     },
     "plugins": [
       "expo-router",

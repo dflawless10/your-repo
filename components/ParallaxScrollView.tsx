@@ -9,7 +9,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { ThemedView } from '@/components/ThemedView';
 import { useBottomTabOverflow } from '@/components/ui/TabBarBackground';
-import  useColorScheme  from '@/hooks/useColorScheme';
+import { useTheme } from '@/app/theme/ThemeContext';
 import { Animated as RNAnimated } from 'react-native';
 const HEADER_HEIGHT = 120; // Reduced from 250
 
@@ -22,7 +22,8 @@ type Props = PropsWithChildren<{
 
 
 function ParallaxScrollView({ children, headerImage, headerBackgroundColor }: Props) {
-  const colorScheme = useColorScheme() ?? 'light';
+  const { theme } = useTheme();
+  const colorScheme = theme;
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const scrollOffset = useScrollViewOffset(scrollRef);
   const bottom = useBottomTabOverflow();

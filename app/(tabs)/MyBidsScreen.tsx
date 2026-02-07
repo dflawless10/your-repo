@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   StyleSheet,
   ActivityIndicator,
@@ -19,6 +19,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
+import { API_BASE_URL } from '@/config';
+import { useTheme } from '@/app/theme/ThemeContext';
 
 interface BidItem {
   bid_id: number;
@@ -33,6 +35,10 @@ interface BidItem {
   status: 'active' | 'won' | 'lost' | 'outbid';
   is_winning: boolean;
   final_price?: number;
+  has_reserve?: boolean;
+  reserve_price?: number;
+  reserve_met?: boolean;
+  loss_reason?: 'reserve_not_met' | 'outbid' | 'other' | null;
   auto_bid_enabled?: boolean;
   auto_bid_max?: number;
   auto_bid_strategy?: 'aggressive' | 'moderate' | 'passive';
@@ -40,9 +46,14 @@ interface BidItem {
 
 type TabType = 'active' | 'won' | 'lost';
 
+const API_URL = API_BASE_URL;
+
 export default function MyBidsScreen() {
+  const { theme, colors } = useTheme();
   const router = useRouter();
   const scrollY = useRef(new RNAnimated.Value(0)).current;
+  const headerOpacity = useRef(new RNAnimated.Value(0)).current;
+  const headerScale = useRef(new RNAnimated.Value(1)).current;
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('active');
   const [bids, setBids] = useState<BidItem[]>([]);
@@ -54,6 +65,33 @@ export default function MyBidsScreen() {
   const [autoBidMax, setAutoBidMax] = useState('');
   const [autoBidStrategy, setAutoBidStrategy] = useState<'aggressive' | 'moderate' | 'passive'>('moderate');
 
+  useEffect(() => {
+    // Fade in header title and arrow - wait for screen to fully render first
+    setTimeout(() => {
+      RNAnimated.timing(headerOpacity, {
+        toValue: 1,
+        duration: 2000, // 2 seconds - slow and dramatic
+        useNativeDriver: true,
+      }).start(() => {
+        // After fade-in completes, start pulsing animation
+        RNAnimated.loop(
+          RNAnimated.sequence([
+            RNAnimated.timing(headerScale, {
+              toValue: 1.05,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+            RNAnimated.timing(headerScale, {
+              toValue: 1,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
+      });
+    }, 500); // 500ms delay - let screen render fully first
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       fetchMyBids();
@@ -61,13 +99,16 @@ export default function MyBidsScreen() {
   );
 
   const fetchMyBids = async () => {
+    console.log('🐐 [MyBids] fetchMyBids called');
     try {
       const token = await AsyncStorage.getItem('jwtToken');
+      console.log('🐐 [MyBids] Token exists:', !!token);
       if (!token) {
         setLoading(false);
         return;
       }
 
+      console.log('🐐 [MyBids] Fetching from API...');
       const response = await fetch('http://10.0.0.170:5000/api/my-bids', {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -75,13 +116,17 @@ export default function MyBidsScreen() {
         },
       });
 
+      console.log('🐐 [MyBids] Response status:', response.status);
       if (response.ok) {
         const data = await response.json();
+        console.log('🐐 [MyBids] Data received:', data);
+        console.log('🐐 [MyBids] Bids count:', data.bids?.length || 0);
         setBids(data.bids || data.results || []);
-
+      } else {
+        console.error('🐐 [MyBids] Response not OK:', response.status);
       }
     } catch (error) {
-      console.error('Failed to fetch bids:', error);
+      console.error('🐐 [MyBids] Failed to fetch bids:', error);
     } finally {
       setLoading(false);
     }
@@ -163,140 +208,219 @@ if (Number.isNaN(maxBid) || maxBid <= selectedBidItem.current_highest_bid) {
     return false;
   });
 
+  const renderStatusBadge = (item: BidItem, isWinning: boolean) => {
+    if (item.status === 'active') {
+      return (
+        <View style={[styles.statusBadge, isWinning ? styles.winningBadge : styles.outbidBadge]}>
+          <Text style={styles.statusText}>
+            {isWinning ? '🏆 WINNING' : '⚠️ OUTBID'}
+          </Text>
+        </View>
+      );
+    }
+    if (item.status === 'won') {
+      return (
+        <View style={[styles.statusBadge, styles.wonBadge]}>
+          <Text style={styles.statusText}>✅ WON</Text>
+        </View>
+      );
+    }
+    if (item.status === 'lost') {
+      return (
+        <View style={[styles.statusBadge, styles.lostBadge]}>
+          <Text style={styles.statusText}>❌ LOST</Text>
+        </View>
+      );
+    }
+    return null;
+  };
+
+  const renderAutoBidIndicator = (item: BidItem) => {
+    if (!item.auto_bid_enabled) return null;
+
+    return (
+      <View style={styles.autoBidIndicator}>
+        <View style={styles.autoBidInfo}>
+          <Ionicons name="flash" size={14} color="#FFA500" />
+          <Text style={styles.autoBidText}>
+            Auto-bid ON (Max: ${item.auto_bid_max || '0.00'}) • {item.auto_bid_strategy || 'Standard'}
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={styles.disableAutoBidButton}
+          onPress={(e) => {
+            e.stopPropagation();
+            Alert.alert(
+              'Disable Auto-Bid',
+              'Are you sure you want to disable auto-bidding for this item?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Disable',
+                  style: 'destructive',
+                  onPress: () => disableAutoBid(item.item_id),
+                },
+              ]
+            );
+          }}
+        >
+          <Ionicons name="close-circle" size={18} color="#F57C00" />
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
+  const renderLossReason = (item: BidItem) => {
+    if (item.status !== 'lost' || !item.loss_reason) return null;
+
+    const reasonConfig: Record<string, { icon: any; color: string; text: string; bgColor: string }> = {
+      reserve_not_met: {
+        icon: 'lock-closed',
+        color: '#FF6B35',
+        text: 'Reserve Not Met - Auction did not reach seller\'s minimum price',
+        bgColor: '#FFF3E0',
+      },
+      outbid: {
+        icon: 'trending-up',
+        color: '#F59E0B',
+        text: 'Outbid - Another bidder placed a higher bid',
+        bgColor: '#FEF3C7',
+      },
+      other: {
+        icon: 'information-circle',
+        color: '#6B7280',
+        text: 'Auction ended - You did not win this item',
+        bgColor: '#F3F4F6',
+      },
+    };
+
+    const config = reasonConfig[item.loss_reason] || reasonConfig.other;
+
+    return (
+      <View>
+        <View style={[styles.lossReasonBanner, { backgroundColor: config.bgColor }]}>
+          <Ionicons name={config.icon} size={16} color={config.color} />
+          <Text style={[styles.lossReasonText, { color: config.color }]}>
+            {config.text}
+          </Text>
+        </View>
+
+        {/* Second Chance: Make Offer button for reserve_not_met */}
+        {item.loss_reason === 'reserve_not_met' && (
+          <TouchableOpacity
+            style={styles.makeOfferButton}
+            onPress={() => router.push(`/make-offer/${item.item_id}`)}
+          >
+            <Ionicons name="paper-plane" size={18} color="#FFF" />
+            <Text style={styles.makeOfferButtonText}>💎 Make an Offer</Text>
+            <Text style={styles.makeOfferSubtext}>Seller may still accept!</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
+
+  const renderActionButtons = (item: BidItem) => {
+    const isActive = item.status === 'active' || item.status === 'outbid';
+    if (!isActive) return null;
+
+    return (
+      <View style={styles.actionRow}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => router.push(`/item/${item.item_id}`)}
+        >
+          <Text style={styles.actionButtonText}>Place Bid</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.actionButton, styles.autoBidButton]}
+          onPress={() => setupAutoBid(item)}
+        >
+          <Ionicons name="flash" size={16} color="#FFF" />
+          <Text style={styles.actionButtonText}>Auto-Bid</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
   const renderBidCard = ({ item }: { item: BidItem }) => {
     const isWinning = item.is_winning;
-    const timeRemaining = getTimeRemaining(item.auction_ends_at);
-    const timeColor = getTimeRemainingColor(item.auction_ends_at);
-
+    const timeRemaining = item.auction_ends_at ? getTimeRemaining(item.auction_ends_at) : 'Ended';
+    const timeColor = item.auction_ends_at ? getTimeRemainingColor(item.auction_ends_at) : '#666';
     const pluralize = (count: number) => (count === 1 ? '' : 's');
+    const isActive = item.status === 'active' || item.status === 'outbid';
+    const showFinalPrice = (item.status === 'won' || item.status === 'lost') && item.final_price;
 
     return (
       <TouchableOpacity
         style={styles.bidCard}
         onPress={() => router.push(`/item/${item.item_id}`)}
       >
-        {/* Item Image */}
-        <Image source={{ uri: item.item_image }} style={styles.itemImage} />
+        <Image source={{ uri: item.item_image || '' }} style={styles.itemImage} />
 
-        {/* Content */}
         <View style={styles.bidContent}>
-          {/* Item Name */}
           <Text style={styles.itemName} numberOfLines={2}>
-            {item.item_name}
+            {item.item_name || 'Untitled Item'}
           </Text>
 
-          {/* Status Badge */}
           <View style={styles.statusRow}>
-            {item.status === 'active' && (
-              <View style={[styles.statusBadge, isWinning ? styles.winningBadge : styles.outbidBadge]}>
-                <Text style={styles.statusText}>
-                  {isWinning ? '🏆 WINNING' : '⚠️ OUTBID'}
-                </Text>
-              </View>
-            )}
-            {item.status === 'won' && (
-              <View style={[styles.statusBadge, styles.wonBadge]}>
-                <Text style={styles.statusText}>✅ WON</Text>
-              </View>
-            )}
-            {item.status === 'lost' && (
-              <View style={[styles.statusBadge, styles.lostBadge]}>
-                <Text style={styles.statusText}>❌ LOST</Text>
-              </View>
-            )}
+            {renderStatusBadge(item, isWinning)}
           </View>
 
-          {/* Bid Info */}
           <View style={styles.infoRow}>
             <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>My Bid</Text>
-              <Text style={styles.myBidAmount}>${item.my_bid_amount.toFixed(2)}</Text>
+              <Text style={styles.myBidAmount}>${item.my_bid_amount?.toFixed(2) || '0.00'}</Text>
             </View>
             <View style={styles.infoItem}>
               <Text style={styles.infoLabel}>Current High</Text>
-              <Text style={styles.currentBidAmount}>${item.current_highest_bid.toFixed(2)}</Text>
+              <Text style={styles.currentBidAmount}>${item.current_highest_bid?.toFixed(2) || '0.00'}</Text>
             </View>
           </View>
 
-          {/* Bid Stats */}
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <Ionicons name="hammer" size={14} color="#666" />
-              <Text style={styles.statText}>{item.total_bids} total bids</Text>
+              <Text style={styles.statText}>{item.total_bids || 0} total bids</Text>
             </View>
             <View style={styles.statItem}>
               <Ionicons name="repeat" size={14} color="#666" />
-             <Text style={styles.statText}>
-  My {item.my_total_bids_on_item} bid{pluralize(item.my_total_bids_on_item)}
-</Text>
+              <Text style={styles.statText}>
+                My {item.my_total_bids_on_item || 0} bid{pluralize(item.my_total_bids_on_item || 0)}
+              </Text>
             </View>
           </View>
 
-          {/* Time Remaining or Final Price */}
-          {item.status === 'active' || item.status === 'outbid' ? (
+          {item.has_reserve ? (
+            <View style={[styles.reserveRow, item.reserve_met ? styles.reserveMetRow : styles.reserveNotMetRow]}>
+              <Ionicons
+                name={item.reserve_met ? "checkmark-circle" : "lock-closed"}
+                size={14}
+                color={item.reserve_met ? "#4CAF50" : "#FF6B35"}
+              />
+              <Text style={[styles.reserveText, item.reserve_met ? styles.reserveMetText : styles.reserveNotMetText]}>
+                {item.reserve_met ? 'Reserve Met' : 'Reserve Not Met'}
+              </Text>
+            </View>
+          ) : null}
+
+          {isActive ? (
             <View style={styles.timeRow}>
               <Ionicons name="time-outline" size={16} color={timeColor} />
               <Text style={[styles.timeText, { color: timeColor }]}>{timeRemaining}</Text>
             </View>
-          ) : (
-            item.final_price && (
-              <View style={styles.finalPriceRow}>
-                <Text style={styles.finalPriceLabel}>Final Price:</Text>
-                <Text style={styles.finalPriceAmount}>${item.final_price.toFixed(2)}</Text>
-              </View>
-            )
-          )}
+          ) : null}
 
-          {/* Auto-Bid Indicator */}
-          {item.auto_bid_enabled && (
-            <View style={styles.autoBidIndicator}>
-              <View style={styles.autoBidInfo}>
-                <Ionicons name="flash" size={14} color="#FFA500" />
-                <Text style={styles.autoBidText}>
-                  Auto-bid ON (Max: ${item.auto_bid_max}) • {item.auto_bid_strategy}
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={styles.disableAutoBidButton}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  Alert.alert(
-                    'Disable Auto-Bid',
-                    'Are you sure you want to disable auto-bidding for this item?',
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      {
-                        text: 'Disable',
-                        style: 'destructive',
-                        onPress: () => disableAutoBid(item.item_id),
-                      },
-                    ]
-                  );
-                }}
-              >
-                <Ionicons name="close-circle" size={18} color="#F57C00" />
-              </TouchableOpacity>
+          {showFinalPrice ? (
+            <View style={styles.finalPriceRow}>
+              <Text style={styles.finalPriceLabel}>Final Price:</Text>
+              <Text style={styles.finalPriceAmount}>${item.final_price?.toFixed(2) || '0.00'}</Text>
             </View>
-          )}
+          ) : null}
 
-          {/* Actions for Active Bids */}
-          {(item.status === 'active' || item.status === 'outbid') && (
-            <View style={styles.actionRow}>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => router.push(`/item/${item.item_id}`)}
-              >
-                <Text style={styles.actionButtonText}>Place Bid</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.autoBidButton]}
-                onPress={() => setupAutoBid(item)}
-              >
-                <Ionicons name="flash" size={16} color="#FFF" />
-                <Text style={styles.actionButtonText}>Auto-Bid</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+          {renderLossReason(item)}
+          {renderAutoBidIndicator(item)}
+          {renderActionButtons(item)}
         </View>
       </TouchableOpacity>
     );
@@ -334,45 +458,56 @@ if (Number.isNaN(maxBid) || maxBid <= selectedBidItem.current_highest_bid) {
     return (
       <View style={styles.container}>
         <EnhancedHeader scrollY={scrollY} />
-        <View style={styles.headerTitleContainer}>
+        <RNAnimated.View style={[styles.headerTitleContainer, { opacity: headerOpacity, transform: [{ scale: headerScale }] }]}>
           <Text style={styles.headerTitle}>My Bids</Text>
           <Text style={styles.headerSubtitle}>Track your auction activity</Text>
-        </View>
+        </RNAnimated.View>
         <ActivityIndicator size="large" color="#6A0DAD" style={styles.loader} />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <EnhancedHeader scrollY={scrollY} />
 
-      <View style={styles.headerTitleContainer}>
+      <RNAnimated.View style={[
+        styles.headerTitleContainer,
+        {
+          opacity: headerOpacity,
+          transform: [{ scale: headerScale }],
+          backgroundColor: colors.background,
+          borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0'
+        }
+      ]}>
         <View style={styles.headerTitleRow}>
           <View style={styles.titleWithArrow}>
             <TouchableOpacity
               onPress={() => router.back()}
               style={styles.backArrow}
             >
-              <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+              <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
             </TouchableOpacity>
             <View>
-              <Text style={styles.headerTitle}>My Bids</Text>
-              <Text style={styles.headerSubtitle}>Track your auction activity</Text>
+              <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>My Bids</Text>
+              <Text style={[styles.headerSubtitle, { color: theme === 'dark' ? '#999' : '#718096' }]}>Track your auction activity</Text>
             </View>
           </View>
           <TouchableOpacity
-            style={styles.statsButton}
+            style={[styles.statsButton, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F3E5F5' }]}
             onPress={() => router.push('/auto-bid-stats')}
           >
             <Ionicons name="stats-chart" size={20} color="#6A0DAD" />
             <Text style={styles.statsButtonText}>Stats</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </RNAnimated.View>
 
       {/* Tabs */}
-      <View style={styles.tabsContainer}>
+      <View style={[
+        styles.tabsContainer,
+        { backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0' }
+      ]}>
         {(['active', 'won', 'lost'] as TabType[]).map((tab) => {
           const count = bids.filter(b => {
             if (tab === 'active') return b.status === 'active' || b.status === 'outbid';
@@ -382,10 +517,18 @@ if (Number.isNaN(maxBid) || maxBid <= selectedBidItem.current_highest_bid) {
           return (
             <TouchableOpacity
               key={tab}
-              style={[styles.tab, activeTab === tab && styles.activeTab]}
+              style={[
+                styles.tab,
+                { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F5F5' },
+                activeTab === tab && styles.activeTab
+              ]}
               onPress={() => setActiveTab(tab)}
             >
-              <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
+              <Text style={[
+                styles.tabText,
+                { color: theme === 'dark' && activeTab !== tab ? '#ECEDEE' : '#666' },
+                activeTab === tab && styles.activeTabText
+              ]}>
                 {tab.charAt(0).toUpperCase() + tab.slice(1)} ({count})
               </Text>
             </TouchableOpacity>
@@ -440,7 +583,7 @@ if (Number.isNaN(maxBid) || maxBid <= selectedBidItem.current_highest_bid) {
               </TouchableOpacity>
             </View>
             <ScrollView>
-              {selectedBidItem && (
+              {selectedBidItem ? (
                 <>
                   {/* Item Info */}
                   <View style={styles.modalItemInfo}>
@@ -459,7 +602,7 @@ if (Number.isNaN(maxBid) || maxBid <= selectedBidItem.current_highest_bid) {
                     />
                   </View>
 
-                  {autoBidEnabled && (
+                  {autoBidEnabled ? (
                     <>
                       {/* Max Bid Input */}
                       <View style={styles.inputContainer}>
@@ -524,7 +667,7 @@ if (Number.isNaN(maxBid) || maxBid <= selectedBidItem.current_highest_bid) {
                         </TouchableOpacity>
                       </View>
                     </>
-                  )}
+                  ) : null}
 
                   {/* Save Button */}
                   <TouchableOpacity
@@ -534,7 +677,7 @@ if (Number.isNaN(maxBid) || maxBid <= selectedBidItem.current_highest_bid) {
                     <Text style={styles.saveButtonText}>Save Auto-Bid Settings</Text>
                   </TouchableOpacity>
                 </>
-              )}
+              ) : null}
             </ScrollView>
           </View>
         </View>
@@ -728,6 +871,74 @@ const styles = StyleSheet.create({
   statText: {
     fontSize: 12,
     color: '#666',
+  },
+  reserveRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    marginBottom: 8,
+  },
+  reserveMetRow: {
+    backgroundColor: '#E8F5E9',
+  },
+  reserveNotMetRow: {
+    backgroundColor: '#FFF3E0',
+  },
+  reserveText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  reserveMetText: {
+    color: '#2E7D32',
+  },
+  reserveNotMetText: {
+    color: '#E65100',
+  },
+  lossReasonBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  lossReasonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
+  makeOfferButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#FF6B35',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginTop: 8,
+    shadowColor: '#FF6B35',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  makeOfferButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  makeOfferSubtext: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#FFE5D9',
+    position: 'absolute',
+    bottom: -16,
+    alignSelf: 'center',
   },
   timeRow: {
     flexDirection: 'row',

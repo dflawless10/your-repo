@@ -1,10 +1,12 @@
+import { API_BASE_URL } from '@/config';
+
 // api/authService.ts
 import { LoginRecord } from '@/types/Auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { makeApiRequest } from '@/api/auth'; // or wherever it's defined
 
 
-const API_URL='http://10.0.0.170:5000'
+const API_URL=API_BASE_URL
 
 
 export const getLoginHistory = async (): Promise<LoginRecord[]> => {

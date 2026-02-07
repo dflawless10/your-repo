@@ -19,6 +19,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '../components/EnhancedHeader';
 import GlobalFooter from "@/app/components/GlobalFooter";
+import { API_BASE_URL } from '@/config';
+import { useTheme } from '@/app/theme/ThemeContext';
 
 interface PaymentMethod {
   id: string;
@@ -36,6 +38,7 @@ interface PaymentMethod {
 
 export default function PaymentMethodsScreen() {
   const router = useRouter();
+  const { theme, colors } = useTheme();
   const scrollY = new Animated.Value(0);
 
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
@@ -186,16 +189,33 @@ export default function PaymentMethodsScreen() {
   };
 
   const handleAddCard = async () => {
-    if (!validateCard()) return;
+    if (!cardholderName.trim()) {
+      Alert.alert('Error', 'Please enter cardholder name');
+      return;
+    }
+    if (!cardNumber.trim()) {
+      Alert.alert('Error', 'Please enter card number');
+      return;
+    }
+    if (!expiryDate.trim() || !cvv.trim()) {
+      Alert.alert('Error', 'Please enter card details');
+      return;
+    }
+    if (!billingZip.trim()) {
+      Alert.alert('Error', 'Please enter billing ZIP code');
+      return;
+    }
+
     setAddingCard(true);
 
     try {
       const token = await AsyncStorage.getItem('jwtToken');
       const [expMonth, expYear] = expiryDate.split('/');
 
-      // Note: For production, this should use Stripe's tokenization
-      // This is a temporary implementation
-      const response = await fetch('http://10.0.0.170:5000/api/payment/methods', {
+      // ✅ Use Stripe to create payment method token (secure, PCI-compliant)
+      // For now, send to backend which will create via Stripe API
+      // In production mobile app, use @stripe/stripe-react-native CardField
+      const response = await fetch(`${API_BASE_URL}/api/payment/methods/create-token`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -213,17 +233,36 @@ export default function PaymentMethodsScreen() {
 
       const data = await response.json();
 
-      if (response.ok) {
-        await loadPaymentMethods();
-        setShowAddModal(false);
-        setCardNumber('');
-        setExpiryDate('');
-        setCvv('');
-        setCardholderName('');
-        setBillingZip('');
-        Alert.alert('Success', 'Payment method added successfully');
+      if (response.ok && data.payment_method_id) {
+        // Now attach the payment method to the user
+        const attachResponse = await fetch(`${API_BASE_URL}/api/payment/methods`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            payment_method_id: data.payment_method_id,
+            type: 'card',
+          }),
+        });
+
+        const attachData = await attachResponse.json();
+
+        if (attachResponse.ok) {
+          await loadPaymentMethods();
+          setShowAddModal(false);
+          setCardNumber('');
+          setExpiryDate('');
+          setCvv('');
+          setCardholderName('');
+          setBillingZip('');
+          Alert.alert('Success', 'Payment method added successfully');
+        } else {
+          Alert.alert('Error', attachData.error || 'Failed to add payment method');
+        }
       } else {
-        Alert.alert('Error', data.message || 'Failed to add payment method');
+        Alert.alert('Error', data.error || 'Failed to process card');
       }
     } catch (error) {
       console.error('Add card error:', error);
@@ -325,13 +364,13 @@ export default function PaymentMethodsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ headerShown: false }} />
       <EnhancedHeader scrollY={scrollY} />
 
       <Animated.ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20 }}
+        style={[styles.scrollView, { backgroundColor: colors.background }]}
+        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20, backgroundColor: colors.background }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
@@ -339,14 +378,14 @@ export default function PaymentMethodsScreen() {
         scrollEventThrottle={16}
       >
         {/* Page Header with Back Arrow */}
-        <View style={styles.pageHeader}>
+        <View style={[styles.pageHeader, { backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E5E5E5' }]}>
           <TouchableOpacity
             onPress={() => router.back()}
             style={styles.backButton}
           >
-            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+            <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
-          <Text style={styles.pageTitle}>Payment Methods</Text>
+          <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Payment Methods</Text>
         </View>
         {/* Security Banner */}
         <LinearGradient
@@ -366,35 +405,35 @@ export default function PaymentMethodsScreen() {
 
         {loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#6A0DAD" />
-            <Text style={styles.loadingText}>Loading payment methods...</Text>
+            <ActivityIndicator size="large" color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+            <Text style={[styles.loadingText, { color: theme === 'dark' ? '#999' : '#999' }]}>Loading payment methods...</Text>
           </View>
         ) : paymentMethods.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="card-outline" size={64} color="#D1D5DB" />
-            <Text style={styles.emptyTitle}>No Payment Methods</Text>
-            <Text style={styles.emptySubtitle}>
+            <Ionicons name="card-outline" size={64} color={theme === 'dark' ? '#3C3C3E' : '#D1D5DB'} />
+            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No Payment Methods</Text>
+            <Text style={[styles.emptySubtitle, { color: theme === 'dark' ? '#999' : '#999' }]}>
               Add a payment method to make purchases faster and easier
             </Text>
           </View>
         ) : (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Your Payment Methods</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Your Payment Methods</Text>
             {paymentMethods.map(renderPaymentMethod)}
           </View>
         )}
 
         {/* Stripe Integration Notice */}
-        <TouchableOpacity style={styles.stripeNotice} onPress={handleLearnMoreStripe}>
+        <TouchableOpacity style={[styles.stripeNotice, { backgroundColor: theme === 'dark' ? '#1C1C2E' : '#F0F4FF', borderColor: theme === 'dark' ? '#2C2C3E' : '#D1D9FF' }]} onPress={handleLearnMoreStripe}>
           <View style={styles.stripeNoticeContent}>
-            <Ionicons name="information-circle" size={24} color="#6A0DAD" />
+            <Ionicons name="information-circle" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
             <View style={styles.stripeNoticeText}>
-              <Text style={styles.stripeNoticeTitle}>Full Stripe Integration Available</Text>
-              <Text style={styles.stripeNoticeSubtitle}>
+              <Text style={[styles.stripeNoticeTitle, { color: theme === 'dark' ? '#B794F4' : '#1E40AF' }]}>Full Stripe Integration Available</Text>
+              <Text style={[styles.stripeNoticeSubtitle, { color: theme === 'dark' ? '#999' : '#1E40AF' }]}>
                 To enable Apple Pay, Google Pay, and enhanced security, build with Stripe SDK
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#6A0DAD" />
+            <Ionicons name="chevron-forward" size={20} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
           </View>
         </TouchableOpacity>
 
@@ -416,9 +455,9 @@ export default function PaymentMethodsScreen() {
         </TouchableOpacity>
 
         {/* Info Card */}
-        <View style={styles.infoCard}>
-          <Text style={styles.infoTitle}>💳 Accepted Payment Methods</Text>
-          <Text style={styles.infoText}>
+        <View style={[styles.infoCard, { backgroundColor: theme === 'dark' ? '#1C1C2E' : '#F0F4FF', borderColor: theme === 'dark' ? '#2C2C3E' : '#D1D9FF' }]}>
+          <Text style={[styles.infoTitle, { color: theme === 'dark' ? '#B794F4' : '#1E40AF' }]}>💳 Accepted Payment Methods</Text>
+          <Text style={[styles.infoText, { color: theme === 'dark' ? '#999' : '#1E40AF' }]}>
             • Visa, Mastercard, American Express, Discover{'\n'}
             • Apple Pay (coming soon - requires native build){'\n'}
             • Google Pay (coming soon - requires native build){'\n'}
@@ -436,15 +475,15 @@ export default function PaymentMethodsScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setShowAddModal(false)}
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Add Card</Text>
+        <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+          <View style={[styles.modalHeader, { backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
+            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Add Card</Text>
             <TouchableOpacity onPress={() => setShowAddModal(false)} style={styles.closeButton}>
-              <Ionicons name="close" size={28} color="#1A1A1A" />
+              <Ionicons name="close" size={28} color={colors.textPrimary} />
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+          <ScrollView style={[styles.modalContent, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
             <LinearGradient
               colors={['#6A0DAD', '#8B5CF6']}
               start={{ x: 0, y: 0 }}
@@ -459,14 +498,15 @@ export default function PaymentMethodsScreen() {
 
             {/* Cardholder Name */}
             <View style={styles.inputSection}>
-              <Text style={styles.inputLabel}>Cardholder Name</Text>
-              <View style={styles.inputContainer}>
-                <Ionicons name="person-outline" size={20} color="#999" style={styles.inputIcon} />
+              <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>Cardholder Name</Text>
+              <View style={[styles.inputContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
+                <Ionicons name="person-outline" size={20} color={theme === 'dark' ? '#666' : '#999'} style={styles.inputIcon} />
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { color: colors.textPrimary }]}
                   value={cardholderName}
                   onChangeText={setCardholderName}
                   placeholder="John Doe"
+                  placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
                   autoCapitalize="words"
                 />
               </View>
@@ -474,14 +514,15 @@ export default function PaymentMethodsScreen() {
 
             {/* Card Number */}
             <View style={styles.inputSection}>
-              <Text style={styles.inputLabel}>Card Number</Text>
-              <View style={styles.inputContainer}>
-                <Ionicons name="card-outline" size={20} color="#999" style={styles.inputIcon} />
+              <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>Card Number</Text>
+              <View style={[styles.inputContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
+                <Ionicons name="card-outline" size={20} color={theme === 'dark' ? '#666' : '#999'} style={styles.inputIcon} />
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { color: colors.textPrimary }]}
                   value={cardNumber}
                   onChangeText={(text) => setCardNumber(formatCardNumber(text))}
                   placeholder="4242 4242 4242 4242"
+                  placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
                   keyboardType="number-pad"
                   maxLength={19}
                 />
@@ -491,14 +532,15 @@ export default function PaymentMethodsScreen() {
             {/* Expiry and CVV */}
             <View style={styles.rowInputs}>
               <View style={[styles.inputSection, { flex: 1, marginRight: 12 }]}>
-                <Text style={styles.inputLabel}>Expiry Date</Text>
-                <View style={styles.inputContainer}>
-                  <Ionicons name="calendar-outline" size={20} color="#999" style={styles.inputIcon} />
+                <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>Expiry Date</Text>
+                <View style={[styles.inputContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
+                  <Ionicons name="calendar-outline" size={20} color={theme === 'dark' ? '#666' : '#999'} style={styles.inputIcon} />
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, { color: colors.textPrimary }]}
                     value={expiryDate}
                     onChangeText={(text) => setExpiryDate(formatExpiryDate(text))}
                     placeholder="MM/YY"
+                    placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
                     keyboardType="number-pad"
                     maxLength={5}
                   />
@@ -506,14 +548,15 @@ export default function PaymentMethodsScreen() {
               </View>
 
               <View style={[styles.inputSection, { flex: 1 }]}>
-                <Text style={styles.inputLabel}>CVV</Text>
-                <View style={styles.inputContainer}>
-                  <Ionicons name="shield-checkmark-outline" size={20} color="#999" style={styles.inputIcon} />
+                <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>CVV</Text>
+                <View style={[styles.inputContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
+                  <Ionicons name="shield-checkmark-outline" size={20} color={theme === 'dark' ? '#666' : '#999'} style={styles.inputIcon} />
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, { color: colors.textPrimary }]}
                     value={cvv}
                     onChangeText={(text) => setCvv(text.replace(/\D/g, '').substring(0, 4))}
                     placeholder="123"
+                    placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
                     keyboardType="number-pad"
                     maxLength={4}
                     secureTextEntry
@@ -524,14 +567,15 @@ export default function PaymentMethodsScreen() {
 
             {/* Billing ZIP */}
             <View style={styles.inputSection}>
-              <Text style={styles.inputLabel}>Billing ZIP Code</Text>
-              <View style={styles.inputContainer}>
-                <Ionicons name="location-outline" size={20} color="#999" style={styles.inputIcon} />
+              <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>Billing ZIP Code</Text>
+              <View style={[styles.inputContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
+                <Ionicons name="location-outline" size={20} color={theme === 'dark' ? '#666' : '#999'} style={styles.inputIcon} />
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { color: colors.textPrimary }]}
                   value={billingZip}
                   onChangeText={setBillingZip}
                   placeholder="12345"
+                  placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
                   keyboardType="number-pad"
                   maxLength={10}
                 />
@@ -563,9 +607,9 @@ export default function PaymentMethodsScreen() {
             </TouchableOpacity>
 
             {/* Security Notice */}
-            <View style={styles.securityNotice}>
-              <Ionicons name="information-circle" size={20} color="#6A0DAD" />
-              <Text style={styles.securityNoticeText}>
+            <View style={[styles.securityNotice, { backgroundColor: theme === 'dark' ? '#1C1C2E' : '#F0F4FF' }]}>
+              <Ionicons name="information-circle" size={20} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+              <Text style={[styles.securityNoticeText, { color: theme === 'dark' ? '#999' : '#1E40AF' }]}>
                 We use Stripe for secure payment processing. Your card details are encrypted with industry-standard SSL/TLS.
               </Text>
             </View>
@@ -597,7 +641,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   pageTitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
     color: '#1A202C',
   },
@@ -635,7 +679,6 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 14,
-    color: '#999',
   },
   emptyState: {
     alignItems: 'center',
@@ -644,13 +687,11 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1A1A1A',
     marginTop: 16,
     marginBottom: 8,
   },
   emptySubtitle: {
     fontSize: 14,
-    color: '#999',
     textAlign: 'center',
     paddingHorizontal: 40,
   },

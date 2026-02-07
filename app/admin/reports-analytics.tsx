@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,13 +9,14 @@ import {
   Animated,
   Dimensions,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '@/config';
-import EnhancedHeader from '../components/EnhancedHeader';
+import EnhancedHeader, { HEADER_MAX_HEIGHT } from '../components/EnhancedHeader';
 import { LinearGradient } from 'expo-linear-gradient';
 import GlobalFooter from "@/app/components/GlobalFooter";
+import { useTheme } from '@/app/theme/ThemeContext';
 
 const { width } = Dimensions.get('window');
 
@@ -24,11 +25,24 @@ interface Analytics {
   items: { total: number; active: number; sold: number; avg_price: number };
   transactions: { total_sales: number; total_revenue: number; avg_sale_price: number; today_sales: number };
   engagement: { total_bids: number; total_favorites: number; total_messages: number };
+  platform_earnings?: {
+    total_commission: number;
+    commission_today: number;
+    commission_this_week: number;
+    commission_this_month: number;
+    payment_processing_fees: number;
+    premium_subscriptions: number;
+    featured_listing_fees: number;
+  };
 }
 
 export default function ReportsAnalyticsScreen() {
   const router = useRouter();
+  const { theme, colors } = useTheme();
+  const isDark = theme === 'dark';
   const scrollY = new Animated.Value(0);
+  const headerOpacity = useRef(new Animated.Value(0)).current;
+  const headerScale = useRef(new Animated.Value(1)).current;
 
   const [analytics, setAnalytics] = useState<Analytics>({
     users: { total: 0, new_today: 0, new_this_week: 0, new_this_month: 0 },
@@ -39,6 +53,32 @@ export default function ReportsAnalyticsScreen() {
 
   useEffect(() => {
     loadAnalytics();
+  }, []);
+
+  useEffect(() => {
+    // Fade in header title and arrow
+    setTimeout(() => {
+      Animated.timing(headerOpacity, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+      }).start(() => {
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(headerScale, {
+              toValue: 1.05,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(headerScale, {
+              toValue: 1,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
+      });
+    }, 500);
   }, []);
 
   const loadAnalytics = async () => {
@@ -69,24 +109,26 @@ export default function ReportsAnalyticsScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <Stack.Screen options={{ headerShown: false }} />
       <EnhancedHeader scrollY={scrollY} />
 
-      <View style={styles.headerContainer}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Reports & Analytics</Text>
-      </View>
-
       <Animated.ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        style={[styles.scrollView, { backgroundColor: colors.background }]}
+        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20 }}
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
         scrollEventThrottle={16}
       >
+        {/* Page Header with Back Arrow */}
+        <Animated.View style={[styles.pageHeader, { backgroundColor: colors.surface, opacity: headerOpacity, transform: [{ scale: headerScale }] }]}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color={isDark ? '#B794F4' : '#6A0DAD'} />
+          </TouchableOpacity>
+          <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Reports & Analytics</Text>
+        </Animated.View>
+
         {/* User Metrics */}
-        <Text style={styles.sectionTitle}>User Growth</Text>
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>User Growth</Text>
         <View style={styles.metricsRow}>
           <MetricCard
             title="Total Users"
@@ -119,7 +161,7 @@ export default function ReportsAnalyticsScreen() {
         </View>
 
         {/* Item Metrics */}
-        <Text style={styles.sectionTitle}>Inventory</Text>
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Inventory</Text>
         <View style={styles.metricsRow}>
           <MetricCard
             title="Total Items"
@@ -150,7 +192,7 @@ export default function ReportsAnalyticsScreen() {
         </View>
 
         {/* Transaction Metrics */}
-        <Text style={styles.sectionTitle}>Revenue</Text>
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Revenue</Text>
         <View style={styles.metricsRow}>
           <MetricCard
             title="Total Revenue"
@@ -180,8 +222,88 @@ export default function ReportsAnalyticsScreen() {
           />
         </View>
 
+        {/* Platform Earnings */}
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>💰 BidGoat Platform Earnings</Text>
+        {analytics.platform_earnings ? (
+          <>
+            <View style={styles.metricsRow}>
+              <MetricCard
+                title="Total Commission"
+                value={`$${analytics.platform_earnings.total_commission.toFixed(2)}`}
+                subtitle="All Time"
+                icon="cash-outline"
+                colors={['#10B981', '#059669']}
+              />
+              <MetricCard
+                title="Today"
+                value={`$${analytics.platform_earnings.commission_today.toFixed(2)}`}
+                subtitle="Commission"
+                icon="today-outline"
+                colors={['#8B5CF6', '#7C3AED']}
+              />
+            </View>
+            <View style={styles.metricsRow}>
+              <MetricCard
+                title="This Week"
+                value={`$${analytics.platform_earnings.commission_this_week.toFixed(2)}`}
+                subtitle="Commission"
+                icon="calendar-outline"
+                colors={['#F59E0B', '#D97706']}
+              />
+              <MetricCard
+                title="This Month"
+                value={`$${analytics.platform_earnings.commission_this_month.toFixed(2)}`}
+                subtitle="Commission"
+                icon="trending-up-outline"
+                colors={['#EF4444', '#DC2626']}
+              />
+            </View>
+            <View style={styles.metricsRow}>
+              <MetricCard
+                title="Payment Processing"
+                value={`$${analytics.platform_earnings.payment_processing_fees.toFixed(2)}`}
+                subtitle="Fees Collected"
+                icon="card-outline"
+                colors={['#06B6D4', '#0891B2']}
+              />
+              <MetricCard
+                title="Premium Subs"
+                value={`$${analytics.platform_earnings.premium_subscriptions.toFixed(2)}`}
+                subtitle="$19.99/mo"
+                icon="star-outline"
+                colors={['#6366F1', '#4F46E5']}
+              />
+            </View>
+            <View style={styles.metricsRow}>
+              <MetricCard
+                title="Featured Listings"
+                value={`$${analytics.platform_earnings.featured_listing_fees.toFixed(2)}`}
+                subtitle="$10 per listing"
+                icon="flash-outline"
+                colors={['#EC4899', '#DB2777']}
+              />
+              <MetricCard
+                title="Total Profit"
+                value={`$${(
+                  analytics.platform_earnings.total_commission +
+                  analytics.platform_earnings.payment_processing_fees +
+                  analytics.platform_earnings.premium_subscriptions +
+                  analytics.platform_earnings.featured_listing_fees
+                ).toFixed(2)}`}
+                subtitle="All Revenue Streams"
+                icon="trophy-outline"
+                colors={['#14B8A6', '#0D9488']}
+              />
+            </View>
+          </>
+        ) : (
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary, fontSize: 14 }]}>
+            Platform earnings data not available
+          </Text>
+        )}
+
         {/* Engagement Metrics */}
-        <Text style={styles.sectionTitle}>Engagement</Text>
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Engagement</Text>
         <View style={styles.metricsRow}>
           <MetricCard
             title="Total Bids"
@@ -206,28 +328,17 @@ export default function ReportsAnalyticsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F9FA' },
-  headerContainer: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 110 : 110,
-    left: 0,
-    right: 0,
+  pageHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-    zIndex: 100,
+    paddingTop: 40,
+    paddingBottom: 8,
+    backgroundColor: '#F8F9FA',
   },
   backButton: { marginRight: 12, padding: 4 },
-  headerTitle: { fontSize: 20, fontWeight: '700', color: '#1A1A1A' },
+  pageTitle: { fontSize: 20, fontWeight: '700', color: '#1A1A1A' },
   scrollView: { flex: 1 },
-  scrollContent: {
-    paddingTop: Platform.OS === 'ios' ? 180 : 180,
-    paddingHorizontal: 16,
-    paddingBottom: 40,
-  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',

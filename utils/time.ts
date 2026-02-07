@@ -131,3 +131,90 @@ export const formatTimeWithSeconds = (iso: string, now: number): string => {
   const totalHours = Math.floor(diffMs / 3600000);
   return `${totalHours}h ${minutes}m ${seconds}s left`;
 };
+
+// Format time WITHOUT seconds (cleaner for card displays)
+export const formatTime = (iso: string, now: number): string => {
+  if (!iso) return "Auction ended";
+
+  const parsed = iso.endsWith('Z') || iso.includes('+')
+    ? new Date(iso)
+    : new Date(iso + 'Z');
+
+  if (isNaN(parsed.getTime())) return "Auction ended";
+
+  const diffMs = parsed.getTime() - now;
+  if (diffMs <= 0) return "Auction ended";
+
+  const days = Math.floor(diffMs / 86400000);
+  const hours = Math.floor((diffMs % 86400000) / 3600000);
+  const minutes = Math.floor((diffMs % 3600000) / 60000);
+
+  // Show days + hours when more than 2 days left
+  if (days >= 2) {
+    return `${days}d ${hours}h`;
+  }
+
+  // Show hours/minutes when less than 48 hours
+  const totalHours = Math.floor(diffMs / 3600000);
+  return `${totalHours}h ${minutes}m`;
+};
+
+/**
+ * Format shipping deadline time remaining in human-readable format
+ * Handles both positive (time left) and negative (overdue) cases
+ */
+export const formatShippingTimeRemaining = (deadline: string | null | undefined, now?: number): string => {
+  if (!deadline) return '';
+
+  const parsed = deadline.endsWith('Z') || deadline.includes('+')
+    ? new Date(deadline)
+    : new Date(deadline + 'Z');
+
+  if (isNaN(parsed.getTime())) return '';
+
+  const currentTime = now || Date.now();
+  const diffMs = parsed.getTime() - currentTime;
+  const isLate = diffMs < 0;
+  const absDiffMs = Math.abs(diffMs);
+
+  const days = Math.floor(absDiffMs / 86400000);
+  const hours = Math.floor((absDiffMs % 86400000) / 3600000);
+  const minutes = Math.floor((absDiffMs % 3600000) / 60000);
+
+  // Format based on time scale
+  if (days >= 7) {
+    const weeks = Math.floor(days / 7);
+    return isLate
+      ? `${weeks} ${weeks === 1 ? 'week' : 'weeks'} overdue`
+      : `${weeks} ${weeks === 1 ? 'week' : 'weeks'} left`;
+  }
+
+  if (days >= 2) {
+    return isLate
+      ? `${days} days overdue`
+      : `${days} days left`;
+  }
+
+  if (days === 1) {
+    return isLate
+      ? `1 day overdue`
+      : `1 day left`;
+  }
+
+  if (hours >= 2) {
+    return isLate
+      ? `${hours} hours overdue`
+      : `${hours} hours left`;
+  }
+
+  if (hours === 1) {
+    return isLate
+      ? `1 hour overdue`
+      : `1 hour left`;
+  }
+
+  // Less than 1 hour
+  return isLate
+    ? `${minutes} minutes overdue`
+    : `${minutes} minutes left`;
+};

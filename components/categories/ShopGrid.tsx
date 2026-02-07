@@ -1,3 +1,5 @@
+import { API_BASE_URL } from '@/config';
+
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, Image, StyleSheet, FlatList, TouchableOpacity, ScrollView,
@@ -13,7 +15,7 @@ type ShopItem = {
   tags: string[];
 };
 
-const API_URL = 'http://10.0.0.170:5000';
+const API_URL = API_BASE_URL;
 
 export default function ShopGridExpanded() {
   const [items, setItems] = useState<ShopItem[]>([]);

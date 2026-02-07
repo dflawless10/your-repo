@@ -1,11 +1,18 @@
-import {useState} from "react";
+import { useGoatBid } from '@/hooks/useGoatBid';
 
-const [showGoat, setShowGoat] = useState(false);
+export const useHandleBidConfirmation = () => {
+  const { goatTrigger, lastBidAmount, triggerGoat } = useGoatBid();
 
-const handleBidConfirm = () => {
-  // your bid logic...
-  setShowGoat(true);
-  setTimeout(() => setShowGoat(false), 2000); // hide after animation
-if (showGoat) return;
+  const handleBidConfirm = (amount: number) => {
+    // Your bid logic goes here (API call, validation, etc.)
+    triggerGoat(amount);
+  };
+
+  return {
+    handleBidConfirm,
+    goatTrigger,
+    lastBidAmount,
+  };
 };
-export default handleBidConfirm;
+
+export default useHandleBidConfirmation;

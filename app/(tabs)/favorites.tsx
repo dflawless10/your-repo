@@ -1,3 +1,5 @@
+import { API_BASE_URL } from '@/config';
+
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -17,8 +19,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import WinkingGoat from '../../assets/winkingGoat.svg';
 import DiamondIcon from '../../assets/diamond.svg';
 import FavoriteCarouselCard from 'app/FavoriteCarouselCard';
-import playGoatSound from '../../assets/goatExcited.wav';
-const API_BASE_URL = 'http://10.0.0.170:5000';
 
 export type ListedItem = {
   id: number;

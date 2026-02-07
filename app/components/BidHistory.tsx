@@ -12,7 +12,7 @@ interface BidHistoryProps {
   bids: Bid[];
 }
 
-export default function BidHistory({ bids }: BidHistoryProps) {
+export default function BidHistory({ bids }: Readonly<BidHistoryProps>) {
   return (
     <FlatList
       data={bids}

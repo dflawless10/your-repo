@@ -1,4 +1,4 @@
-import { useColorScheme } from 'react-native';
+import { useTheme } from '@/app/theme/ThemeContext';
 
 type ThemeProps = {
   light?: string;
@@ -9,7 +9,7 @@ export default function useThemeColor(
   props: ThemeProps,
   colorName: string
 ): string {
-  const theme = useColorScheme() ?? 'light';
+  const { theme } = useTheme();
 
   if (props[theme]) {
     return props[theme]!;

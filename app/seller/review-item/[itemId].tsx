@@ -14,13 +14,19 @@ import { useRouter, useLocalSearchParams, useFocusEffect, Stack } from 'expo-rou
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
+import { API_BASE_URL } from '@/config';
+import { useTheme } from '@/app/theme/ThemeContext';
+import GlobalFooter from '@/app/components/GlobalFooter';
 
-const API_URL = 'http://10.0.0.170:5000';
+const API_URL = API_BASE_URL;
 
 export default function ReviewItemScreen() {
   const router = useRouter();
   const { itemId } = useLocalSearchParams();
+  const { theme, colors } = useTheme();
   const scrollY = useRef(new Animated.Value(0)).current;
+  const headerOpacity = useRef(new Animated.Value(0)).current;
+  const headerScale = useRef(new Animated.Value(1)).current;
   const [item, setItem] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [timeRemaining, setTimeRemaining] = useState<string>('');
@@ -31,6 +37,33 @@ export default function ReviewItemScreen() {
       fetchItem();
     }, [itemId])
   );
+
+  useEffect(() => {
+    // Fade in header title and arrow - wait for screen to fully render first
+    setTimeout(() => {
+      Animated.timing(headerOpacity, {
+        toValue: 1,
+        duration: 2000, // 2 seconds - slow and dramatic
+        useNativeDriver: true,
+      }).start(() => {
+        // After fade-in completes, start pulsing animation
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(headerScale, {
+              toValue: 1.05,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(headerScale, {
+              toValue: 1,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
+      });
+    }, 500); // 500ms delay - let screen render fully first
+  }, []);
 
   useEffect(() => {
     if (item) {
@@ -86,7 +119,54 @@ export default function ReviewItemScreen() {
   };
 
   const handleEdit = () => {
-    router.push(`/seller/item/${itemId}/edit`);
+    // Route to the appropriate form based on selling_strategy and item type
+    const sellingStrategy = item?.selling_strategy;
+
+    // Check if this is a diamond item
+    if (item?.diamond_specifications) {
+      // Route to diamond listing/edit screen with all diamond data
+      try {
+        const diamondSpecs = JSON.parse(item.diamond_specifications);
+        router.push({
+          pathname: '/diamond-listing',
+          params: {
+            editItemId: itemId,
+            imageUrl: item.photo_url,
+            carat: diamondSpecs.carat,
+            shape: diamondSpecs.cut,
+            color: diamondSpecs.color,
+            clarity: diamondSpecs.clarity,
+            certified: diamondSpecs.certification,
+            certificationLab: diamondSpecs.certificationLab || '',
+            certificationNumber: diamondSpecs.certificationNumber || '',
+            ethicallySourced: diamondSpecs.ethicallySourced || 'No',
+            price: item.price?.toString() || '0',
+            rarity: item.rarity || 'rare',
+            additionalImages: item.additional_photos ? JSON.stringify(item.additional_photos) : undefined,
+          }
+        });
+        return;
+      } catch (error) {
+        console.error('Error parsing diamond specifications:', error);
+      }
+    }
+
+    if (sellingStrategy === 'must_sell') {
+      // Route to Must Sell form with item data
+      router.push({
+        pathname: '/MustSellScreen',
+        params: { editItemId: itemId }
+      });
+    } else if (sellingStrategy === 'buy_it_now' || item?.buy_it_now) {
+      // Route to Buy It Now form (list-item) with item data
+      router.push({
+        pathname: '/(tabs)/list-item',
+        params: { editItemId: itemId }
+      });
+    } else {
+      // Default to generic edit screen for other types
+      router.push(`/seller/item/${itemId}/edit`);
+    }
   };
 
   const handleDelete = async () => {
@@ -125,63 +205,74 @@ export default function ReviewItemScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FF6B35" />
-        <Text style={styles.loadingText}>Loading item...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <Stack.Screen options={{ headerShown: false, title: '' }} />
+        <ActivityIndicator size="large" color={theme === 'dark' ? '#B794F4' : '#FF6B35'} />
+        <Text style={[styles.loadingText, { color: theme === 'dark' ? '#999' : '#666' }]}>Loading item...</Text>
       </View>
     );
   }
 
   if (!item) {
     return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>Item not found</Text>
+      <View style={[styles.errorContainer, { backgroundColor: colors.background }]}>
+        <Stack.Screen options={{ headerShown: false, title: '' }} />
+        <Text style={[styles.errorText, { color: colors.textPrimary }]}>Item not found</Text>
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1 }}>
-      <Stack.Screen options={{ headerShown: false }} />
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <Stack.Screen options={{ headerShown: false, title: '' }} />
       <EnhancedHeader scrollY={scrollY} />
 
+      {/* Page Header with Back Arrow */}
+      <Animated.View style={[styles.pageHeader, {
+        opacity: headerOpacity,
+        transform: [{ scale: headerScale }],
+        backgroundColor: colors.background,
+        borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0'
+      }]}>
+        <TouchableOpacity
+          onPress={() => router.replace('/(tabs)/MyAuctionScreen')}
+          style={styles.backButton}
+        >
+          <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+        </TouchableOpacity>
+        <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Review Your Item</Text>
+      </Animated.View>
+
       <ScrollView
-        style={styles.container}
-        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20 }}
+        style={[styles.container, { backgroundColor: colors.background }]}
+        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 110, backgroundColor: colors.background }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
         )}
         scrollEventThrottle={16}
       >
-        {/* Page Header with Back Arrow */}
-        <View style={styles.pageHeader}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backButton}
-          >
-            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
-          </TouchableOpacity>
-          <Text style={styles.pageTitle}>Review Your Item</Text>
-        </View>
 
       {/* Review Status Badge */}
-      <View style={styles.reviewBanner}>
+      <View style={[styles.reviewBanner, {
+        backgroundColor: theme === 'dark' ? '#3D2C1C' : '#FFF8E1',
+        borderColor: theme === 'dark' ? '#5C4A2C' : '#FFB74D'
+      }]}>
         <Ionicons name="hourglass-outline" size={24} color="#FF9800" />
         <View style={styles.reviewBannerText}>
-          <Text style={styles.reviewTitle}>🔍 Under Review</Text>
-          <Text style={styles.reviewSubtitle}>
+          <Text style={[styles.reviewTitle, { color: colors.textPrimary }]}>🔍 Under Review</Text>
+          <Text style={[styles.reviewSubtitle, { color: theme === 'dark' ? '#FFB74D' : '#F57C00' }]}>
             Goes live in {timeRemaining}
           </Text>
-          <Text style={styles.reviewDescription}>
+          <Text style={[styles.reviewDescription, { color: theme === 'dark' ? '#999' : '#666' }]}>
             Your item is being prepared for listing. You can edit or delete it during this time.
           </Text>
         </View>
       </View>
 
       {/* Item Preview */}
-      <View style={styles.previewSection}>
-        <Text style={styles.sectionTitle}>Preview</Text>
+      <View style={[styles.previewSection, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}>
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Preview</Text>
 
         <Image
           source={{ uri: item.photo_url }}
@@ -190,36 +281,42 @@ export default function ReviewItemScreen() {
         />
 
         <View style={styles.itemDetails}>
-          <Text style={styles.itemName}>{item.name}</Text>
-          <Text style={styles.itemDescription}>{item.description}</Text>
+          <Text style={[styles.itemName, { color: colors.textPrimary }]}>{item.name}</Text>
+          <Text style={[styles.itemDescription, { color: theme === 'dark' ? '#999' : '#666' }]}>{item.description}</Text>
 
           <View style={styles.priceRow}>
-            <Text style={styles.priceLabel}>Starting Price:</Text>
-            <Text style={styles.priceValue}>${item.price?.toFixed(2)}</Text>
+            <Text style={[styles.priceLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Starting Price:</Text>
+            <Text style={[styles.priceValue, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>
+              ${item.price?.toFixed(2)}
+            </Text>
           </View>
 
           {item.buy_it_now && (
             <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Buy It Now:</Text>
-              <Text style={styles.priceValue}>${item.buy_it_now?.toFixed(2)}</Text>
+              <Text style={[styles.priceLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Buy It Now:</Text>
+              <Text style={[styles.priceValue, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>
+                ${item.buy_it_now?.toFixed(2)}
+              </Text>
             </View>
           )}
 
           {item.reserve_price && (
             <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Reserve Price:</Text>
-              <Text style={styles.priceValue}>${item.reserve_price?.toFixed(2)}</Text>
+              <Text style={[styles.priceLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Reserve Price:</Text>
+              <Text style={[styles.priceValue, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>
+                ${item.reserve_price?.toFixed(2)}
+              </Text>
             </View>
           )}
 
           <View style={styles.metaRow}>
-            <Text style={styles.metaLabel}>Strategy:</Text>
-            <Text style={styles.metaValue}>{item.selling_strategy || 'auction'}</Text>
+            <Text style={[styles.metaLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Strategy:</Text>
+            <Text style={[styles.metaValue, { color: colors.textPrimary }]}>{item.selling_strategy || 'auction'}</Text>
           </View>
 
           <View style={styles.metaRow}>
-            <Text style={styles.metaLabel}>Auction Ends:</Text>
-            <Text style={styles.metaValue}>
+            <Text style={[styles.metaLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Auction Ends:</Text>
+            <Text style={[styles.metaValue, { color: colors.textPrimary }]}>
               {item.auction_ends_at ? new Date(item.auction_ends_at).toLocaleDateString() : 'N/A'}
             </Text>
           </View>
@@ -240,13 +337,18 @@ export default function ReviewItemScreen() {
       </View>
 
       {/* Info Box */}
-      <View style={styles.infoBox}>
-        <Ionicons name="information-circle-outline" size={20} color="#4A90E2" />
-        <Text style={styles.infoText}>
+      <View style={[styles.infoBox, {
+        backgroundColor: theme === 'dark' ? '#1C2C3E' : '#E3F2FD',
+        borderColor: theme === 'dark' ? '#2C4A6E' : '#90CAF9'
+      }]}>
+        <Ionicons name="information-circle-outline" size={20} color={theme === 'dark' ? '#64B5F6' : '#4A90E2'} />
+        <Text style={[styles.infoText, { color: theme === 'dark' ? '#90CAF9' : '#1976D2' }]}>
           During the review period, your item is not visible to buyers. It will automatically go live after {timeRemaining}.
         </Text>
       </View>
       </ScrollView>
+
+      <GlobalFooter />
     </View>
   );
 }
@@ -278,12 +380,18 @@ const styles = StyleSheet.create({
     color: '#999',
   },
   pageHeader: {
+    position: 'absolute',
+    top: HEADER_MAX_HEIGHT + 34,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 40,
-    paddingBottom: 8,
-    backgroundColor: '#f5f5f5',
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    zIndex: 100,
   },
   backButton: {
     marginRight: 12,

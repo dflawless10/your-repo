@@ -18,6 +18,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import MascotOverlay from '@/app/components/MascotOverlay';
 import type { MascotMood } from '@/types/goatmoods';
+import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
+import GlobalFooter from '@/app/components/GlobalFooter';
 
 type JewelryItem = {
   id: number;
@@ -326,9 +328,10 @@ export default function JewelryBoxScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#0A0118' }}>
+      <EnhancedHeader scrollY={scrollY} username={username} />
       <Animated.ScrollView
         style={styles.container}
-        contentContainerStyle={{ paddingTop: 20, paddingBottom: 100 }}
+        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20, paddingBottom: 20 }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
@@ -760,6 +763,7 @@ export default function JewelryBoxScreen() {
           </View>
         </Modal>
       )}
+
     </View>
   );
 }

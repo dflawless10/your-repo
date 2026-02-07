@@ -1,3 +1,5 @@
+import { API_BASE_URL } from '@/config';
+
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   StyleSheet,
@@ -6,14 +8,14 @@ import {
   ScrollView,
   TouchableOpacity,
   useColorScheme, Dimensions, ActivityIndicator, Modal,
-} from 'react-native';
+ Animated as RNAnimated } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SystemUI from 'expo-system-ui';
 import EnhancedHeader from '@/app/components/EnhancedHeader';
 import { ListedItem } from '@/types/items';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CarouselPreview from '@/app/onboarding/CarouselPreview';
-import { Animated as RNAnimated } from 'react-native';
+
 import Animated from 'react-native-reanimated';
 import {router} from "expo-router";
 import SparkleItemCard from "@/app/components/SparkleItemCard";
@@ -21,6 +23,7 @@ import { useAppDispatch } from 'hooks/reduxHooks';
 import {addToWishlist} from "@/app/wishlistslice";
 import Toast from "react-native-toast-message";
 import { useFocusEffect } from '@react-navigation/native';
+import { useTheme } from '@/app/theme/ThemeContext';
 
 
 
@@ -40,11 +43,11 @@ const goatColors = {
     overlay: 'rgba(255,255,255,0.85)',
   },
   dark: {
-    primary: '#eee',
-    background: '#eee',
-    text: '#d0d0c0',
-    tabBackground: '#333',
-    overlay: 'rgba(255,255,255,0.85)',
+    primary: '#1C1C1E',
+    background: '#0F1213',
+    text: '#ECEDEE',
+    tabBackground: '#1C1C1E',
+    overlay: 'rgba(0,0,0,0.85)',
   },
 };
 
@@ -55,8 +58,8 @@ export default function HomeScreen() {
   const [username, setUsername] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<'Just Listed' | 'Create Auction' | 'Sell Now'>('Just Listed');
   const scrollY = useRef(new RNAnimated.Value(0)).current;
-  const scheme = useColorScheme() ?? 'light';
-  const theme = goatColors[scheme];
+  const { theme: appTheme } = useTheme();
+  const theme = goatColors[appTheme];
   const [items, setItems] = useState<ListedItem[]>([]);
   const [favoritedItems, setFavoritedItems] = useState<Record<number, boolean>>({});
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -76,6 +79,16 @@ export default function HomeScreen() {
 
   const closeModal = () => setShowWelcomeModal(false);
 
+  // Check authentication and redirect if needed
+  useEffect(() => {
+    const checkAuth = async () => {
+      const token = await AsyncStorage.getItem('jwtToken');
+      if (!token) {
+        router.push('/landing');
+      }
+    };
+    checkAuth();
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -85,9 +98,9 @@ export default function HomeScreen() {
         const token = await AsyncStorage.getItem('jwtToken');
         if (!token) {
           setItems([]);
-        setLoading(false);
-        return;
-      }
+          setLoading(false);
+          return;
+        }
 
       const endpoints = {
         'Just Listed': '/api/just-listed',
@@ -119,9 +132,11 @@ export default function HomeScreen() {
         end_time: item.end_time ?? '',
         timeLeft: item.timeLeft,
         rarity: ['common', 'rare', 'legendary'].includes(item.rarity) ? item.rarity : 'common',
-        seller: item.seller || { name: '', avatar: '', id: 0, username: '' },
+        seller: item.seller || { name: '', avatar: '', id: 0, username: '', avg_rating: 0, total_reviews: 0 },
         quantity_available: item.quantity_available || 1,
         watchers: item.watchers || '0',
+        selling_strategy: item.selling_strategy || 'auction',
+        is_must_sell: item.selling_strategy === 'must_sell',
       }));
 
       setItems(mapped);
@@ -177,48 +192,76 @@ export default function HomeScreen() {
     }, [])
   );
 
-  useEffect(() => {
-    (async () => {
-      const token = await AsyncStorage.getItem('jwtToken');
-      if (!token) return;
-      const endpoints = {
-        'Just Listed': '/api/just-listed',
-        'Sell Now': '/api/sell-now',
-        'Create Auction': '/api/my-auctions',
-      } as const;
-      const endpoint = endpoints[activeCategory];
-      try {
-        const res = await fetch(`http://10.0.0.170:5000${endpoint}`, {
-          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        });
-        if (!res.ok) return setItems([]);
-        const data = await res.json();
-        console.log('🐐 Home Screen API Response Sample:', data.items?.[0]); // Debug first item
-        const mapped: ListedItem[] = (data.items ?? []).map((item: any, index: number) => ({
-          id: item.id ?? index,
-          name: item.name,
-          description: item.description || '',
-          price: item.price || 0,
-          highest_bid: item.highest_bid || item.highestBid,
-          photo_url: item.image || item.photo_url || '',
-          bid_count: item.bid_count || item.bidCount,
-          bidCount: item.bidCount || item.bid_count || 0,
-          listed_at: item.listed_at,
-          auction_ends_at: item.auctionEndsAt ?? item.auction_ends_at ?? '',
-          end_time: item.end_time ?? '',
-          timeLeft: item.timeLeft,
-          rarity: ['common', 'rare', 'legendary'].includes(item.rarity) ? item.rarity : 'common',
-          seller: item.seller || { name: '', avatar: '', id: 0, username: '' },
-          quantity_available: item.quantity_available || 1,
-          watchers: item.watchers || '0',
-        }));
-        console.log('🐐 Home Screen Mapped Item Sample:', mapped[0]); // Debug mapped data
-        setItems(mapped);
-      } catch {
+  // Helper: Check if item was listed within last 24 hours
+  const isItemJustListed = useCallback((listedAt: string | undefined): boolean => {
+    if (!listedAt) return false;
+    const listed = new Date(listedAt).getTime();
+    const now = Date.now();
+    const diffHours = (now - listed) / (1000 * 60 * 60);
+    return diffHours <= 24;
+  }, []);
+
+  // Helper: Map API item to ListedItem
+  const mapApiItemToListedItem = useCallback((item: any, index: number): ListedItem => ({
+    id: item.id ?? index,
+    name: item.name,
+    description: item.description || '',
+    price: item.price || 0,
+    highest_bid: item.highest_bid || item.highestBid,
+    photo_url: item.image || item.photo_url || '',
+    bid_count: item.bid_count || item.bidCount,
+    bidCount: item.bidCount || item.bid_count || 0,
+    listed_at: item.listed_at,
+    auction_ends_at: item.auctionEndsAt ?? item.auction_ends_at ?? '',
+    end_time: item.end_time ?? '',
+    timeLeft: item.timeLeft,
+    rarity: ['common', 'rare', 'legendary'].includes(item.rarity) ? item.rarity : 'common',
+    seller: item.seller || { name: '', avatar: '', id: 0, username: '', avg_rating: 0, total_reviews: 0 },
+    quantity_available: item.quantity_available || 1,
+    watchers: item.watchers || '0',
+    selling_strategy: item.selling_strategy || 'auction',
+    is_must_sell: item.selling_strategy === 'must_sell',
+    isJustListed: isItemJustListed(item.listed_at),
+  }), [isItemJustListed]);
+
+  // Fetch items based on active category
+  const fetchCategoryItems = useCallback(async () => {
+    const token = await AsyncStorage.getItem('jwtToken');
+    if (!token) return;
+
+    const endpoints = {
+      'Just Listed': '/api/just-listed',
+      'Sell Now': '/api/sell-now',
+      'Create Auction': '/api/my-auctions',
+    } as const;
+
+    const endpoint = endpoints[activeCategory];
+
+    try {
+      const res = await fetch(`http://10.0.0.170:5000${endpoint}`, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      });
+
+      if (!res.ok) {
         setItems([]);
+        return;
       }
-    })();
-  }, [activeCategory]);
+
+      const data = await res.json();
+      console.log('🐐 Home Screen API Response Sample:', data.items?.[0]);
+
+      const mapped: ListedItem[] = (data.items ?? []).map(mapApiItemToListedItem);
+
+      console.log('🐐 Home Screen Mapped Item Sample:', mapped[0]);
+      setItems(mapped);
+    } catch {
+      setItems([]);
+    }
+  }, [activeCategory, mapApiItemToListedItem]);
+
+  useEffect(() => {
+    fetchCategoryItems();
+  }, [fetchCategoryItems]);
 
   const toggleFavorite = async (id: number) => {
     const updated = {
@@ -281,7 +324,8 @@ export default function HomeScreen() {
 
   const renderHeader = () => (
     <>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categorySlider}>
+      {/* Hidden category buttons - logic kept for CarouselPreview and other screens */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.categorySlider, { display: 'none', height: 0, marginTop: 0, paddingVertical: 0 }]}>
         {(['Just Listed', 'Create Auction', 'Sell Now'] as const).map(label => {
           const isActive = activeCategory === label;
           return (
@@ -307,7 +351,7 @@ export default function HomeScreen() {
           );
         })}
       </ScrollView>
-      <View style={styles.carouselHeaderWrap}>
+      <View style={[styles.carouselHeaderWrap, { marginTop: 110 }]}>
         <CarouselPreview category={activeCategory} />
       </View>
     </>
@@ -400,14 +444,17 @@ export default function HomeScreen() {
       numColumns={2}
       renderItem={({ item }) => (
         <SparkleItemCard
-          item={item}
-          isFavorited={favoritedItems[item.id]}
-          toggleFavorite={toggleFavorite}
-          onAddToCart={() => {}}
-          onWishlistTap={handleWishlistTap}
-          showRemoveButton={false}
-          toggleWishlist={() => {}}
-        />
+  item={item}
+  isFavorited={favoritedItems[item.id]}
+  toggleFavorite={toggleFavorite}
+  onAddToCart={() => {}}
+  onWishlistTap={handleWishlistTap}
+  showRemoveButton={false}
+  toggleWishlist={() => {}}
+  total_reviews={""}
+  id={""}
+/>
+
       )}
       contentContainerStyle={styles.cardList}
       columnWrapperStyle={styles.columnWrapper}
@@ -417,6 +464,10 @@ export default function HomeScreen() {
       )}
       scrollEventThrottle={16}
       ListHeaderComponent={renderHeader}
+      removeClippedSubviews={true}
+      maxToRenderPerBatch={10}
+      windowSize={5}
+      initialNumToRender={10}
       ListEmptyComponent={
         loading ? (
           <ActivityIndicator size="large" color="#FF6B35" style={{ marginTop: 64 }} />

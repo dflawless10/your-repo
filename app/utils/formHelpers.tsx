@@ -2,7 +2,7 @@ import { Alert } from 'react-native';
 import { Router } from 'expo-router';
 
 /**
- * Shows success alert and redirects to item detail page
+ * Shows success alert and redirects to review screen
  * @param itemId - The ID of the newly created item
  * @param router - Expo router instance
  * @param itemType - Type of item (auction, listing, etc.)
@@ -14,11 +14,16 @@ export const handleListingSuccess = (
 ) => {
   Alert.alert(
     'Success! 🎉',
-    `Your ${itemType} is now live!`,
+    `Your ${itemType} will be live in an hour! Want to preview it?`,
     [
       {
-        text: 'View My Listing',
-        onPress: () => router.push(`/(tabs)/item/${itemId}` as any),
+        text: 'Preview Now',
+        onPress: () => router.push(`/seller/review-item/${itemId}` as any),
+      },
+      {
+        text: 'Later',
+        style: 'cancel',
+        onPress: () => router.push('/(tabs)/MyAuctionScreen' as any),
       },
     ],
     { cancelable: false }

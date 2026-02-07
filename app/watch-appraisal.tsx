@@ -8,14 +8,14 @@ import WatchListingCard from '@/components/WatchListingCard';
 import AutocompleteInput from '@/components/AutocompleteInput';
 import { Picker } from "@react-native-picker/picker";
 import CheckBox, {Checkbox} from 'expo-checkbox';
-import useColorScheme from 'hooks/useColorScheme';
 import watchPricesData from '@/assets/data/watchPrices.json';
 import watchBrandsData from '@/assets/data/watchBrands.json';
 import { API_URL } from '@/constants/api';
 import { validateContentQuick } from 'app/utils/contentModeration';
 import GlobalFooter from "@/app/components/GlobalFooter";
+import { useTheme } from '@/app/theme/ThemeContext';
 
-type Country = 'switzerland' | 'germany' | 'japan' | 'usa' | 'france' | 'italy';
+type Country = 'switzerland' | 'germany' | 'japan' | 'usa' | 'france' | 'italy' | 'uk' | 'china' | 'russia' | 'spain' | 'sweden' | 'netherlands' | 'belgium' | 'denmark' | 'austria' | 'czech' | 'poland' | 'canada' | 'mexico' | 'brazil' | 'argentina' | 'australia' | 'southkorea' | 'singapore' | 'hongkong' | 'taiwan' | 'india' | 'uae' | 'southafrica';
 type Warranty = 'none' | 'factory' | 'aftermarket';
 type ClaspType = 'deployable' | 'folding' | 'velcro';
 type CaseShape = 'round' | 'square' | 'rectangle' | 'cushion' | 'tonneau' | 'oval';
@@ -36,7 +36,14 @@ buyItNowPrice: string;
 
 
 type Condition = 'poor' | 'fair' | 'good' | 'excellent';
-type CaseMaterial = '' | '23ktGold' | '22ktGold' | '18ktGold' | '14ktGold' | '10ktGold' | 'whiteGold' | 'yellowGold' | 'roseGold' | 'platinum' | 'silver' | 'titanium' | 'plastic';
+type CaseMetal = '' | 'gold' | 'platinum' | 'silver' | 'stainlessSteel' | 'titanium' | 'metal';
+type CaseGoldKarat = '' | '22kt' | '20kt' | '18kt' | '14kt' | '10kt' | '8kt';
+type CaseMaterial = '' | 'yellowGold' | 'whiteGold' | 'roseGold' | 'plastic' | 'rubber' | 'carbonFiber' | 'ceramic';
+type BandMetal = '' | 'platinum' | 'gold' | 'silver' | 'stainlessSteel' | 'stainlessGold' | 'goldPlatinum' | 'titanium' | 'ceramic' | 'metal' | 'plastic' | 'rubber' | 'leather' | 'fabric' | 'nylon' | 'carbonFiber';
+type BandGoldColor = '' | 'yellow' | 'rose' | 'white' | 'pink' | 'blackHills' | 'mixed';
+type BandGoldKarat = '' | '22kt' | '20kt' | '18kt' | '14kt' | '10kt' | '8kt' | '5kt';
+type BandLeatherType = '' | 'alligator' | 'buffalo' | 'cow' | 'goat' | 'ostrich' | 'sheep' | 'stingray';
+type BandStyle = '' | 'oyster' | 'hLink' | 'jubilee' | 'milanese' | 'beadsOfRice' | 'president' | 'integrated' | 'expansion' | 'butterflyClasp' | 'nato' | 'perlon' | 'bund';
 type BandMaterial = '' | 'gold' | 'platinum' | 'metal' | 'rubber' | 'silver' | 'fabric' | 'leather';
 type MovementType = '' | 'automatic' | 'winder' | 'battery' | 'solar' | 'tourbillon' | 'subSeconds';
 type Rarity = '' | 'common' | 'uncommon' | 'rare' | 'veryRare' | 'extremelyRare';
@@ -69,10 +76,12 @@ export function useAutocompleteField<T extends string>(initialOptions: { label: 
 
 export default function WatchAppraisalScreen() {
   const router = useRouter();
+  const { theme, colors } = useTheme();
   const scrollY = useRef(new Animated.Value(0)).current;
+  const headerOpacity = useRef(new Animated.Value(0)).current;
+  const headerScale = useRef(new Animated.Value(1)).current;
 
-   const scheme = useColorScheme();   // ✅ always called
-  const styles = themedStyles(scheme);
+  const styles = themedStyles(theme);
 
 
   // State
@@ -87,7 +96,14 @@ export default function WatchAppraisalScreen() {
   const [modelNumber, setModelNumber] = useState('');
   const [condition, setCondition] = useState<Condition>('good');
   const [isNew, setIsNew] = useState(true);
+  const [caseMetal, setCaseMetal] = useState<CaseMetal>('');
+  const [caseGoldKarat, setCaseGoldKarat] = useState<CaseGoldKarat>('');
   const [caseMaterial, setCaseMaterial] = useState<CaseMaterial>('');
+  const [bandMetal, setBandMetal] = useState<BandMetal>('');
+  const [bandGoldColor, setBandGoldColor] = useState<BandGoldColor>('');
+  const [bandGoldKarat, setBandGoldKarat] = useState<BandGoldKarat>('');
+  const [bandLeatherType, setBandLeatherType] = useState<BandLeatherType>('');
+  const [bandStyle, setBandStyle] = useState<string>(''); // Changed to string for free-text input
   const [bandMaterial, setBandMaterial] = useState<BandMaterial>('');
   const [movementType, setMovementType] = useState<MovementType>('');
   const [rarity, setRarity] = useState<Rarity>('');
@@ -120,6 +136,29 @@ export default function WatchAppraisalScreen() {
     { label: 'USA', value: 'usa' as Country },
     { label: 'France', value: 'france' as Country },
     { label: 'Italy', value: 'italy' as Country },
+    { label: 'United Kingdom', value: 'uk' as Country },
+    { label: 'China', value: 'china' as Country },
+    { label: 'Russia', value: 'russia' as Country },
+    { label: 'Spain', value: 'spain' as Country },
+    { label: 'Sweden', value: 'sweden' as Country },
+    { label: 'Netherlands', value: 'netherlands' as Country },
+    { label: 'Belgium', value: 'belgium' as Country },
+    { label: 'Denmark', value: 'denmark' as Country },
+    { label: 'Austria', value: 'austria' as Country },
+    { label: 'Czech Republic', value: 'czech' as Country },
+    { label: 'Poland', value: 'poland' as Country },
+    { label: 'Canada', value: 'canada' as Country },
+    { label: 'Mexico', value: 'mexico' as Country },
+    { label: 'Brazil', value: 'brazil' as Country },
+    { label: 'Argentina', value: 'argentina' as Country },
+    { label: 'Australia', value: 'australia' as Country },
+    { label: 'South Korea', value: 'southkorea' as Country },
+    { label: 'Singapore', value: 'singapore' as Country },
+    { label: 'Hong Kong', value: 'hongkong' as Country },
+    { label: 'Taiwan', value: 'taiwan' as Country },
+    { label: 'India', value: 'india' as Country },
+    { label: 'UAE', value: 'uae' as Country },
+    { label: 'South Africa', value: 'southafrica' as Country },
   ],
   '' as Country
 );
@@ -140,7 +179,6 @@ const warrantyField = useAutocompleteField<Warranty>(
   const [bandSize, setBandSize] = useState('');
   const [bandLength, setBandLength] = useState('');
   const [bandLink, setBandLink] = useState('');
-  const [bandStyle, setBandStyle] = useState('');
   const [bandSizeInches, setBandSizeInches] = useState('');
   const [lugWidth, setLugWidth] = useState('');
   const [buckleWidth, setBuckleWidth] = useState('');
@@ -165,6 +203,33 @@ const warrantyField = useAutocompleteField<Warranty>(
 
 
 
+  // Fade in header title and arrow
+  useEffect(() => {
+    setTimeout(() => {
+      Animated.timing(headerOpacity, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+      }).start(() => {
+        // After fade-in completes, start pulsing animation
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(headerScale, {
+              toValue: 1.05,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(headerScale, {
+              toValue: 1,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
+      });
+    }, 500);
+  }, []);
+
   // Fetch brands on mount
   useEffect(() => {
     fetchBrands();
@@ -188,7 +253,7 @@ const warrantyField = useAutocompleteField<Warranty>(
       setBrands(data);
     } catch (error) {
       // Fallback to local JSON
-      console.log('📦 Using local brand data');
+      console.log('📦 Using local brand data due to error:', error);
       const localBrands = Object.keys(watchBrandsData).sort();
       setBrands(localBrands);
     }
@@ -207,7 +272,7 @@ const warrantyField = useAutocompleteField<Warranty>(
       setSelectedModelIndex(0);
     } catch (error) {
       // Fallback to local JSON
-      console.log('📦 Using local model data for', brand);
+      console.log('📦 Using local model data for', brand, 'due to error:', error);
       const localModels = (watchBrandsData as any)[brand] || [];
       setModels(localModels);
       setFilteredModels(localModels);
@@ -238,13 +303,13 @@ const warrantyField = useAutocompleteField<Warranty>(
     try {
       const brandModeration = validateContentQuick(brandName, 'Brand name');
       if (!brandModeration.isValid) {
-        alert(brandModeration.errorMessage!);
+        alert(brandModeration.errorMessage);
         return;
       }
 
       const modelModeration = validateContentQuick(modelName, 'Model name');
       if (!modelModeration.isValid) {
-        alert(modelModeration.errorMessage!);
+        alert(modelModeration.errorMessage);
         return;
       }
     } catch (error) {
@@ -594,20 +659,20 @@ const toggleFeature = (feature: string) => {
     <View style={{ flex: 1 }}>
       <EnhancedHeader scrollY={scrollY} />
 
-      <View style={styles.headerTitleContainer}>
+      <Animated.View style={[styles.headerTitleContainer, { opacity: headerOpacity, transform: [{ scale: headerScale }] }]}>
         <View style={styles.titleWithArrow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
             <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
           </TouchableOpacity>
           <View>
-            <Text style={styles.headerTitleText}>Watch Price Calculator</Text>
-            <Text style={styles.headerSubtitle}>Calculate your watch&apos;s market value</Text>
+            <Text style={[styles.headerTitleText, { color: colors.textPrimary }]}>Watch Price Calculator</Text>
+            <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>Calculate your watch&apos;s market value</Text>
           </View>
         </View>
-      </View>
+      </Animated.View>
 
       <Animated.ScrollView
-        style={[styles.container, { backgroundColor: '#fff' }]}
+        style={[styles.container, { backgroundColor: colors.background }]}
         contentContainerStyle={styles.contentContainer}
         keyboardShouldPersistTaps="handled"
         onScroll={Animated.event(
@@ -617,18 +682,16 @@ const toggleFeature = (feature: string) => {
         scrollEventThrottle={16}
       >
         <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Basic Information</Text>
+        <Text style={[styles.sectionTitle, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>Basic Information</Text>
 
         <AutocompleteInput
   label="Country of Origin"
   value={countryField.value}
   onValueChange={(v: string) => countryField.setValue(v as Country)}
   options={countryField.options}
-  allowCustom={true}
+  allowCustom={false}
+  editable={false}
   fieldName="country"
-  onAddCustom={(value, label) =>
-    countryField.addCustomOption('country', value as Country, label)
-  }
 />
 
 
@@ -646,10 +709,11 @@ const toggleFeature = (feature: string) => {
 
 
         {/* Brand Name */}
-        <Text style={styles.label}>Brand Name</Text>
+        <Text style={[styles.label, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>Brand Name</Text>
         <View style={styles.inputWrapper}>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
+            placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
             placeholder="e.g., Rolex"
             value={brandName}
             onChangeText={handleBrandChange}
@@ -686,8 +750,8 @@ const toggleFeature = (feature: string) => {
 
         {/* Dropdown for brands */}
         {filteredBrands.length > 0 && (
-          <View style={styles.dropdown}>
-            {filteredBrands.slice(0, 5).map((brand, index) => (
+          <ScrollView style={[styles.dropdown, { maxHeight: 200 }]} nestedScrollEnabled>
+            {filteredBrands.slice(0, 8).map((brand, index) => (
               <TouchableOpacity
                 key={brand}
                 onPress={() => {
@@ -701,17 +765,18 @@ const toggleFeature = (feature: string) => {
                 style={[styles.dropdownItem, index === selectedBrandIndex && styles.highlightedItem]}
                 activeOpacity={0.7}
               >
-                <Text>{brand}</Text>
+                <Text style={styles.dropdownText} numberOfLines={1} ellipsizeMode="tail">{brand}</Text>
               </TouchableOpacity>
             ))}
-          </View>
+          </ScrollView>
         )}
 
         {/* Model Name */}
-        <Text style={styles.label}>Model Name</Text>
+        <Text style={[styles.label, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>Model Name</Text>
         <View style={styles.inputWrapper}>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
+            placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
             placeholder="e.g., Daytona"
             value={modelName}
             onChangeText={handleModelChange}
@@ -748,8 +813,8 @@ const toggleFeature = (feature: string) => {
 
         {/* Dropdown for models */}
         {filteredModels.length > 0 && (
-          <View style={styles.dropdown}>
-            {filteredModels.slice(0, 5).map((model, index) => (
+          <ScrollView style={[styles.dropdown, { maxHeight: 200 }]} nestedScrollEnabled>
+            {filteredModels.slice(0, 8).map((model, index) => (
               <TouchableOpacity
                 key={model}
                 onPress={() => {
@@ -763,25 +828,27 @@ const toggleFeature = (feature: string) => {
                 style={[styles.dropdownItem, index === selectedModelIndex && styles.highlightedItem]}
                 activeOpacity={0.7}
               >
-                <Text>{model}</Text>
+                <Text style={styles.dropdownText} numberOfLines={1} ellipsizeMode="tail">{model}</Text>
               </TouchableOpacity>
             ))}
-          </View>
+          </ScrollView>
         )}
 
         {/* Model Number */}
-        <Text style={styles.label}>Model Number</Text>
+        <Text style={[styles.label, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>Model Number</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
+          placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
           placeholder="e.g., 116500LN"
           value={modelNumber}
           onChangeText={setModelNumber}
         />
 
         {/* Year */}
-        <Text style={styles.label}>Year of Manufacture</Text>
+        <Text style={[styles.label, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>Year of Manufacture</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
+          placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
           placeholder="e.g., 2020"
           keyboardType="number-pad"
           value={yearOfManufacture}
@@ -790,7 +857,7 @@ const toggleFeature = (feature: string) => {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Condition & Status</Text>
+        <Text style={[styles.sectionTitle, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>Condition & Status</Text>
 
         <AutocompleteInput
           label="Condition"
@@ -806,7 +873,7 @@ const toggleFeature = (feature: string) => {
         />
 
         <View style={styles.toggleRow}>
-          <Text style={styles.label}>New/Used</Text>
+          <Text style={[styles.label, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>New/Used</Text>
           <View style={styles.toggleButtons}>
             <TouchableOpacity
               style={[styles.toggleButton, isNew && styles.toggleButtonActive]}
@@ -825,135 +892,243 @@ const toggleFeature = (feature: string) => {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Materials</Text>
+        <Text style={[styles.sectionTitle, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>Materials</Text>
 
 
 
 
 
           <AutocompleteInput
-            label="Case Material"
+            label="Case Metal"
+            value={caseMetal}
+            onValueChange={(v) => setCaseMetal(v as CaseMetal)}
+            fieldName="caseMetal"
+            options={[
+              {label: 'Select case metal', value: ''},
+              {label: 'Gold', value: 'gold'},
+              {label: 'Platinum', value: 'platinum'},
+              {label: 'Silver', value: 'silver'},
+              {label: 'Stainless Steel', value: 'stainlessSteel'},
+              {label: 'Titanium', value: 'titanium'},
+              {label: 'Metal (Other)', value: 'metal'},
+            ]}
+          />
+
+          {caseMetal === 'gold' && (
+            <AutocompleteInput
+              label="Gold Karat"
+              value={caseGoldKarat}
+              onValueChange={(v) => setCaseGoldKarat(v as CaseGoldKarat)}
+              fieldName="caseGoldKarat"
+              options={[
+                {label: 'Select karat', value: ''},
+                {label: '22 Karat', value: '22kt'},
+                {label: '20 Karat', value: '20kt'},
+                {label: '18 Karat', value: '18kt'},
+                {label: '14 Karat', value: '14kt'},
+                {label: '10 Karat', value: '10kt'},
+                {label: '8 Karat', value: '8kt'},
+              ]}
+            />
+          )}
+
+          <AutocompleteInput
+            label="Case Material Finish"
             value={caseMaterial}
             onValueChange={(v) => setCaseMaterial(v as CaseMaterial)}
             fieldName="caseMaterial"
             options={[
-              {label: 'Select case material', value: ''},
-              {label: 'Platinum', value: 'platinum'},
+              {label: 'Select finish/material', value: ''},
               {label: 'Yellow Gold', value: 'yellowGold'},
-               {label: 'Rose Gold', value: 'roseGold'},
-               {label: 'White Gold', value: 'whiteGold'},
-               {label: 'Silver', value: 'silver'},
-              {label: 'Titanium', value: 'titanium'},
-               {label: 'Stainless steel', value: 'Stainless Steel'},
-              {label: '23 kt Gold', value: '23ktGold'},
-              {label: '22 kt Gold', value: '22ktGold'},
-              {label: '18 kt Gold', value: '18ktGold'},
-              {label: '14 kt Gold', value: '14ktGold'},
-              {label: '10 kt Gold', value: '10ktGold'},
+              {label: 'White Gold', value: 'whiteGold'},
+              {label: 'Rose Gold', value: 'roseGold'},
+              {label: 'Ceramic', value: 'ceramic'},
+              {label: 'Carbon Fiber', value: 'carbonFiber'},
+              {label: 'Plastic', value: 'plastic'},
+              {label: 'Rubber', value: 'rubber'},
             ]}
           />
 
          <AutocompleteInput
   label="Band Material"
-  value={bandMaterial}
-  onValueChange={(v) => setBandMaterial(v as BandMaterial)}
-  fieldName="bandMaterial"
+  value={bandMetal}
+  onValueChange={(v) => {
+    setBandMetal(v as BandMetal);
+    // Reset sub-selections when material changes
+    if (v !== 'gold') {
+      setBandGoldColor('');
+      setBandGoldKarat('');
+    }
+    if (v !== 'leather') {
+      setBandLeatherType('');
+    }
+  }}
+  fieldName="bandMetal"
   options={[
     { label: 'Select band material', value: '' },
-    { label: 'Platinum', value: 'platinum' },
-    { label: 'Gold', value: 'gold' },
-    { label: '23 kt Gold', value: '23ktGold' },
-    { label: '22 kt Gold', value: '22ktGold' },
-    { label: '18 kt Gold', value: '18ktGold' },
-    { label: '14 kt Gold', value: '14ktGold' },
-    { label: '10 kt Gold', value: '10ktGold' },
-    { label: 'Silver', value: 'silver' },
-    { label: 'Stainless Steel', value: 'stainlessSteel' },
-    { label: 'Metal', value: 'metal' },
-    { label: 'Aluminum', value: 'aluminum' },
-    { label: 'Titanium', value: 'titanium' },
+    { label: 'Carbon Fiber', value: 'carbonFiber' },
     { label: 'Ceramic', value: 'ceramic' },
-    { label: 'Copper', value: 'copper' },
-    { label: 'Rubber', value: 'rubber' },
     { label: 'Fabric', value: 'fabric' },
+    { label: 'Gold', value: 'gold' },
+    { label: 'Gold & Platinum', value: 'goldPlatinum' },
     { label: 'Leather', value: 'leather' },
+    { label: 'Metal', value: 'metal' },
+    { label: 'Nylon', value: 'nylon' },
+    { label: 'Plastic', value: 'plastic' },
+    { label: 'Platinum', value: 'platinum' },
+    { label: 'Rubber', value: 'rubber' },
+    { label: 'Silver', value: 'silver' },
+    { label: 'Stainless & Gold', value: 'stainlessGold' },
+    { label: 'Stainless Steel', value: 'stainlessSteel' },
+    { label: 'Titanium', value: 'titanium' },
   ]}
 />
 
-  <Text style={styles.sectionTitle}>Band Details</Text>
+{bandMetal === 'gold' && (
+  <>
+    <AutocompleteInput
+      label="Gold Color"
+      value={bandGoldColor}
+      onValueChange={(v) => {
+        setBandGoldColor(v as BandGoldColor);
+        // Reset karat when color changes
+        if (!v) setBandGoldKarat('');
+      }}
+      fieldName="bandGoldColor"
+      options={[
+        { label: 'Select gold color', value: '' },
+        { label: 'Black Hills', value: 'blackHills' },
+        { label: 'Mixed', value: 'mixed' },
+        { label: 'Pink', value: 'pink' },
+        { label: 'Rose', value: 'rose' },
+        { label: 'White', value: 'white' },
+        { label: 'Yellow', value: 'yellow' },
+      ]}
+    />
 
-  <Text style={styles.label}>Band Length</Text>
+    {bandGoldColor && (
+      <AutocompleteInput
+        label="Gold Karat"
+        value={bandGoldKarat}
+        onValueChange={(v) => setBandGoldKarat(v as BandGoldKarat)}
+        fieldName="bandGoldKarat"
+        options={[
+          { label: 'Select karat', value: '' },
+          { label: '5 Karat', value: '5kt' },
+          { label: '8 Karat', value: '8kt' },
+          { label: '10 Karat', value: '10kt' },
+          { label: '14 Karat', value: '14kt' },
+          { label: '18 Karat', value: '18kt' },
+          { label: '20 Karat', value: '20kt' },
+          { label: '22 Karat', value: '22kt' },
+        ]}
+      />
+    )}
+  </>
+)}
+
+{bandMetal === 'leather' && (
+  <AutocompleteInput
+    label="Leather Type"
+    value={bandLeatherType}
+    onValueChange={(v) => setBandLeatherType(v as BandLeatherType)}
+    fieldName="bandLeatherType"
+    options={[
+      { label: 'Select leather type', value: '' },
+      { label: 'Alligator', value: 'alligator' },
+      { label: 'Buffalo', value: 'buffalo' },
+      { label: 'Cow', value: 'cow' },
+      { label: 'Goat', value: 'goat' },
+      { label: 'Ostrich', value: 'ostrich' },
+      { label: 'Sheep', value: 'sheep' },
+      { label: 'Stingray', value: 'stingray' },
+    ]}
+  />
+)}
+
+  <Text style={[styles.sectionTitle, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>Band Details</Text>
+
+  <Text style={[styles.label, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>Band Length</Text>
   <TextInput
-    style={styles.input}
+    style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
+    placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
     placeholder="e.g., Standard, Long"
     value={bandLength}
     onChangeText={setBandLength}
   />
 
-  <Text style={styles.label}>Band Link</Text>
+  <Text style={[styles.label, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>Band Link</Text>
   <TextInput
-    style={styles.input}
+    style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
+    placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
     placeholder="e.g., Oyster, Jubilee, President"
     value={bandLink}
     onChangeText={setBandLink}
   />
 
-  <Text style={styles.label}>Band Size (mm)</Text>
+  <Text style={[styles.label, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>Band Size (mm)</Text>
   <TextInput
-    style={styles.input}
+    style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
+    placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
     placeholder="e.g., 20"
     keyboardType="decimal-pad"
     value={bandSize}
     onChangeText={setBandSize}
   />
 
-  <Text style={styles.label}>Band Size (inches)</Text>
+  <Text style={[styles.label, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>Band Size (inches)</Text>
   <TextInput
-    style={styles.input}
+    style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
+    placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
     placeholder="e.g., 8"
     keyboardType="decimal-pad"
     value={bandSizeInches}
     onChangeText={setBandSizeInches}
   />
 
-  <Text style={styles.label}>Band Style</Text>
+  <Text style={[styles.label, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>Band Style</Text>
   <TextInput
-    style={styles.input}
+    style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
+    placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
     placeholder="e.g., Three-piece link, Mesh"
     value={bandStyle}
     onChangeText={setBandStyle}
   />
 
-  <Text style={styles.label}>Lug Width (mm)</Text>
+  <Text style={[styles.label, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>Lug Width (mm)</Text>
   <TextInput
-    style={styles.input}
+    style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
+    placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
     placeholder="e.g., 20"
     keyboardType="decimal-pad"
     value={lugWidth}
     onChangeText={setLugWidth}
   />
 
-  <Text style={styles.label}>Buckle Width (mm)</Text>
+  <Text style={[styles.label, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>Buckle Width (mm)</Text>
   <TextInput
-    style={styles.input}
+    style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
+    placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
     placeholder="e.g., 18"
     keyboardType="decimal-pad"
     value={buckleWidth}
     onChangeText={setBuckleWidth}
   />
 
-  <Text style={styles.label}>Lug to Lug Length (mm)</Text>
+  <Text style={[styles.label, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>Lug to Lug Length (mm)</Text>
   <TextInput
-    style={styles.input}
+    style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
+    placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
     placeholder="e.g., 48"
     keyboardType="decimal-pad"
     value={lugToLugLength}
     onChangeText={setLugToLugLength}
   />
 
-  <Text style={styles.label}>Band Color</Text>
+  <Text style={[styles.label, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>Band Color</Text>
   <TextInput
-    style={styles.input}
+    style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
+    placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
     placeholder="e.g., Black, Silver, Blue"
     value={bandColor}
     onChangeText={setBandColor}
@@ -961,7 +1136,7 @@ const toggleFeature = (feature: string) => {
 </View>
 
 <View style={styles.section}>
-  <Text style={styles.sectionTitle}>Case Details</Text>
+  <Text style={[styles.sectionTitle, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>Case Details</Text>
 
   <AutocompleteInput
     label="Case Back Material"
@@ -979,9 +1154,10 @@ const toggleFeature = (feature: string) => {
     ]}
   />
 
-  <Text style={styles.label}>Serial Number</Text>
+  <Text style={[styles.label, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>Serial Number</Text>
   <TextInput
-    style={styles.input}
+    style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
+    placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
     placeholder="Enter serial number"
     value={serialNumber}
     onChangeText={(text) => {
@@ -991,14 +1167,14 @@ const toggleFeature = (feature: string) => {
     secureTextEntry={serialNumber.length > 8}
   />
   {serialNumber.length > 8 && (
-    <Text style={styles.label}>
+    <Text style={[styles.label, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>
       Serial (masked): {serialNumber.substring(0, serialNumber.length - 8)}{'*'.repeat(8)}
     </Text>
   )}
 </View>
 
 <View style={styles.section}>
-  <Text style={styles.sectionTitle}>Technical Specifications</Text>
+  <Text style={[styles.sectionTitle, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>Technical Specifications</Text>
 
   <AutocompleteInput
     label="Movement Type"
@@ -1021,7 +1197,7 @@ const toggleFeature = (feature: string) => {
     ]}
   />
 
-  <Text style={styles.fieldLabel}>🧠 Watch Features</Text>
+  <Text style={[styles.fieldLabel, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>🧠 Watch Features</Text>
   {[
     'Power Reserve',
     'Quartz',
@@ -1039,61 +1215,63 @@ const toggleFeature = (feature: string) => {
     </View>
   ))}
 
-  <Text style={styles.fieldLabel}>🔗 Clasp Type</Text>
+  <Text style={[styles.fieldLabel, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>🔗 Clasp Type</Text>
   <Picker
     selectedValue={claspType}
     onValueChange={setClaspType}
-    style={styles.picker}
+    style={[styles.picker, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
   >
-    <Picker.Item label="Select clasp type" value="" />
-    <Picker.Item label="Deployable Clasp" value="deployable" />
-    <Picker.Item label="Folding Clasp" value="folding" />
-    <Picker.Item label="Velcro" value="velcro" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Select clasp type" value="" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Deployable Clasp" value="deployable" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Folding Clasp" value="folding" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Velcro" value="velcro" />
   </Picker>
 
-  <Text style={styles.fieldLabel}>📏 Watch Size (mm)</Text>
+  <Text style={[styles.fieldLabel, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>📏 Watch Size (mm)</Text>
   <TextInput
-    style={styles.input}
+    style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
+    placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
     placeholder="e.g., 40, 42, 44"
     keyboardType="decimal-pad"
     value={watchSize}
     onChangeText={setWatchSize}
   />
 
-  <Text style={styles.fieldLabel}>⬛ Case Shape</Text>
+  <Text style={[styles.fieldLabel, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>⬛ Case Shape</Text>
   <Picker
     selectedValue={caseShape}
     onValueChange={setCaseShape}
-    style={styles.picker}
+    style={[styles.picker, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
   >
-    <Picker.Item label="Select case shape" value="" />
-    <Picker.Item label="Round" value="round" />
-    <Picker.Item label="Square" value="square" />
-    <Picker.Item label="Rectangle" value="rectangle" />
-    <Picker.Item label="Cushion" value="cushion" />
-    <Picker.Item label="Tonneau" value="tonneau" />
-    <Picker.Item label="Oval" value="oval" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Select case shape" value="" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Round" value="round" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Square" value="square" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Rectangle" value="rectangle" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Cushion" value="cushion" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Tonneau" value="tonneau" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Oval" value="oval" />
   </Picker>
 
-  <Text style={styles.fieldLabel}>📐 Case Thickness (mm)</Text>
+  <Text style={[styles.fieldLabel, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>📐 Case Thickness (mm)</Text>
   <TextInput
-    style={styles.input}
+    style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
+    placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
     placeholder="e.g., 12"
     keyboardType="decimal-pad"
     value={caseThickness}
     onChangeText={setCaseThickness}
   />
 
-  <Text style={styles.fieldLabel}>👤 Gender</Text>
+  <Text style={[styles.fieldLabel, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>👤 Gender</Text>
   <Picker
     selectedValue={gender}
     onValueChange={setGender}
-    style={styles.picker}
+    style={[styles.picker, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
   >
-    <Picker.Item label="Select gender" value="" />
-    <Picker.Item label="Men's" value="mens" />
-    <Picker.Item label="Women's" value="womens" />
-    <Picker.Item label="Unisex" value="unisex" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Select gender" value="" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Men's" value="mens" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Women's" value="womens" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Unisex" value="unisex" />
   </Picker>
 
   <View style={styles.skeletalGroup}>
@@ -1109,7 +1287,7 @@ const toggleFeature = (feature: string) => {
   color={value ? '#FF6B35' : undefined}
 />
 
-      <Text style={styles.checkboxLabel}>{label}</Text>
+      <Text style={[styles.checkboxLabel, { color: colors.textPrimary }]}>{label}</Text>
     </View>
   ))}
 </View>
@@ -1146,42 +1324,45 @@ const toggleFeature = (feature: string) => {
 </View>
 
 <View style={styles.section}>
-  <Text style={styles.sectionTitle}>Bezel Details</Text>
+  <Text style={[styles.sectionTitle, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>Bezel Details</Text>
 
-  <Text style={styles.label}>Bezel Type</Text>
+  <Text style={[styles.label, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>Bezel Type</Text>
   <TextInput
-    style={styles.input}
+    style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
+    placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
     placeholder="e.g., Fixed, Rotating, Unidirectional"
     value={bezelType}
     onChangeText={setBezelType}
   />
 
-  <Text style={styles.label}>Bezel Style</Text>
+  <Text style={[styles.label, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>Bezel Style</Text>
   <TextInput
-    style={styles.input}
+    style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
+    placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
     placeholder="e.g., Fluted, Smooth, Diamond-Set"
     value={bezelStyle}
     onChangeText={setBezelStyle}
   />
 
-  <Text style={styles.fieldLabel}>💎 Bezel Material</Text>
+  <Text style={[styles.fieldLabel, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>💎 Bezel Material</Text>
   <Picker
     selectedValue={bezelMaterial}
     onValueChange={setBezelMaterial}
-    style={styles.picker}
+    style={[styles.picker, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
   >
-    <Picker.Item label="Select bezel material" value="" />
-    <Picker.Item label="Ceramic" value="ceramic" />
-    <Picker.Item label="Stainless Steel" value="stainlessSteel" />
-    <Picker.Item label="Gold" value="gold" />
-    <Picker.Item label="Platinum" value="platinum" />
-    <Picker.Item label="Aluminum" value="aluminum" />
-    <Picker.Item label="Titanium" value="titanium" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Select bezel material" value="" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Ceramic" value="ceramic" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Stainless Steel" value="stainlessSteel" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Gold" value="gold" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Platinum" value="platinum" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Aluminum" value="aluminum" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Titanium" value="titanium" />
   </Picker>
 
-  <Text style={styles.label}>Bezel Weight (carats)</Text>
+  <Text style={[styles.label, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>Bezel Weight (carats)</Text>
   <TextInput
-    style={styles.input}
+    style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
+    placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
     placeholder="e.g., 2.5 (for diamond/gemstone bezels)"
     keyboardType="decimal-pad"
     value={bezelWeight}
@@ -1194,7 +1375,7 @@ const toggleFeature = (feature: string) => {
       onValueChange={setAftermarketBezel}
       color={aftermarketBezel ? '#FF6B35' : undefined}
     />
-    <Text style={styles.checkboxLabel}>Aftermarket Bezel</Text>
+    <Text style={[styles.checkboxLabel, { color: colors.textPrimary }]}>Aftermarket Bezel</Text>
   </View>
 
   <View style={styles.checkboxRow}>
@@ -1203,62 +1384,65 @@ const toggleFeature = (feature: string) => {
       onValueChange={setOriginalBezel}
       color={originalBezel ? '#FF6B35' : undefined}
     />
-    <Text style={styles.checkboxLabel}>Original Bezel</Text>
+    <Text style={[styles.checkboxLabel, { color: colors.textPrimary }]}>Original Bezel</Text>
   </View>
 </View>
 
 <View style={styles.section}>
-  <Text style={styles.sectionTitle}>Dial Details</Text>
+  <Text style={[styles.sectionTitle, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>Dial Details</Text>
 
-  <Text style={styles.label}>Dial Style</Text>
+  <Text style={[styles.label, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>Dial Style</Text>
   <TextInput
-    style={styles.input}
+    style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
+    placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
     placeholder="e.g., Sunburst, Textured, Guilloche"
     value={dialStyle}
     onChangeText={setDialStyle}
   />
 
-  <Text style={styles.label}>Dial Color</Text>
+  <Text style={[styles.label, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>Dial Color</Text>
   <TextInput
-    style={styles.input}
+    style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
+    placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
     placeholder="e.g., Black, White, Blue, Champagne"
     value={dialColor}
     onChangeText={setDialColor}
   />
 
-  <Text style={styles.label}>Dial Material</Text>
+  <Text style={[styles.label, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>Dial Material</Text>
   <TextInput
-    style={styles.input}
+    style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
+    placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
     placeholder="e.g., Metal, Mother of Pearl, Carbon Fiber"
     value={dialMaterial}
     onChangeText={setDialMaterial}
   />
 
-  <Text style={styles.fieldLabel}>⏰ Dial Hour Markers</Text>
+  <Text style={[styles.fieldLabel, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>⏰ Dial Hour Markers</Text>
   <Picker
     selectedValue={dialHourMarkers}
     onValueChange={setDialHourMarkers}
-    style={styles.picker}
+    style={[styles.picker, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
   >
-    <Picker.Item label="Select hour markers" value="" />
-    <Picker.Item label="Arabic Numerals" value="arabic" />
-    <Picker.Item label="Roman Numerals" value="roman" />
-    <Picker.Item label="Baton/Stick" value="baton" />
-    <Picker.Item label="Diamond" value="diamond" />
-    <Picker.Item label="Mixed" value="mixed" />
-    <Picker.Item label="None" value="none" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Select hour markers" value="" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Arabic Numerals" value="arabic" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Roman Numerals" value="roman" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Baton/Stick" value="baton" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Diamond" value="diamond" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Mixed" value="mixed" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="None" value="none" />
   </Picker>
 
-  <Text style={styles.fieldLabel}>📟 Dial/Face Type</Text>
+  <Text style={[styles.fieldLabel, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>📟 Dial/Face Type</Text>
   <Picker
     selectedValue={dialType}
     onValueChange={setDialType}
-    style={styles.picker}
+    style={[styles.picker, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
   >
-    <Picker.Item label="Select dial type" value="" />
-    <Picker.Item label="Analog" value="analog" />
-    <Picker.Item label="Digital" value="digital" />
-    <Picker.Item label="Analog-Digital" value="analogDigital" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Select dial type" value="" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Analog" value="analog" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Digital" value="digital" />
+    <Picker.Item color={theme === 'dark' ? '#f0f0f0' : '#000'} label="Analog-Digital" value="analogDigital" />
   </Picker>
 
   <View style={styles.checkboxRow}>
@@ -1267,7 +1451,7 @@ const toggleFeature = (feature: string) => {
       onValueChange={setAftermarketDial}
       color={aftermarketDial ? '#FF6B35' : undefined}
     />
-    <Text style={styles.checkboxLabel}>Aftermarket Dial</Text>
+    <Text style={[styles.checkboxLabel, { color: colors.textPrimary }]}>Aftermarket Dial</Text>
   </View>
 
   <View style={styles.checkboxRow}>
@@ -1276,7 +1460,7 @@ const toggleFeature = (feature: string) => {
       onValueChange={setOriginalDial}
       color={originalDial ? '#FF6B35' : undefined}
     />
-    <Text style={styles.checkboxLabel}>Original Dial</Text>
+    <Text style={[styles.checkboxLabel, { color: colors.textPrimary }]}>Original Dial</Text>
   </View>
 </View>
 
@@ -1284,7 +1468,7 @@ const toggleFeature = (feature: string) => {
 
 
 <View style={styles.section}>
-  <Text style={styles.sectionTitle}>Additional Features</Text>
+  <Text style={[styles.sectionTitle, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>Additional Features</Text>
 
   <TouchableOpacity
     style={styles.checkboxRow}
@@ -1295,7 +1479,7 @@ const toggleFeature = (feature: string) => {
       size={24}
       color="#FF6B35"
     />
-    <Text style={styles.checkboxLabel}>Original Packaging</Text>
+    <Text style={[styles.checkboxLabel, { color: colors.textPrimary }]}>Original Packaging</Text>
   </TouchableOpacity>
 
   <TouchableOpacity
@@ -1307,7 +1491,7 @@ const toggleFeature = (feature: string) => {
       size={24}
       color="#FF6B35"
     />
-    <Text style={styles.checkboxLabel}>Diamonds / Gemstones</Text>
+    <Text style={[styles.checkboxLabel, { color: colors.textPrimary }]}>Diamonds / Gemstones</Text>
   </TouchableOpacity>
 </View>
 
@@ -1348,9 +1532,10 @@ const toggleFeature = (feature: string) => {
     )}
 
     <View style={styles.buyItNowSection}>
-      <Text style={styles.buyItNowLabel}>🏷️ Buy It Now Price (Optional)</Text>
+      <Text style={[styles.buyItNowLabel, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>🏷️ Buy It Now Price (Optional)</Text>
       <TextInput
-        style={styles.buyItNowInput}
+        style={[styles.buyItNowInput, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
+        placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
         placeholder="Enter Buy It Now price"
         keyboardType="decimal-pad"
         value={buyItNowPrice}
@@ -1533,6 +1718,10 @@ export const themedStyles = (scheme: 'light' | 'dark') => {
       padding: 10,
       borderBottomWidth: 1,
       borderBottomColor: isDark ? '#444' : '#eee',
+    },
+    dropdownText: {
+      fontSize: 15,
+      color: palette.textPrimary,
     },
     highlightedItem: {
       backgroundColor: palette.highlight,

@@ -11,7 +11,6 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
-import useColorScheme from '../hooks/useColorScheme';
 import { AuthProvider } from '@/hooks/AuthContext';
 import React, { useEffect, useRef } from 'react';
 import { Provider } from 'react-redux';
@@ -21,13 +20,21 @@ import {
   sendPushTokenToBackend,
   setupNotificationListeners,
   removeNotificationListeners,
-} from './utils/pushNotifications';
+} from '../utils/pushNotifications';
 import * as Notifications from 'expo-notifications';
-import { ThemeProvider as AppThemeProvider } from 'app/theme/ThemeContext';
+import { ThemeProvider as AppThemeProvider, useTheme } from 'app/theme/ThemeContext';
 import Toast from 'react-native-toast-message';
 
+function ThemedNavigation({ children }: { children: React.ReactNode }) {
+  const { theme } = useTheme();
+  return (
+    <NavigationThemeProvider value={theme === 'dark' ? NavigationDarkTheme : NavigationDefaultTheme}>
+      {children}
+    </NavigationThemeProvider>
+  );
+}
+
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
@@ -109,7 +116,7 @@ const responseListener = useRef<Notifications.Subscription | null>(null);
     <GestureHandlerRootView style={{ flex: 1 }}>
       <Provider store={store}>
         <AppThemeProvider>
-          <NavigationThemeProvider value={colorScheme === 'dark' ? NavigationDarkTheme : NavigationDefaultTheme}>
+          <ThemedNavigation>
             <AuthProvider>
               <>
                 <Stack>
@@ -139,13 +146,14 @@ const responseListener = useRef<Notifications.Subscription | null>(null);
                   <Stack.Screen name="category/[name]" options={{ headerShown: false }} />
                   <Stack.Screen name="CreateAuctionScreen" options={{ headerShown: false }} />
                   <Stack.Screen name="listing/create" options={{ headerShown: false }} />
+                  <Stack.Screen name="bid-history/[itemId]" options={{ headerShown: false }} />
                   <Stack.Screen name="+not-found" />
                 </Stack>
                 <StatusBar style="auto" />
                 <Toast />
               </>
             </AuthProvider>
-          </NavigationThemeProvider>
+          </ThemedNavigation>
         </AppThemeProvider>
       </Provider>
     </GestureHandlerRootView>

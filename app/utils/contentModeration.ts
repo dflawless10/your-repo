@@ -6,7 +6,7 @@
  */
 
 import { COMPREHENSIVE_PROFANITY_LIST } from './comprehensiveProfanityList';
-import { containsProhibitedPhrase } from './prohibitedPhrases';
+import { containsProhibitedPhrase } from '../../utils/prohibitedPhrases';
 import { PROHIBITED_CONTENT } from 'app/config/moderationPolicy';
 
 // Use a comprehensive profanity list (271+ words)

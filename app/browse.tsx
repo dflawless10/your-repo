@@ -1,3 +1,5 @@
+import { API_BASE_URL } from '@/config';
+
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
 import MascotOverlay from '../app/components/MascotOverlay';

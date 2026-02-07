@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { ImageValidationResult } from '@/hooks/useImageValidation';
+import { useTheme } from '@/app/theme/ThemeContext';
 
 type Props = {
   validation: ImageValidationResult;
@@ -17,6 +18,7 @@ export default function ImageValidationFeedback({
   dismissAfter = 5000,
   onDismiss
 }: Readonly<Props>) {
+  const { theme, colors } = useTheme();
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const [shouldRender, setShouldRender] = React.useState(true);
   const { isValid, errors, warnings, checks } = validation;
@@ -51,12 +53,24 @@ export default function ImageValidationFeedback({
   if (!visible || !shouldRender) return null;
 
   return (
-    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-      <Text style={styles.title}>📸 Image Validation</Text>
+    <Animated.View style={[
+      styles.container,
+      {
+        opacity: fadeAnim,
+        backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff',
+        borderColor: theme === 'dark' ? '#3C3C3E' : '#ddd'
+      }
+    ]}>
+      <Text style={[styles.title, { color: colors.textPrimary }]}>📸 Image Validation</Text>
 
       {/* Status Summary */}
-      <View style={[styles.statusBanner, isValid ? styles.statusValid : styles.statusInvalid]}>
-        <Text style={styles.statusText}>
+      <View style={[
+        styles.statusBanner,
+        isValid
+          ? { backgroundColor: theme === 'dark' ? '#1C3D2E' : '#d4edda' }
+          : { backgroundColor: theme === 'dark' ? '#3D1C1C' : '#f8d7da' }
+      ]}>
+        <Text style={[styles.statusText, { color: colors.textPrimary }]}>
           {isValid ? '✅ Ready to Upload' : '❌ Issues Found'}
         </Text>
       </View>
@@ -67,28 +81,36 @@ export default function ImageValidationFeedback({
           label="File Type"
           passed={checks.fileType.passed}
           message={checks.fileType.message}
+          theme={theme}
+          colors={colors}
         />
         <CheckItem
           label="Dimensions"
           passed={checks.dimensions.passed}
           message={checks.dimensions.message}
+          theme={theme}
+          colors={colors}
         />
         <CheckItem
           label="Aspect Ratio"
           passed={checks.aspectRatio.passed}
           message={checks.aspectRatio.message}
+          theme={theme}
+          colors={colors}
         />
         <CheckItem
           label="File Size"
           passed={checks.fileSize.passed}
           message={checks.fileSize.message}
+          theme={theme}
+          colors={colors}
         />
       </View>
 
       {/* Errors */}
       {errors.length > 0 && (
-        <View style={styles.messagesSection}>
-          <Text style={styles.messagesTitle}>⚠️ Errors:</Text>
+        <View style={[styles.messagesSection, { borderTopColor: theme === 'dark' ? '#3C3C3E' : '#eee' }]}>
+          <Text style={[styles.messagesTitle, { color: colors.textPrimary }]}>⚠️ Errors:</Text>
           {errors.map((error, idx) => (
             <Text key={idx} style={styles.errorText}>
               • {error}
@@ -99,8 +121,8 @@ export default function ImageValidationFeedback({
 
       {/* Warnings */}
       {warnings.length > 0 && (
-        <View style={styles.messagesSection}>
-          <Text style={styles.messagesTitle}>⚡ Warnings:</Text>
+        <View style={[styles.messagesSection, { borderTopColor: theme === 'dark' ? '#3C3C3E' : '#eee' }]}>
+          <Text style={[styles.messagesTitle, { color: colors.textPrimary }]}>⚡ Warnings:</Text>
           {warnings.map((warning, idx) => (
             <Text key={idx} style={styles.warningText}>
               • {warning}
@@ -111,21 +133,39 @@ export default function ImageValidationFeedback({
 
       {/* Success Message */}
       {isValid && errors.length === 0 && warnings.length === 0 && (
-        <View style={styles.successSection}>
-          <Text style={styles.successText}>🎉 Image looks great! Ready to list.</Text>
+        <View style={[styles.successSection, { backgroundColor: theme === 'dark' ? '#1C3D2E' : '#d4edda' }]}>
+          <Text style={[styles.successText, { color: theme === 'dark' ? '#86EFAC' : '#155724' }]}>
+            🎉 Image looks great! Ready to list.
+          </Text>
         </View>
       )}
     </Animated.View>
   );
 }
 
-function CheckItem({ label, passed, message }: { label: string; passed: boolean; message: string }) {
+function CheckItem({
+  label,
+  passed,
+  message,
+  theme,
+  colors
+}: {
+  label: string;
+  passed: boolean;
+  message: string;
+  theme: 'light' | 'dark';
+  colors: any;
+}) {
   return (
     <View style={styles.checkItem}>
       <Text style={styles.checkIcon}>{passed ? '✅' : '❌'}</Text>
       <View style={styles.checkContent}>
-        <Text style={styles.checkLabel}>{label}</Text>
-        <Text style={[styles.checkMessage, !passed && styles.checkMessageError]}>
+        <Text style={[styles.checkLabel, { color: colors.textPrimary }]}>{label}</Text>
+        <Text style={[
+          styles.checkMessage,
+          { color: theme === 'dark' ? '#999' : '#666' },
+          !passed && styles.checkMessageError
+        ]}>
           {message}
         </Text>
       </View>

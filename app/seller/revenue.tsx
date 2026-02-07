@@ -14,8 +14,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
 import GlobalFooter from "@/app/components/GlobalFooter";
+import { API_BASE_URL } from '@/config';
 
-const API_URL = 'http://10.0.0.170:5000';
+const API_URL = API_BASE_URL;
 
 type Transaction = {
   id: number;
@@ -48,9 +49,37 @@ type RevenueData = {
 export default function RevenueScreen() {
   const router = useRouter();
   const scrollY = useRef(new Animated.Value(0)).current;
+  const headerOpacity = useRef(new Animated.Value(0)).current;
+  const headerScale = useRef(new Animated.Value(1)).current;
   const [data, setData] = useState<RevenueData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Fade in header title and arrow
+  useEffect(() => {
+    setTimeout(() => {
+      Animated.timing(headerOpacity, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+      }).start(() => {
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(headerScale, {
+              toValue: 1.05,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(headerScale, {
+              toValue: 1,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
+      });
+    }, 500);
+  }, []);
 
   useEffect(() => {
     fetchRevenue();
@@ -147,7 +176,7 @@ export default function RevenueScreen() {
     <View style={{ flex: 1 }}>
       <EnhancedHeader scrollY={scrollY} />
 
-      <View style={styles.headerTitleContainer}>
+      <Animated.View style={[styles.headerTitleContainer, { opacity: headerOpacity, transform: [{ scale: headerScale }] }]}>
         <View style={styles.titleWithArrow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
             <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
@@ -157,7 +186,7 @@ export default function RevenueScreen() {
             <Text style={styles.headerSubtitle}>Track your earnings</Text>
           </View>
         </View>
-      </View>
+      </Animated.View>
 
       <Animated.ScrollView
         style={styles.container}
@@ -176,7 +205,7 @@ export default function RevenueScreen() {
         <View style={styles.mainCard}>
           <Text style={styles.cardLabel}>Total Sales</Text>
           <Text style={styles.mainValue}>${summary.total_sales.toFixed(2)}</Text>
-          <Text style={styles.cardSubtext}>{summary.transaction_count} transactions</Text>
+          <Text style={styles.cardSubtext}>{summary.transaction_count} transaction{summary.transaction_count === 1 ? '' : 's'}</Text>
         </View>
 
         <View style={styles.row}>

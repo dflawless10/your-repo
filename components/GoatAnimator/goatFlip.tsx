@@ -9,6 +9,7 @@ import Animated, {
 import { Audio } from 'expo-av';
 import goatImg from '../../assets/images/goat.png'; // Make sure this path is correct
 import { MascotMood } from '@/types/goatmoods';
+import { useTheme } from '@/app/theme/ThemeContext';
 
 type GoatFlipProps = {
   trigger: boolean;
@@ -33,6 +34,7 @@ const moodSounds: Partial<Record<MascotMood, any>> = {
 
 
 export const GoatFlip: React.FC<GoatFlipProps> = ({ trigger, onComplete, bidAmount = 0 }) => {
+  const { theme } = useTheme();
   const flip = useSharedValue(0);
 
   const goatFlipStyle = useAnimatedStyle(() => {
@@ -69,7 +71,14 @@ export const GoatFlip: React.FC<GoatFlipProps> = ({ trigger, onComplete, bidAmou
 
 
   return (
-    <Animated.View style={[styles.goatContainer, goatFlipStyle]}>
+    <Animated.View style={[
+      styles.goatContainer,
+      goatFlipStyle,
+      {
+        backgroundColor: theme === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'transparent',
+        borderRadius: 60,
+      }
+    ]}>
       <Image source={goatImg} style={styles.goat} />
     </Animated.View>
   );

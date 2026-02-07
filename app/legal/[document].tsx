@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTheme } from '@/app/theme/ThemeContext';
 
 const TERMS_OF_SERVICE = `# Terms of Service
 
@@ -64,8 +65,104 @@ BidGoat is an online auction platform that allows users to buy and sell jewelry 
 • Provide tracking information to buyers
 • Package items securely to prevent damage
 • Respond to buyer inquiries promptly
+• Honor your stated return policy
+• Clearly disclose item condition and authenticity
 
-## 6. Prohibited Activities
+### 5.4 Seller Policies
+• Sellers must set a return policy for their shop
+• Policies must comply with BidGoat's baseline rules
+• Policies appear on your seller profile and each listing
+• You may not refuse returns for counterfeit or misrepresented items
+• BidGoat may override seller policies in cases of fraud
+
+## 6. Return Policy Framework
+
+### 6.1 Platform Baseline (Non-Negotiable)
+Returns are ALWAYS accepted if:
+• Item is counterfeit, fake, or replica
+• Item is significantly not as described
+• Item arrives damaged due to inadequate packaging
+• Item has undisclosed defects or condition issues
+• Item is the wrong size, color, or specification
+
+**Sellers cannot override these protections.**
+
+### 6.2 Seller-Defined Return Policies
+Sellers choose from these standard options:
+
+**No Returns (Final Sale)**
+• Items are sold as-is
+• Only platform baseline protections apply
+• Best for custom or personalized items
+
+**7-Day Returns**
+• Buyer may return within 7 days of delivery
+• Item must be unworn/unused in original condition
+• Return shipping paid by buyer (unless item not as described)
+
+**14-Day Returns**
+• Buyer may return within 14 days of delivery
+• Item must be unworn/unused in original condition
+• Return shipping paid by buyer (unless item not as described)
+
+**30-Day Returns**
+• Buyer may return within 30 days of delivery
+• Item must be unworn/unused in original condition
+• Return shipping paid by buyer (unless item not as described)
+
+### 6.3 Inspection Periods for High-Value Items
+• Items priced $1,000+ include a mandatory 48-hour inspection period
+• Items priced $5,000+ include a mandatory 7-day inspection period
+• During inspection, buyers may request professional authentication
+• Buyers may return if authenticity cannot be verified
+• Seller pays return shipping during inspection period
+
+### 6.4 Restocking Fees
+• Sellers may charge up to 20% restocking fee for buyer's remorse returns
+• No restocking fee allowed if item is not as described
+• Restocking fees must be disclosed in seller policy
+
+## 7. Dispute Resolution
+
+### 7.1 How Disputes Work
+If there's an issue with an order:
+
+1. **Buyer opens a dispute** (within 30 days of delivery)
+2. **Seller has 48 hours to respond** and propose a solution
+3. **Both parties provide evidence:**
+   • Photos of item as received
+   • Screenshots of original listing
+   • Communication records
+   • Tracking/shipping information
+4. **BidGoat reviews and mediates** (typically within 3-5 business days)
+5. **Final decision is binding** and enforced by the platform
+
+### 7.2 Common Dispute Outcomes
+• Full refund + return shipping label provided
+• Partial refund (for minor issues)
+• No refund (if item matches description)
+• Seller account suspension (for repeat violations)
+• Buyer account warning (for fraudulent claims)
+
+### 7.3 BidGoat's Override Authority
+BidGoat may override a seller's return policy if:
+• Evidence shows fraud or misrepresentation
+• Seller is unresponsive or uncooperative
+• Pattern of similar complaints exists
+• Item is clearly counterfeit or fake
+
+### 7.4 Evidence Requirements
+**For Buyers:**
+• Photos of item showing defect/issue
+• Photos of packaging (if damaged in transit)
+• Copy of seller's listing (screenshots)
+
+**For Sellers:**
+• Photos of item before shipping
+• Proof of condition/authenticity (certificates, receipts)
+• Communication records with buyer
+
+## 8. Prohibited Activities
 
 You may not:
 • List counterfeit or stolen items
@@ -75,8 +172,10 @@ You may not:
 • Use automated tools or bots
 • Attempt to circumvent platform fees
 • Post offensive or inappropriate content
+• File fraudulent disputes or claims
+• Refuse legitimate returns covered by platform baseline
 
-## 7. Prohibited Items
+## 9. Prohibited Items
 
 The following items cannot be sold on BidGoat:
 • Counterfeit goods
@@ -85,15 +184,15 @@ The following items cannot be sold on BidGoat:
 • Recalled items
 • Weapons or illegal substances
 
-## 8. Disclaimers
+## 10. Disclaimers
 
 BidGoat is provided "as is" without warranties of any kind. We do not guarantee uninterrupted or error-free service. We are not responsible for user-generated content.
 
-## 9. Limitation of Liability
+## 11. Limitation of Liability
 
 BidGoat's liability is limited to the fees paid in the transaction. We are not liable for indirect, incidental, or consequential damages.
 
-## 10. Contact Information
+## 12. Contact Information
 
 For questions about these Terms of Service:
 • Email: legal@bidgoat.com
@@ -240,6 +339,7 @@ By using BidGoat, you consent to this Privacy Policy and agree to its terms.`;
 
 export default function LegalDocumentScreen() {
   const { document } = useLocalSearchParams<{ document: string }>();
+  const { theme, colors } = useTheme();
 
   const isTerms = document === 'terms';
   const title = isTerms ? 'Terms of Service' : 'Privacy Policy';
@@ -263,26 +363,26 @@ export default function LegalDocumentScreen() {
   });
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
       <Stack.Screen
         options={{
           title: title,
           headerShown: true,
         }}
       />
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
+      <ScrollView style={[styles.scrollView, { backgroundColor: colors.background }]} contentContainerStyle={[styles.contentContainer, { backgroundColor: colors.background }]}>
         {sections.map((section, index) => (
           <View key={index} style={styles.section}>
             {index === 0 ? (
-              <ThemedText type="title" style={styles.mainTitle}>
+              <ThemedText type="title" style={[styles.mainTitle, { color: colors.textPrimary }]}>
                 {section.title}
               </ThemedText>
             ) : (
-              <ThemedText type="subtitle" style={styles.sectionTitle}>
+              <ThemedText type="subtitle" style={[styles.sectionTitle, { color: colors.textPrimary }]}>
                 {section.title}
               </ThemedText>
             )}
-            <ThemedText style={styles.sectionContent}>
+            <ThemedText style={[styles.sectionContent, { color: theme === 'dark' ? '#999' : '#555' }]}>
               {section.content.trim()}
             </ThemedText>
           </View>
@@ -295,7 +395,6 @@ export default function LegalDocumentScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
   },
   scrollView: {
     flex: 1,
@@ -311,18 +410,15 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
     marginBottom: 16,
-    color: '#1a1a1a',
   },
   sectionTitle: {
     fontSize: 20,
     fontWeight: '600',
     marginBottom: 12,
     marginTop: 8,
-    color: '#333',
   },
   sectionContent: {
     fontSize: 15,
     lineHeight: 24,
-    color: '#555',
   },
 });

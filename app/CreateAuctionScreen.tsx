@@ -1,9 +1,10 @@
+import { API_BASE_URL } from '@/config';
+
 import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
   TextInput,
-  Button,
   Alert,
   StyleSheet,
   ScrollView,
@@ -11,9 +12,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   TouchableOpacity,
+  Keyboard,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
 import ImageUploader from '@/components/ImageUploader';
@@ -25,73 +27,177 @@ import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHead
 import { useImageValidation } from '@/hooks/useImageValidation';
 import ImageValidationFeedback from '@/app/components/ImageValidationFeedback';
 import GlobalFooter from "@/app/components/GlobalFooter";
+import CategorySelector, { QUICK_CATEGORIES } from '@/app/components/CategorySelector';
+import { useTheme } from '@/app/theme/ThemeContext';
 
 
-const API_URL = 'http://10.0.0.170:5000';
+const API_URL = API_BASE_URL;
 
  function CreateAuctionForm() {
+  const { theme, colors } = useTheme();
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const editItemId = params.editItemId as string | undefined;
   const scrollY = useRef(new Animated.Value(0)).current;
+  const headerOpacity = useRef(new Animated.Value(0)).current;
+  const headerScale = useRef(new Animated.Value(1)).current;
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [imageUris, setImageUris] = useState<string[]>([]);
   const [startPrice, setStartPrice] = useState('');
-  const [durationHours, setDurationHours] = useState('');
+  const [durationHours, setDurationHours] = useState('168'); // Default: 7 days
+  const [showCustomDuration, setShowCustomDuration] = useState(false);
   const [tags, setTags] = useState('');
   const [rarity, setRarity] = useState('common');
   const [reservePrice, setReservePrice] = useState('');
   const [weightLbs, setWeightLbs] = useState('1.0');
-  const [category, setCategory] = useState<number | null>(null);
+  const [categoryId, setCategoryId] = useState('');
+  const [categoryName, setCategoryName] = useState('');
   const [gender, setGender] = useState<string>('unisex');
-  const [categories, setCategories] = useState<
-    { id: number; name: string; emoji: string }[]
-  >([]);
+  const [loading, setLoading] = useState(false);
+
+  // Preset duration options
+  const presetDurations = [
+    { label: '24h', hours: '24' },
+    { label: '48h', hours: '48' },
+    { label: '7 days', hours: '168' },
+    { label: '14 days', hours: '336' },
+    { label: '30 days', hours: '720' },
+  ];
 
   // Image validation for first image
   const imageValidation = useImageValidation(imageUris.length > 0 ? imageUris[0] : null);
 
   useEffect(() => {
-    fetch(`${API_URL}/categories`)
-      .then((res) => res.json())
-      .then((data) => {
-        setCategories(data);
-        if (data.length > 0) setCategory(data[0].id);
-      })
-      .catch((err) => console.error('Failed to load categories:', err));
-  }, []);
+    // Fade in header title and arrow - wait for screen to fully render first
+    setTimeout(() => {
+      Animated.timing(headerOpacity, {
+        toValue: 1,
+        duration: 2000, // 2 seconds - slow and dramatic
+        useNativeDriver: true,
+      }).start(() => {
+        // After fade-in completes, start pulsing animation
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(headerScale, {
+              toValue: 1.05,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(headerScale, {
+              toValue: 1,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
+      });
+    }, 500); // 500ms delay - let screen render fully first
+
+    if (editItemId) {
+      loadItemForEdit();
+    }
+  }, [editItemId]);
+
+
+  const loadItemForEdit = async () => {
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem('jwtToken');
+      const res = await fetch(`${API_URL}/item/${editItemId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        const item = await res.json();
+
+        // Safety check: Ensure this is an auction (not must_sell or buy_it_now)
+        if (item.selling_strategy === 'must_sell' || item.buy_it_now) {
+          Alert.alert('Error', 'This item cannot be edited as an auction.');
+          router.back();
+          return;
+        }
+
+        setName(item.name || '');
+        setDescription(item.description || '');
+        setStartPrice(item.price?.toString() || '');
+
+        // Set category from item data
+        if (item.category_id) {
+          setCategoryId(item.category_id.toString());
+          const cat = QUICK_CATEGORIES.find(c => c.id === item.category_id.toString());
+          setCategoryName(cat?.name || '');
+        }
+
+        setTags(item.tags || '');
+        setRarity(item.rarity || 'common');
+        setReservePrice(item.reserve_price?.toString() || '');
+        setWeightLbs(item.weight_lbs?.toString() || '1.0');
+        setGender(item.gender || 'unisex');
+        setDurationHours(item.duration_hours?.toString() || '');
+
+        // Load existing images
+        const existingImages = [item.photo_url];
+        if (item.additional_photos && Array.isArray(item.additional_photos)) {
+          existingImages.push(...item.additional_photos);
+        }
+        setImageUris(existingImages);
+      }
+    } catch (error) {
+      console.error('Error loading item for edit:', error);
+      Alert.alert('Error', 'Could not load item data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async () => {
     // Validate required fields
-    if (!name || !description || !category || !startPrice || !durationHours || imageUris.length === 0) {
-      Alert.alert('Missing Fields', 'Please fill out all fields and upload at least one photo');
+    if (!name || !description || !categoryId || !startPrice || !durationHours || imageUris.length === 0) {
+      Alert.alert('Missing Fields', 'Please fill out all fields, select a category, and upload at least one photo');
+      return;
+    }
+
+    // Validate duration hours
+    const duration = parseInt(durationHours);
+    if (isNaN(duration)) {
+      Alert.alert('Invalid Duration', 'Please enter a valid number for auction duration');
+      return;
+    }
+    if (duration < 24) {
+      Alert.alert('Duration Too Short', 'Auctions must run for at least 24 hours (1 day) to give bidders time to discover your item.');
+      return;
+    }
+    if (duration > 720) {
+      Alert.alert('Duration Too Long', 'Auctions cannot exceed 720 hours (30 days). For longer listings, use Buy It Now.');
       return;
     }
 
     // Validate name length
     const nameValidation = validateCharacterCount(name, CHARACTER_LIMITS.NAME_MIN, CHARACTER_LIMITS.NAME_MAX, 'Item name');
     if (!nameValidation.isValid) {
-      Alert.alert('Item Name Invalid', nameValidation.errorMessage!);
+      Alert.alert('Item Name Invalid', nameValidation.errorMessage);
       return;
     }
 
     // Validate description length
     const descValidation = validateCharacterCount(description, CHARACTER_LIMITS.DESCRIPTION_MIN, CHARACTER_LIMITS.DESCRIPTION_MAX, 'Description');
     if (!descValidation.isValid) {
-      Alert.alert('Description Invalid', descValidation.errorMessage! + '\n\n💡 Tip: Describe the item\'s condition, materials, size, and any unique features.');
+      Alert.alert('Description Invalid', descValidation.errorMessage + '\n\n💡 Tip: Describe the item\'s condition, materials, size, and any unique features.');
       return;
     }
 
     // Content Moderation
     const nameModeration = validateContentQuick(name, 'Item name');
     if (!nameModeration.isValid) {
-      Alert.alert('Content Policy Violation', nameModeration.errorMessage!);
+      Alert.alert('Content Policy Violation', nameModeration.errorMessage);
       return;
     }
 
     const descModeration = validateContentQuick(description, 'Description');
     if (!descModeration.isValid) {
-      Alert.alert('Content Policy Violation', descModeration.errorMessage!);
+      Alert.alert('Content Policy Violation', descModeration.errorMessage);
       return;
     }
 
@@ -100,7 +206,7 @@ const API_URL = 'http://10.0.0.170:5000';
 
     formData.append('name', name);
     formData.append('description', description);
-    formData.append('category_id', category.toString());
+    formData.append('category_id', categoryId);
     formData.append('price', startPrice);
     formData.append('tags', tags);
     formData.append('duration_hours', durationHours || '96');
@@ -127,31 +233,65 @@ const API_URL = 'http://10.0.0.170:5000';
 
 
     try {
-      const res = await fetch(`${API_URL}/item`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
-      });
+      let res;
+
+      if (editItemId) {
+        // Update existing item
+        res = await fetch(`${API_URL}/item/${editItemId}`, {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        });
+      } else {
+        // Create new item
+        res = await fetch(`${API_URL}/item`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        });
+      }
 
       if (res.ok) {
         const responseData = await res.json();
-        const itemId = responseData.item_id;
+        const itemId = responseData.item_id || editItemId;
 
-        // Clear form
-        setName('');
-        setDescription('');
-        setStartPrice('');
-        setDurationHours('');
-        setTags('');
-        setRarity('common');
-        setReservePrice('');
-        setCategory(null);
-        setImageUris([]);
+        if (editItemId) {
+          // Random compliments for edits
+          const compliments = [
+            'Your item looks beautiful now! Good luck! 🌟',
+            'Good job with the edit! Good luck! ✨',
+            'Wow! Those changes look amazing! 🎉',
+            'Perfect! Your listing is looking great! 💫',
+            'Excellent work! Your item is sure to sell! 🚀',
+            'Beautiful updates! Best of luck! 🍀',
+            'Looking good! Your changes are impressive! 👏',
+            'Fantastic edits! This will catch buyers\' eyes! 👀'
+          ];
+          const randomCompliment = compliments[Math.floor(Math.random() * compliments.length)];
 
-        // Show a success message and redirect to item detail
-        handleListingSuccess(itemId, router, 'auction');
+          Alert.alert('Success!', randomCompliment, [
+            { text: 'OK', onPress: () => router.back() }
+          ]);
+        } else {
+          // Clear form only for new listings
+          setName('');
+          setDescription('');
+          setStartPrice('');
+          setDurationHours('');
+          setTags('');
+          setRarity('common');
+          setReservePrice('');
+          setCategoryId('');
+          setCategoryName('');
+          setImageUris([]);
+
+          // Show a success message and redirect to item detail
+          handleListingSuccess(itemId, router, 'auction');
+        }
       } else {
         const msg = await res.text();
         Alert.alert('Error', msg);
@@ -163,27 +303,33 @@ const API_URL = 'http://10.0.0.170:5000';
   };
 
   return (
-  <View style={{ flex: 1 }}>
-    <EnhancedHeader scrollY={scrollY} onSearch={() => {}} />
-    
-    {/* Title with Back Arrow */}
-    <View style={styles.headerTitleContainer}>
-      <View style={styles.titleWithArrow}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
-          <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Create Auction</Text>
-      </View>
-    </View>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <EnhancedHeader scrollY={scrollY} onSearch={() => {}} />
 
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={100}
-    >
+      {/* Title with Back Arrow */}
+      <Animated.View style={[
+        styles.headerTitleContainer,
+        {
+          opacity: headerOpacity,
+          transform: [{ scale: headerScale }],
+          backgroundColor: colors.background,
+          borderBottomColor: theme === 'dark' ? '#333' : '#E5E5E5'
+        }
+      ]}>
+        <View style={styles.titleWithArrow}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <View>
+            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{editItemId ? 'Edit Auction' : 'Create Auction'}</Text>
+            {editItemId && <Text style={[styles.headerSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]}>Update your listing details</Text>}
+          </View>
+        </View>
+      </Animated.View>
+
       <ScrollView
-        style={styles.container}
-        contentContainerStyle={{ paddingTop: 240, paddingBottom: 200 }}
+        style={[styles.container, { backgroundColor: colors.background }]}
+        contentContainerStyle={{ paddingTop: 240, paddingBottom: 120, backgroundColor: colors.background }}
         scrollEventThrottle={16}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={true}
@@ -192,17 +338,15 @@ const API_URL = 'http://10.0.0.170:5000';
           { useNativeDriver: false }
         )}
       >
-        <Text style={styles.label}>Select Category</Text>
-
-        <Picker
-          selectedValue={category}
-          onValueChange={(value) => setCategory(value)}
-          style={styles.picker}
-        >
-          {categories.map((cat) => (
-            <Picker.Item key={cat.id} label={`${cat.emoji} ${cat.name}`} value={cat.id} />
-          ))}
-        </Picker>
+        <CategorySelector
+          selectedCategory={categoryId}
+          onSelectCategory={(id, name) => {
+            setCategoryId(id);
+            setCategoryName(name);
+          }}
+          required={true}
+          showSelectedBanner={true}
+        />
 
         <ImageUploader
           maxImages={5}
@@ -222,7 +366,7 @@ const API_URL = 'http://10.0.0.170:5000';
           <ImageValidationFeedback validation={imageValidation} />
         )}
 
-        <Text style={styles.sectionTitle}>🎯 Auction Details</Text>
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>🎯 Auction Details</Text>
 
         {/* Item Name with Character Counter */}
         <CharacterCounterInput
@@ -248,33 +392,131 @@ const API_URL = 'http://10.0.0.170:5000';
           style={styles.textArea}
           helpText="💡 Great descriptions include: condition, materials, measurements, brand (if applicable), and what makes this item special"
         />
-        <TextInput placeholder="Starting Bid Price ($)" value={startPrice} onChangeText={setStartPrice} keyboardType="numeric" style={styles.input} />
-        <TextInput placeholder="Auction Duration (hours)" value={durationHours} onChangeText={setDurationHours} keyboardType="numeric" style={styles.input} />
-        <TextInput placeholder="Reserve Price (minimum to sell, optional)" value={reservePrice} onChangeText={setReservePrice} keyboardType="numeric" style={styles.input} />
 
-        <Text style={styles.sectionTitle}>📦 Item Details</Text>
-        <TextInput placeholder="Tags (comma-separated)" value={tags} onChangeText={setTags} style={styles.input} />
-        <TextInput placeholder="Rarity (e.g. common, rare, legendary)" value={rarity} onChangeText={setRarity} style={styles.input} />
-        <TextInput placeholder="Weight (lbs) - for shipping" value={weightLbs} onChangeText={setWeightLbs} keyboardType="decimal-pad" style={styles.input} />
 
-        <Text style={styles.label}>Gender</Text>
+
+        <TextInput placeholder="Starting Bid Price ($)" placeholderTextColor={theme === 'dark' ? '#666' : '#999'} value={startPrice} onChangeText={setStartPrice} keyboardType="numeric" style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: colors.textPrimary, borderColor: theme === 'dark' ? '#3C3C3E' : '#DDD' }]} />
+
+        <Text style={[styles.label, { color: colors.textPrimary }]}>Auction Duration</Text>
+        <View style={styles.presetButtonRow}>
+          {presetDurations.map((preset) => (
+            <TouchableOpacity
+              key={preset.hours}
+              style={[
+                styles.presetButton,
+                durationHours === preset.hours && styles.presetButtonSelected,
+              ]}
+              onPress={() => {
+                setDurationHours(preset.hours);
+                setShowCustomDuration(false);
+              }}
+            >
+              <Text
+                style={[
+                  styles.presetButtonText,
+                  durationHours === preset.hours && styles.presetButtonTextSelected,
+                ]}
+              >
+                {preset.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+          <TouchableOpacity
+            style={[
+              styles.presetButton,
+              showCustomDuration && styles.presetButtonSelected,
+            ]}
+            onPress={() => setShowCustomDuration(true)}
+          >
+            <Text
+              style={[
+                styles.presetButtonText,
+                showCustomDuration && styles.presetButtonTextSelected,
+              ]}
+            >
+              Custom
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {showCustomDuration && (
+          <TextInput
+            placeholder="Custom duration (hours)"
+            placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
+            value={durationHours}
+            onChangeText={setDurationHours}
+            keyboardType="numeric"
+            style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: colors.textPrimary, borderColor: theme === 'dark' ? '#3C3C3E' : '#DDD' }]}
+          />
+        )}
+
+        <Text style={[styles.helperText, { color: theme === 'dark' ? '#999' : '#666' }]}>
+          💡 Choose a preset or enter custom duration (24-720 hours)
+        </Text>
+
+        <TextInput placeholder="Reserve Price (minimum to sell, optional)" placeholderTextColor={theme === 'dark' ? '#666' : '#999'} value={reservePrice} onChangeText={setReservePrice} keyboardType="numeric" style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: colors.textPrimary, borderColor: theme === 'dark' ? '#3C3C3E' : '#DDD' }]} />
+
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>📦 Item Details</Text>
+        <TextInput
+          placeholder="Tags (comma-separated)"
+          placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
+          value={tags}
+          onChangeText={setTags}
+          style={[styles.input, styles.tagsInput, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: colors.textPrimary, borderColor: theme === 'dark' ? '#3C3C3E' : '#DDD' }]}
+          multiline
+          numberOfLines={3}
+          textAlignVertical="top"
+        />
+
+        {/* Item Rarity Dropdown */}
+        <Text style={[styles.label, { color: colors.textPrimary }]}>Item Rarity</Text>
         <Picker
-          selectedValue={gender}
-          onValueChange={(value) => setGender(value)}
-          style={styles.picker}
+          selectedValue={rarity}
+          onValueChange={(value) => setRarity(value)}
+          style={[styles.picker, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: colors.textPrimary, borderColor: theme === 'dark' ? '#3C3C3E' : '#ccc' }]}
+          dropdownIconColor={theme === 'dark' ? '#B794F4' : '#6A0DAD'}
+          mode="dropdown"
         >
-          <Picker.Item label="Unisex / Not Specified" value="unisex" />
-          <Picker.Item label="👨 Men's" value="men" />
-          <Picker.Item label="👩 Women's" value="women" />
+          <Picker.Item label="Common" value="common" />
+          <Picker.Item label="Rare" value="rare" />
+          <Picker.Item label="Extremely Rare" value="extremely_rare" />
         </Picker>
 
-        <View style={styles.buttonContainer}>
-          <Button title="Create Auction" onPress={handleSubmit} />
-        </View>
+        <TextInput placeholder="Weight (lbs) - for shipping" placeholderTextColor={theme === 'dark' ? '#666' : '#999'} value={weightLbs} onChangeText={setWeightLbs} keyboardType="decimal-pad" style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: colors.textPrimary, borderColor: theme === 'dark' ? '#3C3C3E' : '#DDD' }]} />
+
+        {/* Only show Gender picker for wearable items (jewelry, accessories, watches, clothing) */}
+        {categoryName && (() => {
+          const catName = categoryName.toLowerCase();
+          const isWearable = ['accessories', 'body jewelry', 'bracelets', 'brooches', 'chains', 'earrings',
+                             'engagement', 'necklaces', 'pendants', 'rings', 'watches', 'hat pins'].includes(catName);
+
+          return isWearable ? (
+            <>
+              <Text style={[styles.label, { color: colors.textPrimary }]}>Gender</Text>
+              <Picker
+                selectedValue={gender}
+                onValueChange={(value) => setGender(value)}
+                style={[styles.picker, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: colors.textPrimary, borderColor: theme === 'dark' ? '#3C3C3E' : '#ccc' }]}
+                dropdownIconColor={theme === 'dark' ? '#B794F4' : '#6A0DAD'}
+                mode="dropdown"
+              >
+                <Picker.Item label="Unisex / Not Specified" value="unisex" />
+                <Picker.Item label="👨 Men's" value="men" />
+                <Picker.Item label="👩 Women's" value="women" />
+              </Picker>
+            </>
+          ) : null;
+        })()}
+
+        <TouchableOpacity
+          style={styles.buttonContainer}
+          onPress={handleSubmit}
+        >
+          <Text style={styles.buttonTitle}>Create Auction</Text>
+        </TouchableOpacity>
       </ScrollView>
-    </KeyboardAvoidingView>
-     <GlobalFooter />
-  </View>
+      <GlobalFooter />
+    </View>
   );
 }
 
@@ -282,7 +524,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: '#fff',
   },
   headerTitleContainer: {
     position: 'absolute',
@@ -291,14 +532,16 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: 16,
     paddingVertical: 16,
-    backgroundColor: '#FFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
     zIndex: 100,
   },
   titleWithArrow: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+   headerSubtitle: {
+    fontSize: 14,
+    color: '#718096',
   },
   backArrow: {
     marginRight: 12,
@@ -307,7 +550,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1A202C',
   },
   label: {
     marginBottom: 4,
@@ -318,29 +560,130 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: 16,
     marginBottom: 8,
-    color: '#2d3748',
   },
   picker: {
     borderWidth: 1,
-    borderColor: '#ccc',
     marginBottom: 12,
     borderRadius: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#ccc',
     padding: 10,
     borderRadius: 6,
     marginBottom: 12,
-    backgroundColor: 'white',
+  },
+  helperText: {
+    fontSize: 12,
+    marginTop: -8,
+    marginBottom: 12,
+    marginLeft: 4,
+    fontStyle: 'italic',
+  },
+  presetButtonRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  presetButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    backgroundColor: '#FFFFFF',
+    minWidth: 70,
+    alignItems: 'center',
+  },
+  presetButtonSelected: {
+    backgroundColor: '#6A0DAD',
+    borderColor: '#6A0DAD',
+  },
+  presetButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+  },
+  presetButtonTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  tagsInput: {
+    minHeight: 80,
+    paddingTop: 12,
   },
   textArea: {
     minHeight: 100,
     paddingTop: 10,
   },
   buttonContainer: {
-    marginTop: 24,
-    marginBottom: 40,
+    backgroundColor: '#FF6B35',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginVertical: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+
+buttonTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+
+  categoryInputContainer: {
+    position: 'relative',
+    zIndex: 1000,
+    marginBottom: 12,
+  },
+  categoryDropdown: {
+    position: 'absolute',
+    top: 70,
+    left: 0,
+    right: 0,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    backgroundColor: '#FFF',
+    height: 280,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 1001,
+  },
+  categoryScrollView: {
+    flex: 1,
+  },
+  categoryDropdownItem: {
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  categoryDropdownText: {
+    fontSize: 16,
+    color: '#1A202C',
+  },
+  selectedCategoryContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: '#E6F7FF',
+    borderRadius: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#91D5FF',
+  },
+  selectedCategoryText: {
+    fontSize: 16,
+    color: '#1A202C',
+    fontWeight: '500',
   },
 });
 

@@ -26,6 +26,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import GlobalFooter from "./components/GlobalFooter";
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
+import { useTheme } from '@/app/theme/ThemeContext';
 
 
 const { width, height } = Dimensions.get('window');
@@ -101,9 +102,12 @@ const ZoomableImage = ({
 };
 
 export default function FullImageScreen() {
-  const { mediaArray, index } = useLocalSearchParams();
+  const { theme, colors } = useTheme();
+  const { mediaArray, index, title } = useLocalSearchParams();
   const router = useRouter();
   const scrollY = useRef(new Animated.Value(0)).current;
+  const headerOpacity = React.useRef(new Animated.Value(0)).current;
+  const headerScale = React.useRef(new Animated.Value(1)).current;
 
   let images: string[] = [];
   try {
@@ -113,11 +117,40 @@ export default function FullImageScreen() {
     console.warn('Failed to parse mediaArray:', err);
   }
 
+  const itemTitle = typeof title === 'string' ? title : (Array.isArray(title) ? title[0] : 'Images');
+
   const start = Math.min(Math.max(Number(index) || 0, 0), images.length - 1);
   const [activeIndex, setActiveIndex] = useState(start);
   const [scrollEnabled, setScrollEnabled] = useState(true);
   const flatListRef = useRef<FlatList>(null);
   const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    // Fade in header title and arrow - wait for screen to fully render first
+    setTimeout(() => {
+      Animated.timing(headerOpacity, {
+        toValue: 1,
+        duration: 2000, // 2 seconds - slow and dramatic
+        useNativeDriver: true,
+      }).start(() => {
+        // After fade-in completes, start pulsing animation
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(headerScale, {
+              toValue: 1.05,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(headerScale, {
+              toValue: 1,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
+      });
+    }, 500); // 500ms delay - let screen render fully first
+  }, []);
 
 
   const scrollToIndex = (i: number) => {
@@ -131,24 +164,32 @@ export default function FullImageScreen() {
   );
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <Stack.Screen options={{ headerShown: false }} />
       <EnhancedHeader scrollY={scrollY} />
 
-      <View style={styles.container}>
-        {/* Title with Back Arrow */}
-        <View style={styles.headerTitleContainer}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backButton}
-          >
-            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>
-            {activeIndex + 1} / {images.length}
-          </Text>
-        </View>
+      {/* Title with Back Arrow - Overlays on top */}
+      <Animated.View
+        style={[
+          styles.headerTitleContainer,
+          {
+            opacity: headerOpacity,
+            transform: [{ scale: headerScale }],
+          }
+        ]}
+      >
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backButton}
+        >
+          <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>
+          {itemTitle}
+        </Text>
+      </Animated.View>
 
+      <View style={styles.container}>
         <FlatList
         ref={flatListRef}
         data={images}
@@ -160,6 +201,7 @@ export default function FullImageScreen() {
         keyExtractor={(_, i) => `image-${i}`}
         showsHorizontalScrollIndicator={false}
         removeClippedSubviews={false}
+        contentContainerStyle={{ paddingTop: 84 }}
         getItemLayout={(data, index) => ({
           length: width,
           offset: width * index,
@@ -188,8 +230,8 @@ export default function FullImageScreen() {
           />
         ))}
         </View>
-        <GlobalFooter />
       </View>
+      <GlobalFooter />
     </View>
   );
 }
@@ -200,13 +242,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   headerTitleContainer: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 160 : 150,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: 'rgba(255, 255, 255, 0.95)',
+    zIndex: 1000,
   },
   backButton: {
     marginRight: 12,

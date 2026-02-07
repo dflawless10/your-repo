@@ -29,6 +29,8 @@ interface AdminStats {
 export default function AdminOnDutyScreen() {
   const router = useRouter();
   const scrollY = new Animated.Value(0);
+  const headerOpacity = React.useRef(new Animated.Value(0)).current;
+  const headerScale = React.useRef(new Animated.Value(1)).current;
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -44,6 +46,32 @@ export default function AdminOnDutyScreen() {
 
   console.log('🐐 AdminOnDutyScreen rendered');
 
+  // Fade in header title and arrow
+  useEffect(() => {
+    setTimeout(() => {
+      Animated.timing(headerOpacity, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+      }).start(() => {
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(headerScale, {
+              toValue: 1.05,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(headerScale, {
+              toValue: 1,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
+      });
+    }, 500);
+  }, []);
+
   useEffect(() => {
     checkAdminAccess();
   }, []);
@@ -52,14 +80,14 @@ export default function AdminOnDutyScreen() {
     try {
       const token = await AsyncStorage.getItem('jwtToken');
       if (!token) {
-        console.log('No token found, allowing access for development');
-        setIsAdmin(true);
+        Alert.alert('Access Denied', 'Please sign in to access admin features.');
+        router.push('/sign-in');
         setLoading(false);
         return;
       }
 
       // Check if the user is admin
-      const response = await fetch(`${API_BASE_URL}/api/user/profile`, {
+      const response = await fetch(`${API_BASE_URL}/api/user-profile`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -69,20 +97,19 @@ export default function AdminOnDutyScreen() {
           setIsAdmin(true);
           loadAdminStats();
         } else {
-          console.log('User is not admin, allowing access for development');
-          setIsAdmin(true);
+          Alert.alert('Access Denied', 'You do not have admin privileges.');
+          router.back();
         }
       } else {
-        console.log('Profile check failed, allowing access for development');
-        setIsAdmin(true);
+        Alert.alert('Error', 'Failed to verify admin status.');
+        router.back();
       }
       setLoading(false);
     } catch (error) {
       console.error('Error checking admin access:', error);
+      Alert.alert('Error', 'Failed to verify admin access.');
+      router.back();
       setLoading(false);
-      // For development - allow access
-      setIsAdmin(true);
-      loadAdminStats();
     }
   };
 
@@ -169,17 +196,17 @@ export default function AdminOnDutyScreen() {
       <EnhancedHeader scrollY={scrollY} />
 
       {/* Title with Back Arrow */}
-      <View style={styles.headerTitleContainer}>
+      <Animated.View style={[styles.headerTitleContainer, { opacity: headerOpacity, transform: [{ scale: headerScale }] }]}>
         <View style={styles.titleWithArrow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
             <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Admin On Duty</Text>
+          <Text style={styles.headerTitle}></Text>
          <View style={styles.adminBadge}>
             <Text style={styles.adminBadgeText}>ADMIN</Text>
           </View>
         </View>
-      </View>
+      </Animated.View>
 
 
       <Animated.ScrollView

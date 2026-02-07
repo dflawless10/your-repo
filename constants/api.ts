@@ -1,2 +1,4 @@
+import { API_BASE_URL } from '@/config';
+
 // src/constants/api.ts
-export const API_URL = 'http://10.0.0.170:5000';
+export const API_URL = API_BASE_URL;

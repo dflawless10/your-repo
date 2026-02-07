@@ -1,9 +1,11 @@
+import { API_BASE_URL } from '@/config';
+
 import React, { useState } from 'react';
 import {
   View, TextInput, Button, StyleSheet, Alert,
 } from 'react-native';
 
-const API_URL = 'http://10.0.0.170:5000';
+const API_URL = API_BASE_URL;
 
 export default function ContactForm() {
   const [name, setName] = useState('');

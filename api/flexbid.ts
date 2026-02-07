@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const API_BASE_URL = 'http://10.0.0.170:5000';
+import { API_BASE_URL } from '@/config';
 
 export interface FlexBidAuction {
   id: number;

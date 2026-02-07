@@ -13,7 +13,7 @@ import Animated, {
 
 // Use require() for images with expo-image
 import genieSprite from '../assets/goat-icon.png'; // Using goat-icon.png
-import wishlistCoin from '../assets/goat-stamp.png';
+import wishlistCoin from '../assets/goat-stamp-wishlistBadge.png';
 
 // Create an animated version of expo-image
 const AnimatedImage = Animated.createAnimatedComponent(Image);

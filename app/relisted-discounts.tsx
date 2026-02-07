@@ -1,9 +1,14 @@
+import { API_BASE_URL } from '@/config';
+
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, View, Text, StyleSheet } from "react-native";
 import RelistedDiscountsScreen from "app/components/RelistedDiscountsScreen";
 import { ListedItem } from "@/types/items";
+import { useTheme } from '@/app/theme/ThemeContext';
 
 export default function RelistedDiscountsPage() {
+  const { theme, colors } = useTheme();
+  const styles = createStyles(theme === 'dark', colors);
   const [items, setItems] = useState<ListedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,16 +34,16 @@ export default function RelistedDiscountsPage() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color="#E53935" />
-        <Text style={styles.loadingText}>Loading Relisted Discounts…</Text>
+        <Text style={[styles.loadingText, { color: colors.textPrimary }]}>Loading Relisted Discounts…</Text>
       </View>
     );
   }
 
   if (error) {
     return (
-      <View style={styles.center}>
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
         <Text style={styles.errorText}>Error: {error}</Text>
       </View>
     );
@@ -47,17 +52,16 @@ export default function RelistedDiscountsPage() {
   return <RelistedDiscountsScreen items={items} />;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (isDark: boolean, colors: any) => StyleSheet.create({
   center: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#fff",
   },
   loadingText: {
     marginTop: 12,
     fontSize: 16,
-    color: "#555",
+    color: colors.textPrimary,
   },
   errorText: {
     fontSize: 16,

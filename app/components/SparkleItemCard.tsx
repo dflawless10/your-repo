@@ -16,7 +16,7 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import { router } from 'expo-router';
-import {formatTimeWithSeconds, getCountdownLocal, isLowStock} from '@/utils/time';
+import {formatTime, formatTimeWithSeconds, getCountdownLocal, isLowStock} from '@/utils/time';
 import { ThemedText } from '@/components/ThemedText';
 import UnTappedHeart from '@/assets/unTappedHeart.svg';
 import TappedHeart from '@/assets/TappedHeart.svg';
@@ -24,7 +24,7 @@ import { useAppDispatch } from '@/hooks/reduxHooks';
 import {addToWishlist} from '@/app/wishlistslice';
 import GoatGenieBadge from '@/app/GoatGenieBadge';
 import {Ionicons, MaterialCommunityIcons} from '@expo/vector-icons';
-import { ListedItem } from '@/types/items';
+import {AuctionItem, ListedItem} from '@/types/items';
 import { useWishlist } from '@/app/wishlistContext';
 
 
@@ -33,6 +33,8 @@ const { width } = Dimensions.get('window');
 const COLUMN_GAP = 12;
 const NUM_COLUMNS = 2;
 const ITEM_WIDTH = (width - 32 - COLUMN_GAP) / NUM_COLUMNS;
+
+
 
 export default function SparkleItemCard({
   item,
@@ -45,6 +47,8 @@ export default function SparkleItemCard({
   isWishlistScreen = false,
 }: Readonly<{
   item: ListedItem;
+  total_reviews: string;
+  id: string;
   isWishlisted?: boolean;
   toggleWishlist: (id: number) => void;
   isFavorited: boolean;
@@ -52,8 +56,7 @@ export default function SparkleItemCard({
   onWishlistTap?: (item: ListedItem) => void;
   showRemoveButton?: boolean;
   isWishlistScreen?: boolean;
-
-   onAddToCart?: () => void;
+  onAddToCart?: () => void;
 }>) {
   const { timeText, isUrgent } = getCountdownLocal(item.auction_ends_at);
   const hasEnded = timeText === 'Ended';
@@ -92,6 +95,45 @@ export default function SparkleItemCard({
       console.error('🐐 Error adding to wishlist:', error);
     }
   };
+ type SellerInfo = {
+  seller?: {
+    id: number | string;
+    username?: string;
+    avg_rating?: number;
+    total_reviews?: number;
+    avatar: string;
+  };
+};
+
+const handleSellerTap = (item: SellerInfo) => {
+  if (!item?.seller) return;
+
+  router.push({
+    pathname: '/seller/[sellerId]',
+    params: { sellerId: String(item.seller.id) },
+  });
+};
+
+const isJustListed = (() => {
+  if (!item.listedAt) return false;
+  const listed = new Date(item.listedAt).getTime();
+  const now = Date.now();
+  const diffHours = (now - listed) / (1000 * 60 * 60);
+  return diffHours <= 24; // show badge for 24 hours
+})();
+
+
+const isMustSell =
+  Number(item.is_must_sell) === 1 ||
+  item.selling_strategy === "must_sell";
+
+console.log("🐐 MUST SELL DEBUG:", {
+  is_must_sell: item.is_must_sell,
+  selling_strategy: item.selling_strategy,
+  type_is_must_sell: typeof item.is_must_sell,
+});
+
+
 
   const handleShare = async () => {
     try {
@@ -157,6 +199,7 @@ export default function SparkleItemCard({
 
         {isUrgent && !hasEnded && (
           <View style={styles.urgentBadge}>
+            <Ionicons name="flame" size={12} color="#FFF" />
             <Text style={styles.urgentBadgeText}>ENDING SOON</Text>
           </View>
         )}
@@ -174,6 +217,22 @@ export default function SparkleItemCard({
             <Text style={styles.buyItNowText}>BUY NOW</Text>
           </View>
         )}
+
+        {/* Must Sell Badge - bottom Left */}
+        {(Number(item.is_must_sell) === 1 || item.selling_strategy === 'must_sell') && (
+  <View style={styles.mustSellBadge}>
+    <Text style={styles.mustSellText}>⚡ MUST SELL</Text>
+  </View>
+)}
+
+{isJustListed && (
+  <View style={styles.justListedBadge}>
+    <MaterialCommunityIcons name="new-box" size={12} color="#fff" />
+    <Text style={styles.justListedText}>JUST LISTED</Text>
+  </View>
+)}
+
+
 
         {/* Wishlist Coin - Bottom Right */}
         {!isWishlistScreen && (
@@ -229,7 +288,7 @@ export default function SparkleItemCard({
 
         <View style={styles.priceRow}>
           <Text style={styles.cardPrice}>
-            {item.selling_strategy === 'must_sell' && !item.highest_bid && item.price === 0
+            {(item.is_must_sell || item.selling_strategy === 'must_sell') && !item.highest_bid && item.price === 0
               ? 'Best Offer'
               : `$${Number(item.highest_bid ?? item.price ?? 0).toFixed(2)}`}
           </Text>
@@ -238,12 +297,22 @@ export default function SparkleItemCard({
           )}
         </View>
 
+        {isJustListed && (
+  <View style={styles.justListedBadge}>
+    <MaterialCommunityIcons name="new-box" size={12} color="#fff" />
+    <Text style={styles.justListedText}>JUST LISTED</Text>
+  </View>
+)}
+
+
+
+
         {/* Selling Strategy Badge */}
-        {item.selling_strategy && item.selling_strategy === 'must_sell' && (
-          <View style={styles.strategyBadge}>
-            <Text style={styles.strategyBadgeText}>⚡ Must Sell</Text>
-          </View>
-        )}
+       {(Number(item.is_must_sell) === 1 || item.selling_strategy === 'must_sell') && (
+  <View style={styles.strategyBadge}>
+    <Text style={styles.strategyBadgeText}>⚡ MUST SELL</Text>
+  </View>
+)}
 
         <View style={styles.statsContainer}>
 
@@ -263,12 +332,36 @@ export default function SparkleItemCard({
                 </View>
 
         {item.seller && (
-          <Text style={styles.sellerName} numberOfLines={1}>
-            by {item.seller.username || 'Seller'}
-          </Text>
-        )}
-      </View>
+  <View style={styles.sellerRatingRow}>
+    {item.seller.avatar && (
+      <Image source={{ uri: item.seller.avatar }} style={styles.sellerAvatar} />
+    )}
+    <TouchableOpacity
+      onPress={(e) => {
+        e.stopPropagation();
+        handleSellerTap(item);
+      }}
+      style={styles.sellerNameContainer}
+    >
+      <Text style={styles.sellerName} numberOfLines={1}>
+         {item.seller.username}
+      </Text>
     </TouchableOpacity>
+
+    {typeof item.seller.avg_rating === 'number' && (
+      <View style={styles.ratingRow}>
+        <Ionicons name="star" size={14} color="#FFD700" />
+        <Text style={styles.ratingText} numberOfLines={1}>
+          {item.seller.avg_rating.toFixed(1)} ({item.seller.total_reviews || 0})
+        </Text>
+      </View>
+    )}
+  </View>
+)}
+      </View>
+
+    </TouchableOpacity>
+
   );
 }
 
@@ -285,20 +378,86 @@ const styles = StyleSheet.create({
     elevation: 4,
     overflow: 'hidden',
   },
+  ratingText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  bottomRow: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'flex-start',
+  marginTop: 4,
+},
+
+bottomLeft: {
+  flex: 1,
+  paddingRight: 8,
+  gap: 4,
+},
+
+bottomRight: {
+  flexShrink: 1,
+  alignItems: 'flex-end',
+  gap: 4,
+},
+  justListedBadge: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: '#2563EB', // BidGoat blue
+  paddingHorizontal: 10,
+  paddingVertical: 6,
+  borderRadius: 20,
+  gap: 4,
+  shadowColor: '#2563EB',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.4,
+  shadowRadius: 4,
+  elevation: 4,
+},
+justListedText: {
+  color: '#fff',
+  fontSize: 11,
+  fontWeight: '800',
+  letterSpacing: 0.5,
+},
+
+
   statsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
     marginTop: 4,
   },
+   urgencyBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: '#e53e3e',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   bidCountText: {
     fontSize: 12,
     color: '#666',
     marginRight: 8,
   },
+   bidLabel: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 10,
+    marginTop: 2,
+    opacity: 0.9,
+  },
+
   statsText: {
     fontSize: 12,
-    color: '#666',
+    fontWeight: '600',
     marginRight: 8,
   },
   imageContainer: {
@@ -326,16 +485,19 @@ const styles = StyleSheet.create({
   },
   urgentBadge: {
     position: 'absolute',
-    top: 8,
-    left: 8,
-    backgroundColor: '#FF6B6B',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
+    top: 10,
+    right: 10,
+    backgroundColor: '#e53e3e',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   urgentBadgeText: {
     color: '#fff',
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
@@ -370,6 +532,24 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.5,
   },
+  mustSellBadge: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    backgroundColor: '#FF6B35',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    zIndex: 5,
+  },
+  mustSellText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+
+
   wishlistCoinOverlay: {
     position: 'absolute',
     bottom: 8,
@@ -393,23 +573,23 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   infoContainer: {
-    padding: 12,
+    padding: 14,
   },
   cardTitle: {
     fontSize: 14,
     fontWeight: '600',
     color: '#1a1a1a',
-    marginBottom: 6,
-    lineHeight: 18,
+    marginBottom: 8,
+    lineHeight: 17,
   },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   cardPrice: {
-    fontSize: 18,
+    fontSize: 13,
     fontWeight: '700',
     color: '#6A0DAD',
   },
@@ -436,9 +616,36 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#F44336',
   },
-  sellerName: {
-    fontSize: 12,
-    color: '#666',
-    fontStyle: 'italic',
+  sellerRatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginLeft: 16,
+    marginRight: 8,
   },
+  sellerAvatar: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    marginRight: 4,
+  },
+  sellerNameContainer: {
+    flexShrink: 1,
+    flexGrow: 0,
+    marginRight: 6,
+  },
+  sellerName: {
+    fontSize: 11,
+    color: '#007AFF',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+    marginLeft: 4,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 0,
+    marginLeft: 2,
+  },
+
 });

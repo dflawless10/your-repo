@@ -9,6 +9,7 @@ type SlideProps = {
   id: string; // ✅ renamed from "key" to "id"
 };
 
+// eslint-disable-next-line react/display-name
 const MemoizedSlide: React.FC<SlideProps> = React.memo(({ label, id }) => {
   const router = useRouter();
 

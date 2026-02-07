@@ -17,6 +17,7 @@ export interface ThemeColors {
   background: string;
   surface: string;
   textPrimary: string;
+  textSecondary: string;
   brandPrimary: string;
   onBrandPrimary: string;
 }
@@ -35,6 +36,7 @@ const lightColors: ThemeColors = {
   background: '#FFFFFF',
   surface: '#FFFFFF',
   textPrimary: '#11181C',
+  textSecondary: '#4A5568',
   brandPrimary: '#007AFF',
   onBrandPrimary: '#FFFFFF',
 };
@@ -43,6 +45,7 @@ const darkColors: ThemeColors = {
   background: '#0F1213', // dark background
   surface: '#1C1C1E',    // dark surface
   textPrimary: '#ECEDEE', // light text
+  textSecondary: '#ddd',  // lighter gray for secondary text
   brandPrimary: '#0A84FF',
   onBrandPrimary: '#FFFFFF',
 };
@@ -54,6 +57,7 @@ const ThemeContext = createContext<ThemeContextType | null>(null);
 const getStoredTheme = async (): Promise<ThemeType | null> => {
   try {
     const stored = await AsyncStorage.getItem(THEME_KEY);
+    console.log('🎨 getStoredTheme: Read from storage ->', stored);
     return stored === 'light' || stored === 'dark' ? (stored as ThemeType) : null;
   } catch (error) {
     console.warn('Failed to load theme from storage:', error);
@@ -64,6 +68,7 @@ const getStoredTheme = async (): Promise<ThemeType | null> => {
 const saveThemePreference = async (theme: ThemeType) => {
   try {
     await AsyncStorage.setItem(THEME_KEY, theme);
+    console.log('🎨 saveThemePreference: Saved to storage ->', theme);
   } catch (error) {
     console.warn('Failed to save theme to storage:', error);
   }
@@ -74,35 +79,40 @@ export const ThemeProvider = ({ children }: PropsWithChildren<{}>) => {
   const systemScheme = useColorScheme(); // 'light' | 'dark' | null
   const [theme, setThemeState] = useState<ThemeType>('light');
 
+  // Only load theme once on mount
   useEffect(() => {
     (async () => {
       const stored = await getStoredTheme();
-      setThemeState((stored ?? (systemScheme === 'dark' ? 'dark' : 'light')) as ThemeType);
+      const initialTheme = (stored ?? (systemScheme === 'dark' ? 'dark' : 'light')) as ThemeType;
+      console.log('🎨 ThemeProvider: Loading theme ->', initialTheme, '(stored:', stored, 'system:', systemScheme, ')');
+      setThemeState(initialTheme);
     })();
-  }, [systemScheme]);
+  }, []); // Empty dependency array - only run once on mount
 
-  const setTheme = useCallback((newTheme: ThemeType) => {
+  const setTheme = useCallback(async (newTheme: ThemeType) => {
+    console.log('🎨 ThemeProvider: Setting theme to', newTheme);
     setThemeState(newTheme);
-    saveThemePreference(newTheme);
+    await saveThemePreference(newTheme);
   }, []);
 
-  const toggleTheme = useCallback(() => {
-    setThemeState((prev) => {
-      const newTheme = prev === 'light' ? 'dark' : 'light';
-      saveThemePreference(newTheme);
-      return newTheme;
-    });
-  }, []);
+  const toggleTheme = useCallback(async () => {
+    const prev = theme;
+    const newTheme = prev === 'light' ? 'dark' : 'light';
+    console.log('🎨 ThemeProvider: Toggling theme from', prev, 'to', newTheme);
+    setThemeState(newTheme);
+    await saveThemePreference(newTheme);
+  }, [theme]);
 
-  const contextValue = useMemo(
-    () => ({
-      theme,
-      colors: theme === 'light' ? lightColors : darkColors,
-      setTheme,
-      toggleTheme,
-    }),
-    [theme, setTheme, toggleTheme]
-  );
+  // Always create new object on every render - ensures all consumers get updates
+  // Calculate colors based on current theme state
+  const contextValue = {
+    theme,
+    colors: theme === 'light' ? lightColors : darkColors,
+    setTheme,
+    toggleTheme,
+  };
+
+  console.log('🎨 ThemeProvider render - theme:', theme, 'colors.background:', contextValue.colors.background);
 
   return <ThemeContext.Provider value={contextValue}>{children}</ThemeContext.Provider>;
 };

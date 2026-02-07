@@ -25,8 +25,10 @@ import { setUser } from '@/utils/userSlice';
 import { getUserProfile } from '@/api/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme } from '@/app/theme/ThemeContext';
 
 export default function JewelryBoxScreen() {
+  const { theme, colors } = useTheme();
   const router = useRouter();
   const { addToWishlist, refreshWishlist } = useWishlist();
   const { isAuthenticated, username, token } = useAuth();
@@ -39,6 +41,8 @@ export default function JewelryBoxScreen() {
   const [showFilterHelp, setShowFilterHelp] = useState(false);
   const [showSortHelp, setShowSortHelp] = useState(false);
   const scrollY = useRef(new Animated.Value(0)).current;
+  const headerOpacity = useRef(new Animated.Value(0)).current;
+  const headerScale = useRef(new Animated.Value(1)).current;
   const dispatch = useAppDispatch();
 
   // Fetch favorites from backend
@@ -107,6 +111,33 @@ export default function JewelryBoxScreen() {
     hydrateUser();
   }, [token, dispatch]);
 
+  // Fade in header title - wait for screen to fully render first
+  useEffect(() => {
+    setTimeout(() => {
+      Animated.timing(headerOpacity, {
+        toValue: 1,
+        duration: 2000, // 2 seconds - slow and dramatic
+        useNativeDriver: true,
+      }).start(() => {
+        // After fade-in completes, start pulsing animation
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(headerScale, {
+              toValue: 1.05,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(headerScale, {
+              toValue: 1,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
+      });
+    }, 500); // 500ms delay - let screen render fully first
+  }, []);
+
   // Apply sorting and filtering
   useEffect(() => {
     let items = [...allItems];
@@ -116,7 +147,26 @@ export default function JewelryBoxScreen() {
       items = items.filter(item => {
         const tags = item.tags?.toLowerCase() || '';
         const name = item.name?.toLowerCase() || '';
-        return tags.includes(filterCategory) || name.includes(filterCategory);
+        const category = item.category?.toLowerCase() || '';
+        const searchText = `${tags} ${name} ${category}`;
+
+        // Use word boundary regex to avoid partial matches (e.g., "ring" shouldn't match "earring")
+        const pattern = new RegExp(`\\b${filterCategory}s?\\b`, 'i');
+        const matches = pattern.test(searchText);
+
+        // Debug logging for item #723
+        if (item.id === 723) {
+          console.log('🐐 JewelryBox Filter Debug - Item #723:');
+          console.log('  Filter:', filterCategory);
+          console.log('  Name:', name);
+          console.log('  Tags:', tags);
+          console.log('  Category:', category);
+          console.log('  Search text:', searchText);
+          console.log('  Pattern:', pattern.source);
+          console.log('  Match result:', matches);
+        }
+
+        return matches;
       });
     }
 
@@ -143,16 +193,11 @@ export default function JewelryBoxScreen() {
   }, [allItems, sortBy, filterCategory]);
 
   const handleToggleFavorite = async (itemId: number) => {
-    const updated = {
-      ...favoritedMap,
-      [itemId]: !favoritedMap[itemId],
-    };
-    setFavoritedMap(updated);
-
     try {
-      await AsyncStorage.setItem('favoritedItems', JSON.stringify(updated));
+      const isFavorited = favoritedMap[itemId];
 
-      if (updated[itemId]) {
+      if (!isFavorited) {
+        // Add to favorites
         await fetch('http://10.0.0.170:5000/api/favorites', {
           method: 'POST',
           headers: {
@@ -161,7 +206,12 @@ export default function JewelryBoxScreen() {
           },
           body: JSON.stringify({ item_id: itemId }),
         });
+
+        const updated = { ...favoritedMap, [itemId]: true };
+        setFavoritedMap(updated);
+        await AsyncStorage.setItem('favoritedItems', JSON.stringify(updated));
       } else {
+        // Remove from favorites
         await fetch(`http://10.0.0.170:5000/api/favorites/${itemId}`, {
           method: 'DELETE',
           headers: {
@@ -169,7 +219,14 @@ export default function JewelryBoxScreen() {
             'Content-Type': 'application/json',
           },
         });
-        await fetchFavoritesFromBackend();
+
+        // Immediately remove from UI
+        setAllItems(prev => prev.filter(item => item.id !== itemId));
+        setFilteredItems(prev => prev.filter(item => item.id !== itemId));
+
+        const updated = { ...favoritedMap, [itemId]: false };
+        setFavoritedMap(updated);
+        await AsyncStorage.setItem('favoritedItems', JSON.stringify(updated));
       }
     } catch (err) {
       console.error('🐐 Failed to toggle favorite:', err);
@@ -201,12 +258,28 @@ export default function JewelryBoxScreen() {
   const getCategoryBadge = (item: ListedItem) => {
     const tags = item.tags?.toLowerCase() || '';
     const name = item.name?.toLowerCase() || '';
+    const category = item.category?.toLowerCase() || '';
 
-    if (tags.includes('watch') || name.includes('watch')) return { icon: '⌚', label: 'Watch', color: '#6A0DAD' };
-    if (tags.includes('ring') || name.includes('ring')) return { icon: '💍', label: 'Ring', color: '#FF6B35' };
-    if (tags.includes('necklace') || name.includes('necklace')) return { icon: '📿', label: 'Necklace', color: '#4A90E2' };
-    if (tags.includes('bracelet') || name.includes('bracelet')) return { icon: '🔗', label: 'Bracelet', color: '#38a169' };
-    if (tags.includes('earring') || name.includes('earring')) return { icon: '💎', label: 'Earrings', color: '#E91E63' };
+    const searchText = `${tags} ${name} ${category}`;
+
+    // Use word boundary regex for more precise matching
+    // Check most specific categories first
+    if (/\bearring|\bearings\b/i.test(searchText)) return { icon: '👂', label: 'Earrings', color: '#E91E63' };
+    if (/\bpendant|\bpendants\b/i.test(searchText)) return { icon: '📿', label: 'Pendant', color: '#9C27B0' };
+    if (/\bcoin|\bcoins\b/i.test(searchText)) return { icon: '🪙', label: 'Coins', color: '#FF9800' };
+    if (/\banklet|\banklets\b/i.test(searchText)) return { icon: '🦶', label: 'Anklet', color: '#00BCD4' };
+    if (/\bwatch|\bwatches\b/i.test(searchText)) return { icon: '⌚', label: 'Watch', color: '#6A0DAD' };
+    if (/\bring|\brings\b/i.test(searchText)) return { icon: '💍', label: 'Ring', color: '#FF6B35' };
+    if (/\bnecklace|\bnecklaces\b/i.test(searchText)) return { icon: '📿', label: 'Necklace', color: '#4A90E2' };
+    if (/\bbracelet|\bbracelets\b/i.test(searchText)) return { icon: '🔗', label: 'Bracelet', color: '#FFD700' };
+    if (/\bbrooch|\bbrooches\b/i.test(searchText)) return { icon: '📌', label: 'Brooch', color: '#D32F2F' };
+    if (/\bchain|\bchains\b/i.test(searchText)) return { icon: '⛓️', label: 'Chain', color: '#607D8B' };
+    if (/\bgemstone|\bgem\b|\bgems\b/i.test(searchText)) return { icon: '💠', label: 'Gemstone', color: '#00BCD4' };
+    if (/\bdiamond|\bdiamonds\b/i.test(searchText)) return { icon: '💎', label: 'Diamond', color: '#00BCD4' };
+    if (/\bgold\b/i.test(searchText)) return { icon: '🏆', label: 'Gold', color: '#FFD700' };
+    if (/\bsilver\b/i.test(searchText)) return { icon: '⚪', label: 'Silver', color: '#C0C0C0' };
+    if (/\bantique|\bvintage\b/i.test(searchText)) return { icon: '🏺', label: 'Antique', color: '#8D6E63' };
+
     return { icon: '✨', label: 'Jewelry', color: '#4CAF50' };
   };
 
@@ -218,19 +291,35 @@ export default function JewelryBoxScreen() {
 
   const FilterChip = ({ label, value, active }: { label: string; value: string; active: boolean }) => (
     <TouchableOpacity
-      style={[styles.filterChip, active && styles.filterChipActive]}
+      style={[
+        styles.filterChip,
+        { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#FFF', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' },
+        active && styles.filterChipActive
+      ]}
       onPress={() => setFilterCategory(value)}
     >
-      <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{label}</Text>
+      <Text style={[
+        styles.filterChipText,
+        { color: theme === 'dark' && !active ? '#ECEDEE' : '#4a5568' },
+        active && styles.filterChipTextActive
+      ]}>{label}</Text>
     </TouchableOpacity>
   );
 
   const SortChip = ({ label, value, active }: { label: string; value: typeof sortBy; active: boolean }) => (
     <TouchableOpacity
-      style={[styles.filterChip, active && styles.filterChipActive]}
+      style={[
+        styles.filterChip,
+        { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#FFF', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' },
+        active && styles.filterChipActive
+      ]}
       onPress={() => setSortBy(value)}
     >
-      <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{label}</Text>
+      <Text style={[
+        styles.filterChipText,
+        { color: theme === 'dark' && !active ? '#ECEDEE' : '#4a5568' },
+        active && styles.filterChipTextActive
+      ]}>{label}</Text>
     </TouchableOpacity>
   );
 
@@ -333,29 +422,12 @@ export default function JewelryBoxScreen() {
               )}
             </View>
 
-            {/* Stats Row */}
-            <View style={styles.statsRow}>
-              <View style={styles.stat}>
-                <Ionicons name="eye-outline" size={12} color="#666" />
-                <Text style={styles.statText}>{Math.floor(Math.random() * 30) + 10}</Text>
-              </View>
-
-              {item.auction_ends_at && (
-                <View style={styles.stat}>
-                  <Ionicons name="time-outline" size={12} color={getCountdownColor(item.auction_ends_at)} />
-                  <Text style={[styles.statText, { color: getCountdownColor(item.auction_ends_at) }]}>
-                    {formatTimeWithSeconds(item.auction_ends_at, Date.now())}
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            {/* Seller */}
-            {item.seller && (
-              <View style={styles.sellerRow}>
-                <Ionicons name="person-circle-outline" size={14} color="#999" />
-                <Text style={styles.sellerText} numberOfLines={1}>
-                  {item.seller.username || 'Seller'}
+            {/* Countdown Timer */}
+            {item.auction_ends_at && (
+              <View style={styles.countdownRow}>
+                <Ionicons name="time-outline" size={14} color={getCountdownColor(item.auction_ends_at)} />
+                <Text style={[styles.countdownText, { color: getCountdownColor(item.auction_ends_at) }]}>
+                  {formatTimeWithSeconds(item.auction_ends_at, Date.now())}
                 </Text>
               </View>
             )}
@@ -366,7 +438,7 @@ export default function JewelryBoxScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Animated.ScrollView
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -379,24 +451,26 @@ export default function JewelryBoxScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        {loading ? (
+        {loading && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#6A0DAD" />
             <Text style={styles.loadingText}>Loading your favorites...</Text>
           </View>
-        ) : filteredItems.length === 0 && allItems.length === 0 ? (
-          renderEmptyState()
-        ) : (
+        )}
+
+        {!loading && filteredItems.length === 0 && allItems.length === 0 && renderEmptyState()}
+
+        {!loading && !(filteredItems.length === 0 && allItems.length === 0) && (
           <>
             {/* Header Stats */}
-            <View style={styles.headerStats}>
-              <Text style={styles.headerTitle}>
+            <Animated.View style={[styles.headerStats, { opacity: headerOpacity, transform: [{ scale: headerScale }] }]}>
+              <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
                 💖 My Favorites
               </Text>
-              <Text style={styles.headerCount}>
+              <Text style={[styles.headerCount, { color: theme === 'dark' ? '#999' : '#666' }]}>
                 {filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'}
               </Text>
-            </View>
+            </Animated.View>
 
             {/* Filters */}
             <ScrollView
@@ -405,16 +479,19 @@ export default function JewelryBoxScreen() {
               contentContainerStyle={styles.filtersContainer}
             >
               <View style={styles.filterLabelRow}>
-                <Text style={styles.filterLabel}>Category:</Text>
+                <Text style={[styles.filterLabel, { color: colors.textPrimary }]}>Category:</Text>
                 <TouchableOpacity onPress={() => setShowFilterHelp(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                   <Ionicons name="help-circle" size={16} color="#6A0DAD" />
                 </TouchableOpacity>
               </View>
               <FilterChip label="All" value="all" active={filterCategory === 'all'} />
-              <FilterChip label="⌚ Watches" value="watch" active={filterCategory === 'watch'} />
               <FilterChip label="💍 Rings" value="ring" active={filterCategory === 'ring'} />
+              <FilterChip label="⌚ Watches" value="watch" active={filterCategory === 'watch'} />
+              <FilterChip label="👂 Earrings" value="earring" active={filterCategory === 'earring'} />
               <FilterChip label="📿 Necklaces" value="necklace" active={filterCategory === 'necklace'} />
               <FilterChip label="🔗 Bracelets" value="bracelet" active={filterCategory === 'bracelet'} />
+              <FilterChip label="🦶 Anklets" value="anklet" active={filterCategory === 'anklet'} />
+              <FilterChip label="🪙 Coins" value="coin" active={filterCategory === 'coin'} />
             </ScrollView>
 
             {/* Sort Options */}
@@ -476,7 +553,9 @@ export default function JewelryBoxScreen() {
                   • 💍 Rings - Engagement rings, wedding bands, etc.{'\n'}
                   • 📿 Necklaces - Chains, pendants, and more{'\n'}
                   • 🔗 Bracelets - Tennis bracelets, bangles, etc.{'\n'}
-                  • 💎 Earrings - Studs, hoops, and drops
+                  • 👂 Earrings - Studs, huggies, chandelier, hoops, and drops{'\n'}
+                  • 🦶 Anklets - Ankle bracelets and chains{'\n'}
+                  • 🪙 Coins - Collectible and precious metal coins
                 </Text>
               </View>
 
@@ -552,7 +631,7 @@ const CARD_WIDTH = (width - PADDING * 2 - GAP) / NUM_COLUMNS;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: '#F7FAFC',
   },
   loadingContainer: {
     flex: 1,
@@ -571,7 +650,7 @@ const styles = StyleSheet.create({
     paddingTop: 20,
   },
   headerTitle: {
-    fontSize: 26,
+    fontSize: 20,
     fontWeight: '700',
     color: '#1a202c',
     marginBottom: 4,
@@ -756,33 +835,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFF',
   },
-  statsRow: {
+  countdownRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 6,
-  },
-  stat: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  statText: {
-    fontSize: 11,
-    color: '#666',
-    fontWeight: '500',
-  },
-  sellerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+    gap: 6,
     marginTop: 4,
   },
-  sellerText: {
-    fontSize: 11,
-    color: '#999',
-    fontStyle: 'italic',
-    flex: 1,
+  countdownText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   emptyContainer: {
     alignItems: 'center',

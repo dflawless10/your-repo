@@ -21,6 +21,10 @@ import DateRangePicker from 'app/components/DataRangePicker';
 import Dropdown from 'app/components/DropDown';
 import {ReviewFilter} from 'types/ReviewFilter';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
+import GlobalFooter from "@/app/components/GlobalFooter";
+import { API_BASE_URL } from '@/config';
+import { SellerPoliciesCard } from '@/app/components/SellerPoliciesCard';
+import { useTheme } from '@/app/theme/ThemeContext';
 
 
 type Review = {
@@ -44,6 +48,14 @@ type Seller = {
   items_sold: number;
   joined: string;
   badge?: string;
+  policies?: {
+    return_policy: 'no_returns' | '7_days' | '14_days' | '30_days';
+    return_window_days: number;
+    buyer_pays_return_shipping: boolean;
+    restocking_fee_percent: number;
+    authenticity_guarantee: boolean;
+    shipping_policy: string;
+  };
   review_stats: {
     total_reviews: number;
     avg_rating: number;
@@ -57,15 +69,21 @@ type Seller = {
   recent_reviews: Review[];
 };
 
+const API_URL = API_BASE_URL;
+
 export default function SellerProfileScreen() {
   const { sellerId, from, itemId } = useLocalSearchParams();
+  console.log('🐐 SellerProfileScreen params:', { sellerId, from, itemId });
   const router = useRouter();
+  const { theme, colors } = useTheme();
   const [seller, setSeller] = useState<Seller | null>(null);
   const [loading, setLoading] = useState(true);
   const [ctsStats, setCtsStats] = useState({ watchers: 0, ctsRate: 0, rewardPoints: 0 });
   const skeletonOpacity = useRef(new Animated.Value(1)).current;
   const contentOpacity = useRef(new Animated.Value(0)).current;
   const scrollY = useRef(new Animated.Value(0)).current;
+  const headerOpacity = useRef(new Animated.Value(0)).current;
+  const headerScale = useRef(new Animated.Value(1)).current;
   const [filter, setFilter] = useState<ReviewFilter>({
   keyword: '',
   minRating: 1,
@@ -94,8 +112,13 @@ export default function SellerProfileScreen() {
 
     const fetchSeller = async (id: string) => {
       try {
-        const response = await fetch(`http://10.0.0.170:5000/seller/${id}`);
-        if (!response.ok) throw new Error(`Failed to fetch seller: ${response.status}`);
+        console.log('🐐 Fetching seller with ID:', id, 'URL:', `${API_URL}/seller/${id}`);
+        const response = await fetch(`${API_URL}/seller/${id}`);
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('🐐 Seller fetch failed:', response.status, errorText);
+          throw new Error(`Failed to fetch seller: ${response.status}`);
+        }
         const data = await response.json();
         if (isMounted) setSeller(data);
       } catch (error) {
@@ -107,7 +130,7 @@ export default function SellerProfileScreen() {
 
     const fetchCTSStats = async (id: string) => {
       try {
-        const response = await fetch(`http://10.0.0.170:5000/api/seller/${id}/cts-stats`);
+        const response = await fetch(`${API_URL}/api/seller/${id}/cts-stats`);
         if (response.ok) {
           const data = await response.json();
           if (isMounted) setCtsStats(data);
@@ -132,24 +155,34 @@ export default function SellerProfileScreen() {
     };
   }, [sellerId]);
 
+  // Reviews are already included in the seller API response
+  // No need for separate filtered reviews fetch
+
   useEffect(() => {
-    if (seller?.id) {
-      const fetchFilteredReviews = async () => {
-        try {
-          const res = await fetch(`http://10.0.0.170:5000/api/reviews/filter`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...filter, seller_id: seller.id }),
-          });
-          const data = await res.json();
-          setFilteredReviews(data.reviews ?? []);
-        } catch (err) {
-          console.error('🐐 Filter fetch error:', err);
-        }
-      };
-      fetchFilteredReviews();
-    }
-  }, [filter, seller?.id]);
+    // Fade in header title and arrow
+    setTimeout(() => {
+      Animated.timing(headerOpacity, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+      }).start(() => {
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(headerScale, {
+              toValue: 1.05,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(headerScale, {
+              toValue: 1,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
+      });
+    }, 500);
+  }, []);
 
   useEffect(() => {
     if (!loading) {
@@ -174,21 +207,26 @@ export default function SellerProfileScreen() {
   };
 
   const renderReviews = () => {
-    const reviewsToRender =
-      filteredReviews.length > 0 || filter.keyword || filter.sentiments?.length
-        ? filteredReviews
-        : seller?.recent_reviews ?? [];
+    const reviewsToRender = seller?.recent_reviews ?? [];
 
     if (reviewsToRender.length === 0) {
-      return <Text style={styles.placeholder}>No reviews match your filters 🐐</Text>;
+      return <Text style={[styles.placeholder, { color: theme === 'dark' ? '#999' : '#718096' }]}>No reviews yet for this seller 🐐</Text>;
     }
 
     return reviewsToRender.map((r, index) => (
-      <View key={`${r.reviewer_name}-${index}`} style={styles.reviewBlock}>
-        <Text style={styles.label}>{r.reviewer_name} ({r.feedback_level})</Text>
-        <Text style={styles.subLabel}>Rating: {r.rating} ⭐</Text>
-        <Text style={styles.subLabel}>Mood: {r.mascot_mood || '🐐'}</Text>
-        <Text style={styles.comment}>{r.comment}</Text>
+      <View key={`${r.reviewer_name}-${index}`} style={[styles.reviewBlock, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#edf2f7' }]}>
+        <Text style={[styles.label, { color: colors.textPrimary }]}>
+          {r.reviewer_name || 'Anonymous'} ({r.feedback_level || 'Buyer'})
+        </Text>
+        <Text style={[styles.subLabel, { color: colors.textPrimary }]}>
+          Rating: {r.rating || 0} ⭐
+        </Text>
+        <Text style={[styles.subLabel, { color: colors.textPrimary }]}>
+          Mood: {r.mascot_mood || '🐐'}
+        </Text>
+        <Text style={[styles.comment, { color: theme === 'dark' ? '#CCC' : '#4a5568' }]}>
+          {r.comment || 'No comment provided'}
+        </Text>
       </View>
     ));
   };
@@ -209,11 +247,11 @@ export default function SellerProfileScreen() {
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <EnhancedHeader scrollY={scrollY} onSearch={() => {}} />
       <Animated.ScrollView
-        style={styles.scrollContainer}
-        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20, paddingBottom: 100 }}
+        style={[styles.scrollContainer, { backgroundColor: colors.background }]}
+        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20, paddingBottom: 100, backgroundColor: colors.background }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
@@ -222,12 +260,12 @@ export default function SellerProfileScreen() {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
-        <View style={styles.pageHeader}>
+        <Animated.View style={[styles.pageHeader, { opacity: headerOpacity, transform: [{ scale: headerScale }], backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E5E5E5' }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#333" />
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={styles.pageTitle}>Seller Profile</Text>
-        </View>
+          <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Seller Profile</Text>
+        </Animated.View>
 
         {/* Header */}
         <View style={[styles.header, { marginBottom: 16, paddingHorizontal: 16 }]}>
@@ -240,7 +278,7 @@ export default function SellerProfileScreen() {
           style={styles.avatar}
         />
         <View style={styles.headerInfo}>
-          <Text style={styles.title}>👤 {seller?.username}</Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>{seller?.username}</Text>
           {seller?.badge ? <Text style={styles.badge}>{seller.badge}</Text> : null}
           <StarRating
             rating={seller?.review_stats?.avg_rating ?? 0}
@@ -248,12 +286,12 @@ export default function SellerProfileScreen() {
           />
           <View style={styles.row}>
             <Text style={styles.star}>{'⭐'.repeat(seller?.pricing_star ?? 0)}</Text>
-            <Text style={styles.subLabel}>Pricing Power</Text>
+            <Text style={[styles.subLabel, { color: colors.textPrimary }]}>Pricing Power</Text>
           </View>
           <View style={styles.quickRow}>
-            <Text style={styles.chip}>Sold: {seller?.items_sold}</Text>
-            <Text style={styles.chip}>Joined: {seller?.joined}</Text>
-            <Text style={styles.chip}>
+            <Text style={[styles.chip, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F3F4F6', color: colors.textPrimary }]}>Sold: {seller?.items_sold}</Text>
+            <Text style={[styles.chip, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F3F4F6', color: colors.textPrimary }]}>Joined: {seller?.joined}</Text>
+            <Text style={[styles.chip, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F3F4F6', color: colors.textPrimary }]}>
               Positive: {seller?.review_stats?.positive_percent}%
             </Text>
           </View>
@@ -284,62 +322,50 @@ export default function SellerProfileScreen() {
 
       {/* KPI Cards */}
       <View style={styles.kpiRow}>
-        <View style={styles.kpiCard}>
-          <Text style={styles.kpiLabel}>Comm</Text>
-          <Text style={styles.kpiValue}>
+        <View style={[styles.kpiCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
+          <Text style={[styles.kpiLabel, { color: colors.textPrimary }]}>Comm</Text>
+          <Text style={[styles.kpiValue, { color: colors.textPrimary }]}>
             {seller?.review_stats?.communication ?? 'N/A'} ⭐
           </Text>
         </View>
-        <View style={styles.kpiCard}>
-          <Text style={styles.kpiLabel}>Accuracy</Text>
-          <Text style={styles.kpiValue}>
+        <View style={[styles.kpiCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
+          <Text style={[styles.kpiLabel, { color: colors.textPrimary }]}>Accuracy</Text>
+          <Text style={[styles.kpiValue, { color: colors.textPrimary }]}>
             {seller?.review_stats?.accuracy ?? 'N/A'} ⭐
           </Text>
         </View>
-        <View style={styles.kpiCard}>
-          <Text style={styles.kpiLabel}>Image</Text>
-          <Text style={styles.kpiValue}>
+        <View style={[styles.kpiCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
+          <Text style={[styles.kpiLabel, { color: colors.textPrimary }]}>Image</Text>
+          <Text style={[styles.kpiValue, { color: colors.textPrimary }]}>
             {seller?.review_stats?.image_quality ?? 'N/A'} ⭐
           </Text>
         </View>
-        <View style={styles.kpiCard}>
-          <Text style={styles.kpiLabel}>Shipping</Text>
-          <Text style={styles.kpiValue}>{avgShippingScore.toFixed(1)} ⭐</Text>
+        <View style={[styles.kpiCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
+          <Text style={[styles.kpiLabel, { color: colors.textPrimary }]}>Shipping</Text>
+          <Text style={[styles.kpiValue, { color: colors.textPrimary }]}>{avgShippingScore.toFixed(1)} ⭐</Text>
         </View>
       </View>
-      {/* Filters (Collapsible) */}
-      <ReviewFilterPanel filter={filter} setFilter={setFilter} />
-      <View style={styles.actionsRow}>
-        <TouchableOpacity style={styles.shareButton} onPress={shareFilteredView}>
-          <Text style={styles.shareText}>🔗 Share</Text>
-        </TouchableOpacity>
-      </View>
-      {/* Optional advanced filter controls inline if needed */}
 
+      {/* Seller Policies */}
+      {seller?.policies && (
+        <SellerPoliciesCard policies={seller.policies} />
+      )}
 
-
-      <Dropdown
-        label="Sort By"
-        options={['newest', 'oldest', 'highest rating', 'lowest rating']}
-        selected={filter.sortBy}
-        onSelect={(val) => setFilter({ ...filter, sortBy: val })}
-      />
-      <Dropdown
-        label="Item Variant"
-        options={['Red', 'Blue', 'XL', 'Used', 'New']}
-        selected={filter.variant}
-        onSelect={(variant) => setFilter({ ...filter, variant })}
-      />
-      {/* Reviews */}
       <View style={styles.divider} />
-       <Text style={[styles.title, styles.reviewsTitle]}>📝 Reviews</Text>
-      <Animated.View style={{ opacity: skeletonOpacity }}>
-        <ReviewSkeleton count={3} />
-      </Animated.View>
-      <Animated.View style={{ opacity: contentOpacity }}>{renderReviews()}</Animated.View>
+
+      {/* Reviews Section */}
+       <Text style={[styles.title, styles.reviewsTitle, { color: colors.textPrimary }]}>📝 Reviews</Text>
+      {loading ? (
+        <Animated.View style={{ opacity: skeletonOpacity }}>
+          <ReviewSkeleton count={3} />
+        </Animated.View>
+      ) : (
+        <Animated.View style={{ opacity: contentOpacity }}>{renderReviews()}</Animated.View>
+      )}
       {/* Add Review */}
       <BuyerReviewForm seller={seller} />
       </Animated.ScrollView>
+      <GlobalFooter />
     </View>
   );
 }

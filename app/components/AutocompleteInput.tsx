@@ -15,7 +15,7 @@ type Props = {
   placeholder?: string;
 };
 
-export default function AutocompleteInput({ label, value, onValueChange, options, placeholder }: Props) {
+export default function AutocompleteInput({ label, value, onValueChange, options, placeholder }: Readonly<Props>) {
   const [searchText, setSearchText] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);

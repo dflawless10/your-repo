@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '../components/EnhancedHeader';
 import GlobalFooter from "@/app/components/GlobalFooter";
+import { API_BASE_URL } from '@/config';
+import { useTheme } from '@/app/theme/ThemeContext';
 
 interface PrivacySettings {
   profile_visibility: 'public' | 'private' | 'friends';
@@ -31,7 +33,10 @@ interface PrivacySettings {
 
 export default function PrivacySettingsScreen() {
   const router = useRouter();
+  const { theme, colors } = useTheme();
   const scrollY = new Animated.Value(0);
+  const headerOpacity = useRef(new Animated.Value(0)).current;
+  const headerScale = useRef(new Animated.Value(1)).current;
 
   const [settings, setSettings] = useState<PrivacySettings>({
     profile_visibility: 'public',
@@ -49,6 +54,32 @@ export default function PrivacySettingsScreen() {
 
   useEffect(() => {
     loadPrivacySettings();
+  }, []);
+
+  useEffect(() => {
+    // Fade in header title and arrow
+    setTimeout(() => {
+      Animated.timing(headerOpacity, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+      }).start(() => {
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(headerScale, {
+              toValue: 1.05,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(headerScale, {
+              toValue: 1,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
+      });
+    }, 500);
   }, []);
 
   const loadPrivacySettings = async () => {
@@ -126,13 +157,13 @@ export default function PrivacySettingsScreen() {
     key: keyof PrivacySettings,
     icon: keyof typeof Ionicons.glyphMap
   ) => (
-    <View style={styles.settingRow}>
-      <View style={styles.settingIcon}>
-        <Ionicons name={icon} size={22} color="#6A0DAD" />
+    <View style={[styles.settingRow, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
+      <View style={[styles.settingIcon, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F0F4FF' }]}>
+        <Ionicons name={icon} size={22} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
       </View>
       <View style={styles.settingContent}>
-        <Text style={styles.settingTitle}>{title}</Text>
-        <Text style={styles.settingSubtitle}>{subtitle}</Text>
+        <Text style={[styles.settingTitle, { color: colors.textPrimary }]}>{title}</Text>
+        <Text style={[styles.settingSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]}>{subtitle}</Text>
       </View>
       <Switch
         value={settings[key] as boolean}
@@ -145,13 +176,13 @@ export default function PrivacySettingsScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ headerShown: false }} />
       <EnhancedHeader scrollY={scrollY} />
 
       <Animated.ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20 }}
+        style={[styles.scrollView, { backgroundColor: colors.background }]}
+        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20, backgroundColor: colors.background }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
@@ -159,15 +190,15 @@ export default function PrivacySettingsScreen() {
         scrollEventThrottle={16}
       >
         {/* Page Header with Back Arrow */}
-        <View style={styles.pageHeader}>
+        <Animated.View style={[styles.pageHeader, { opacity: headerOpacity, transform: [{ scale: headerScale }], backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E5E5E5' }]}>
           <TouchableOpacity
             onPress={() => router.back()}
             style={styles.backButton}
           >
-            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+            <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
-          <Text style={styles.pageTitle}>Privacy Settings</Text>
-        </View>
+          <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Privacy Settings</Text>
+        </Animated.View>
         {/* Privacy Policy Banner */}
         <TouchableOpacity
           style={styles.policyBanner}
@@ -191,30 +222,31 @@ export default function PrivacySettingsScreen() {
 
         {/* Profile Visibility */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Profile Visibility</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Profile Visibility</Text>
 
-          <View style={styles.optionsCard}>
+          <View style={[styles.optionsCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
             {['public', 'private', 'friends'].map((option) => (
               <TouchableOpacity
                 key={option}
                 style={[
                   styles.optionRow,
-                  settings.profile_visibility === option && styles.optionRowSelected,
+                  { borderBottomColor: theme === 'dark' ? '#2C2C2E' : '#F3F4F6' },
+                  settings.profile_visibility === option && { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F3FF' },
                 ]}
                 onPress={() => updateSetting('profile_visibility', option)}
               >
                 <Ionicons
                   name={settings.profile_visibility === option ? 'radio-button-on' : 'radio-button-off'}
                   size={22}
-                  color={settings.profile_visibility === option ? '#6A0DAD' : '#999'}
+                  color={settings.profile_visibility === option ? (theme === 'dark' ? '#B794F4' : '#6A0DAD') : '#999'}
                 />
                 <View style={styles.optionContent}>
-                  <Text style={styles.optionTitle}>
+                  <Text style={[styles.optionTitle, { color: colors.textPrimary }]}>
                     {option === 'public' && '🌐 Public'}
                     {option === 'private' && '🔒 Private'}
                     {option === 'friends' && '👥 Friends Only'}
                   </Text>
-                  <Text style={styles.optionSubtitle}>
+                  <Text style={[styles.optionSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]}>
                     {option === 'public' && 'Anyone can see your profile'}
                     {option === 'private' && 'Only you can see your profile'}
                     {option === 'friends' && 'Only verified connections'}
@@ -227,7 +259,7 @@ export default function PrivacySettingsScreen() {
 
         {/* Activity Privacy */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Activity Privacy</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Activity Privacy</Text>
 
           {renderToggleSetting(
             'Show Bid History',
@@ -253,9 +285,9 @@ export default function PrivacySettingsScreen() {
 
         {/* Communication Settings */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Who Can Message You</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Who Can Message You</Text>
 
-          <View style={styles.optionsCard}>
+          <View style={[styles.optionsCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
             {[
               { value: 'everyone', label: 'Everyone', subtitle: 'Anyone can send you messages' },
               { value: 'verified', label: 'Verified Users Only', subtitle: 'Only verified sellers' },
@@ -265,18 +297,19 @@ export default function PrivacySettingsScreen() {
                 key={option.value}
                 style={[
                   styles.optionRow,
-                  settings.allow_messages === option.value && styles.optionRowSelected,
+                  { borderBottomColor: theme === 'dark' ? '#2C2C2E' : '#F3F4F6' },
+                  settings.allow_messages === option.value && { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F3FF' },
                 ]}
                 onPress={() => updateSetting('allow_messages', option.value)}
               >
                 <Ionicons
                   name={settings.allow_messages === option.value ? 'radio-button-on' : 'radio-button-off'}
                   size={22}
-                  color={settings.allow_messages === option.value ? '#6A0DAD' : '#999'}
+                  color={settings.allow_messages === option.value ? (theme === 'dark' ? '#B794F4' : '#6A0DAD') : '#999'}
                 />
                 <View style={styles.optionContent}>
-                  <Text style={styles.optionTitle}>{option.label}</Text>
-                  <Text style={styles.optionSubtitle}>{option.subtitle}</Text>
+                  <Text style={[styles.optionTitle, { color: colors.textPrimary }]}>{option.label}</Text>
+                  <Text style={[styles.optionSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]}>{option.subtitle}</Text>
                 </View>
               </TouchableOpacity>
             ))}
@@ -285,7 +318,7 @@ export default function PrivacySettingsScreen() {
 
         {/* Data & Privacy */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Data & Privacy</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Data & Privacy</Text>
 
           {renderToggleSetting(
             'Search Engine Indexing',
@@ -311,38 +344,44 @@ export default function PrivacySettingsScreen() {
 
         {/* Data Rights */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Your Data Rights</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Your Data Rights</Text>
 
-          <TouchableOpacity style={styles.actionCard} onPress={handleDownloadData}>
+          <TouchableOpacity
+            style={[styles.actionCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}
+            onPress={handleDownloadData}
+          >
             <Ionicons name="download-outline" size={22} color="#2196F3" />
             <View style={styles.actionContent}>
-              <Text style={styles.actionTitle}>Download Your Data</Text>
-              <Text style={styles.actionSubtitle}>Get a copy of your personal information</Text>
+              <Text style={[styles.actionTitle, { color: colors.textPrimary }]}>Download Your Data</Text>
+              <Text style={[styles.actionSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]}>Get a copy of your personal information</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#CCC" />
+            <Ionicons name="chevron-forward" size={20} color={theme === 'dark' ? '#666' : '#CCC'} />
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.actionCard}
+            style={[styles.actionCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}
             onPress={() => Alert.alert('Data Deletion', 'To delete your data, please delete your account from Account Settings → Delete Account.')}
           >
             <Ionicons name="trash-outline" size={22} color="#DC2626" />
             <View style={styles.actionContent}>
-              <Text style={styles.actionTitle}>Delete Your Data</Text>
-              <Text style={styles.actionSubtitle}>Permanently remove all your information</Text>
+              <Text style={[styles.actionTitle, { color: colors.textPrimary }]}>Delete Your Data</Text>
+              <Text style={[styles.actionSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]}>Permanently remove all your information</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#CCC" />
+            <Ionicons name="chevron-forward" size={20} color={theme === 'dark' ? '#666' : '#CCC'} />
           </TouchableOpacity>
         </View>
 
         {/* Privacy Statement */}
-        <View style={styles.statementCard}>
-          <Text style={styles.statementTitle}>🛡️ Our Commitment</Text>
-          <Text style={styles.statementText}>
+        <View style={[styles.statementCard, {
+          backgroundColor: theme === 'dark' ? '#1C2C1E' : '#F0FDF4',
+          borderColor: theme === 'dark' ? '#2C4F2E' : '#86EFAC'
+        }]}>
+          <Text style={[styles.statementTitle, { color: theme === 'dark' ? '#86EFAC' : '#166534' }]}>🛡️ Our Commitment</Text>
+          <Text style={[styles.statementText, { color: theme === 'dark' ? '#A7F3D0' : '#166534' }]}>
             BidGoat takes your privacy seriously. We never sell your personal data to third parties and use industry-standard encryption to protect your information.
           </Text>
           <TouchableOpacity onPress={() => setShowPolicyModal(true)} style={styles.learnMoreButton}>
-            <Text style={styles.learnMoreText}>Learn more about our privacy practices →</Text>
+            <Text style={[styles.learnMoreText, { color: theme === 'dark' ? '#6EE7B7' : '#059669' }]}>Learn more about our privacy practices →</Text>
           </TouchableOpacity>
         </View>
 
@@ -356,25 +395,25 @@ export default function PrivacySettingsScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setShowPolicyModal(false)}
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Privacy Policy</Text>
+        <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+          <View style={[styles.modalHeader, { backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E5E5EA' }]}>
+            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Privacy Policy</Text>
             <TouchableOpacity onPress={() => setShowPolicyModal(false)} style={styles.closeButton}>
-              <Ionicons name="close" size={28} color="#1A1A1A" />
+              <Ionicons name="close" size={28} color={colors.textPrimary} />
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
-            <Text style={styles.policyHeader}>BidGoat Privacy Policy</Text>
-            <Text style={styles.policyDate}>Effective Date: December 24, 2025</Text>
+          <ScrollView style={[styles.modalContent, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
+            <Text style={[styles.policyHeader, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>BidGoat Privacy Policy</Text>
+            <Text style={[styles.policyDate, { color: theme === 'dark' ? '#999' : '#999' }]}>Effective Date: December 24, 2025</Text>
 
-            <Text style={styles.policySectionTitle}>Our Commitment to Your Privacy</Text>
-            <Text style={styles.policyBody}>
+            <Text style={[styles.policySectionTitle, { color: colors.textPrimary }]}>Our Commitment to Your Privacy</Text>
+            <Text style={[styles.policyBody, { color: theme === 'dark' ? '#999' : '#4B5563' }]}>
               At BidGoat, we believe that your privacy is a fundamental right. We are committed to protecting your personal information and being transparent about how we collect, use, and safeguard your data.
             </Text>
 
-            <Text style={styles.policySectionTitle}>1. Information We Collect</Text>
-            <Text style={styles.policyBody}>
+            <Text style={[styles.policySectionTitle, { color: colors.textPrimary }]}>1. Information We Collect</Text>
+            <Text style={[styles.policyBody, { color: theme === 'dark' ? '#999' : '#4B5563' }]}>
               • Account Information: Username, email, password (encrypted){'\n'}
               • Profile Information: Display name, avatar, bio{'\n'}
               • Transaction Data: Bid history, purchase history{'\n'}
@@ -382,8 +421,8 @@ export default function PrivacySettingsScreen() {
               • Device Information: IP address, browser type
             </Text>
 
-            <Text style={styles.policySectionTitle}>2. How We Use Your Information</Text>
-            <Text style={styles.policyBody}>
+            <Text style={[styles.policySectionTitle, { color: colors.textPrimary }]}>2. How We Use Your Information</Text>
+            <Text style={[styles.policyBody, { color: theme === 'dark' ? '#999' : '#4B5563' }]}>
               • Provide and improve our services{'\n'}
               • Process transactions and auctions{'\n'}
               • Send notifications about bids and messages{'\n'}
@@ -391,13 +430,13 @@ export default function PrivacySettingsScreen() {
               • Comply with legal obligations
             </Text>
 
-            <Text style={styles.policySectionTitle}>3. We NEVER Sell Your Data</Text>
-            <Text style={styles.policyBody}>
+            <Text style={[styles.policySectionTitle, { color: colors.textPrimary }]}>3. We NEVER Sell Your Data</Text>
+            <Text style={[styles.policyBody, { color: theme === 'dark' ? '#999' : '#4B5563' }]}>
               BidGoat will never sell, rent, or trade your personal information to third parties for their marketing purposes. Period.
             </Text>
 
-            <Text style={styles.policySectionTitle}>4. Your Privacy Rights</Text>
-            <Text style={styles.policyBody}>
+            <Text style={[styles.policySectionTitle, { color: colors.textPrimary }]}>4. Your Privacy Rights</Text>
+            <Text style={[styles.policyBody, { color: theme === 'dark' ? '#999' : '#4B5563' }]}>
               • Access: Request a copy of your personal data{'\n'}
               • Correction: Update or correct inaccurate information{'\n'}
               • Deletion: Request deletion of your account and data{'\n'}
@@ -405,8 +444,8 @@ export default function PrivacySettingsScreen() {
               • Opt-Out: Unsubscribe from marketing emails
             </Text>
 
-            <Text style={styles.policySectionTitle}>5. Data Security</Text>
-            <Text style={styles.policyBody}>
+            <Text style={[styles.policySectionTitle, { color: colors.textPrimary }]}>5. Data Security</Text>
+            <Text style={[styles.policyBody, { color: theme === 'dark' ? '#999' : '#4B5563' }]}>
               • All data transmitted over HTTPS/TLS encryption{'\n'}
               • Passwords hashed with bcrypt algorithm{'\n'}
               • PCI-DSS compliant payment processing{'\n'}
@@ -414,24 +453,24 @@ export default function PrivacySettingsScreen() {
               • Strict employee access controls
             </Text>
 
-            <Text style={styles.policySectionTitle}>6. Children's Privacy</Text>
-            <Text style={styles.policyBody}>
+            <Text style={[styles.policySectionTitle, { color: colors.textPrimary }]}>6. Children&#39;s Privacy</Text>
+            <Text style={[styles.policyBody, { color: theme === 'dark' ? '#999' : '#4B5563' }]}>
               BidGoat is not intended for users under 18 years old. We do not knowingly collect information from children.
             </Text>
 
-            <Text style={styles.policySectionTitle}>7. Contact Us</Text>
-            <Text style={styles.policyBody}>
+            <Text style={[styles.policySectionTitle, { color: colors.textPrimary }]}>7. Contact Us</Text>
+            <Text style={[styles.policyBody, { color: theme === 'dark' ? '#999' : '#4B5563' }]}>
               For privacy questions or concerns:{'\n\n'}
               Email: privacy@bidgoat.com{'\n'}
               Data Protection Officer: dpo@bidgoat.com{'\n\n'}
               Response Time: 7 business days
             </Text>
 
-            <Text style={styles.policyFooter}>
+            <Text style={[styles.policyFooter, { color: theme === 'dark' ? '#999' : '#6B7280' }]}>
               By using BidGoat, you acknowledge that you have read and understood this Privacy Policy.
             </Text>
 
-            <Text style={styles.policyCopyright}>
+            <Text style={[styles.policyCopyright, { color: theme === 'dark' ? '#666' : '#9CA3AF' }]}>
               © 2025 BidGoat. All rights reserved.
             </Text>
 
@@ -665,7 +704,6 @@ const styles = StyleSheet.create({
   policyHeader: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#6A0DAD',
     marginTop: 24,
     marginBottom: 8,
   },
@@ -677,7 +715,6 @@ const styles = StyleSheet.create({
   policySectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1A1A1A',
     marginTop: 24,
     marginBottom: 12,
   },

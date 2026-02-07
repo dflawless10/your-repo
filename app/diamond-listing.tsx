@@ -19,6 +19,9 @@ import Svg, { Defs, LinearGradient, Stop, Polygon } from 'react-native-svg';
 import { CharacterCounterInput, CHARACTER_LIMITS, validateCharacterCount } from './components/CharacterCounterInput';
 import { useImageValidation } from '@/hooks/useImageValidation';
 import ImageValidationFeedback from '@/app/components/ImageValidationFeedback';
+import Toast from 'react-native-toast-message';
+import { API_BASE_URL } from '@/config';
+import { useTheme } from '@/app/theme/ThemeContext';
 
 const AnimatedSvg = Animated.createAnimatedComponent(Svg);
 
@@ -63,17 +66,29 @@ const SpinningDiamond = () => {
 };
 
 export default function DiamondListingScreen() {
+  const { theme, colors } = useTheme();
   const router = useRouter();
   const params = useLocalSearchParams();
   const { token } = useAuth();
 
+  // Check if this is edit mode
+  const isEditMode = !!params.editItemId;
+  const editItemId = params.editItemId as string;
+
   // Debug: Log all params including additionalImages
   console.log('🐐 Diamond listing params:', params);
+  console.log('🐐 Edit mode:', isEditMode, 'Item ID:', editItemId);
   console.log('🐐 additionalImages param:', params.additionalImages);
 
-  const [title, setTitle] = useState(`${params.carat}ct ${params.shape} Diamond`);
+  // Helper to safely get string from params (handles string | string[] | undefined)
+  const getParamString = (param: string | string[] | undefined): string => {
+    if (!param) return '';
+    return Array.isArray(param) ? param[0] : param;
+  };
+
+  const [title, setTitle] = useState(`${getParamString(params.carat)}ct ${getParamString(params.shape)} Diamond`);
   const [description, setDescription] = useState('');
-  const [startingBid, setStartingBid] = useState(params.price?.toString() || '');
+  const [startingBid, setStartingBid] = useState(getParamString(params.price));
   const [duration, setDuration] = useState('7');
 
   // Advanced auction options
@@ -82,7 +97,7 @@ export default function DiamondListingScreen() {
   const [hasBuyItNow, setHasBuyItNow] = useState(false);
   const [buyItNowPrice, setBuyItNowPrice] = useState('');
   const [isMustSell, setIsMustSell] = useState(false);
-  const [appraisedValue] = useState(params.price?.toString() || '');
+  const [appraisedValue] = useState(getParamString(params.price));
 
   // Image validation
   const imageValidation = useImageValidation(params.imageUrl as string | null);
@@ -134,7 +149,7 @@ export default function DiamondListingScreen() {
     }
 
     // Validate required diamond specifications
-    if (!params.carat || !params.shape || !params.color || !params.clarity) {
+    if (!getParamString(params.carat) || !getParamString(params.shape) || !getParamString(params.color) || !getParamString(params.clarity)) {
       Alert.alert('Error', 'Please fill in all diamond specifications (Carat Weight, Cut, Color, and Clarity) before listing.');
       return;
     }
@@ -142,8 +157,8 @@ export default function DiamondListingScreen() {
     // Validate Must Sell constraints
     if (isMustSell) {
       const durationNum = parseInt(duration);
-      if (durationNum < 1 || durationNum > 7) {
-        Alert.alert('Error', 'Must Sell duration must be between 1 and 7 days');
+      if (durationNum < 24 || durationNum > 72) {
+        Alert.alert('Error', 'Must Sell duration must be 24, 48, or 72 hours');
         return;
       }
       if (hasReserve || hasBuyItNow) {
@@ -176,13 +191,13 @@ export default function DiamondListingScreen() {
     // Character count validation with moderation
     const titleValidation = validateCharacterCount(title, CHARACTER_LIMITS.NAME_MIN, CHARACTER_LIMITS.NAME_MAX, 'Title');
     if (!titleValidation.isValid) {
-      Alert.alert('Title Invalid', titleValidation.errorMessage!);
+      Alert.alert('Title Invalid', titleValidation.errorMessage);
       return;
     }
 
     const descValidation = validateCharacterCount(description, CHARACTER_LIMITS.DESCRIPTION_MIN, CHARACTER_LIMITS.DESCRIPTION_MAX, 'Description');
     if (!descValidation.isValid) {
-      Alert.alert('Description Invalid', descValidation.errorMessage!);
+      Alert.alert('Description Invalid', descValidation.errorMessage);
       return;
     }
 
@@ -209,21 +224,21 @@ console.log('price:', parseFloat(startingBid));
 console.log('duration_hours:', parseInt(duration));
       formData.append('category_id', '1');
 console.log('category_id: 1');
-      formData.append('tags', `diamond,${params.shape},${params.carat}ct,${params.color},${params.clarity}`);
-console.log('tags:', `diamond,${params.shape},${params.carat}ct,${params.color},${params.clarity}`);
-      formData.append('rarity', params.rarity || 'rare');
-console.log('rarity:', params.rarity || 'rare');
-      
+      formData.append('tags', `diamond,${getParamString(params.shape)},${getParamString(params.carat)}ct,${getParamString(params.color)},${getParamString(params.clarity)}`);
+console.log('tags:', `diamond,${getParamString(params.shape)},${getParamString(params.carat)}ct,${getParamString(params.color)},${getParamString(params.clarity)}`);
+      formData.append('rarity', getParamString(params.rarity) || 'rare');
+console.log('rarity:', getParamString(params.rarity) || 'rare');
+
       // Add diamond specifications as JSON
       const diamondSpecs = JSON.stringify({
-        carat: params.carat,
-        cut: params.shape,
-        color: params.color,
-        clarity: params.clarity,
-        certification: params.certified,
-        certificationLab: params.certificationLab || '',
-        certificationNumber: params.certificationNumber || '',
-        ethicallySourced: params.ethicallySourced || 'No'
+        carat: getParamString(params.carat),
+        cut: getParamString(params.shape),
+        color: getParamString(params.color),
+        clarity: getParamString(params.clarity),
+        certification: getParamString(params.certified),
+        certificationLab: getParamString(params.certificationLab) || '',
+        certificationNumber: getParamString(params.certificationNumber) || '',
+        ethicallySourced: getParamString(params.ethicallySourced) || 'No'
       });
       formData.append('diamond_specifications', diamondSpecs);
 console.log('diamond_specifications:', diamondSpecs);
@@ -287,8 +302,13 @@ console.log('diamond_specifications:', diamondSpecs);
         }
       }
 
-      const response = await fetch('http://10.0.0.170:5000/create_item', {
-        method: 'POST',
+      // Use PUT for edits, POST for new listings
+      const endpoint = isEditMode
+        ? `http://10.0.0.170:5000/item/${editItemId}`
+        : 'http://10.0.0.170:5000/create_item';
+
+      const response = await fetch(endpoint, {
+        method: isEditMode ? 'PUT' : 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -296,21 +316,57 @@ console.log('diamond_specifications:', diamondSpecs);
       });
 
       if (response.ok) {
-        let successMessage = '💎 Diamond listed successfully!';
+        const data = await response.json();
+        const itemId = isEditMode ? editItemId : data.item_id;
+
+        // Build congratulations message
+        let text2 = isEditMode
+          ? '💎 Your diamond has been updated!'
+          : '💎 Your diamond is under review!';
 
         if (hasReserve && reservePrice) {
-          successMessage += `\n🔒 Reserve price set at $${parseFloat(reservePrice).toLocaleString()}`;
+          text2 += ` Reserve: $${parseFloat(reservePrice).toLocaleString()}`;
         }
         if (hasBuyItNow && buyItNowPrice) {
-          successMessage += `\n⚡ Buy It Now price: $${parseFloat(buyItNowPrice).toLocaleString()}`;
+          text2 += ` • Buy Now: $${parseFloat(buyItNowPrice).toLocaleString()}`;
         }
         if (isMustSell) {
-          successMessage += `\n🔥 Must Sell mode activated (${duration} days)`;
+          text2 += ` • Must Sell: ${duration}d`;
         }
 
-        Alert.alert('Success', successMessage, [
-          { text: 'OK', onPress: () => router.push('/(tabs)/MyAuctionScreen') },
-        ]);
+        // Show celebratory toast
+        Toast.show({
+          type: 'success',
+          text1: isEditMode
+            ? '✨ Diamond Updated Successfully!'
+            : '🎉 Congratulations! Diamond Listed!',
+          text2: text2,
+          visibilityTime: 3000,
+          position: 'top',
+          topOffset: 60,
+        });
+
+        // Show preview modal after short delay
+        setTimeout(() => {
+          Alert.alert(
+            'Success! 🎉',
+            isEditMode
+              ? 'Your diamond has been updated! Want to preview it?'
+              : 'Your diamond listing will be live in an hour! Want to preview it?',
+            [
+              {
+                text: 'Preview Now',
+                onPress: () => router.push(`/seller/review-item/${itemId}`),
+              },
+              {
+                text: 'Later',
+                style: 'cancel',
+                onPress: () => router.push('/(tabs)/MyAuctionScreen'),
+              },
+            ],
+            { cancelable: false }
+          );
+        }, 1000);
       } else {
         const error = await response.json();
         Alert.alert('Error', error.error || 'Failed to create listing');
@@ -323,20 +379,22 @@ console.log('diamond_specifications:', diamondSpecs);
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1 }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={100}
     >
       <ScrollView
-        style={styles.container}
+        style={[styles.container, { backgroundColor: colors.background }]}
         contentContainerStyle={{ paddingBottom: 150 }}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.header}>
+        <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E2E8F0' }]}>
           <TouchableOpacity onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color="#1A202C" />
+            <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>List Your Diamond</Text>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
+            {isEditMode ? 'Edit Diamond Listing' : 'List Your Diamond'}
+          </Text>
           <View style={{ width: 24 }} />
         </View>
 
@@ -354,7 +412,7 @@ console.log('diamond_specifications:', diamondSpecs);
           </>
         )}
 
-        <View style={styles.form}>
+        <View style={[styles.form, { backgroundColor: colors.background }]}>
           <CharacterCounterInput
             label="Title"
             placeholder="e.g., 1.25ct Round Diamond"
@@ -380,25 +438,29 @@ console.log('diamond_specifications:', diamondSpecs);
 
         {/* Display Appraised Value */}
         {appraisedValue && (
-          <View style={styles.appraisedValueContainer}>
+          <View style={[styles.appraisedValueContainer, {
+            backgroundColor: theme === 'dark' ? '#2C2440' : '#F0F4FF',
+            borderColor: theme === 'dark' ? '#B794F4' : '#6A0DAD'
+          }]}>
             <View style={styles.appraisedValueHeader}>
-              <Ionicons name="diamond" size={24} color="#6A0DAD" />
-              <Text style={styles.appraisedValueLabel}>Appraised Value</Text>
+              <Ionicons name="diamond" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+              <Text style={[styles.appraisedValueLabel, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>Appraised Value</Text>
             </View>
-            <Text style={styles.appraisedValueAmount}>
+            <Text style={[styles.appraisedValueAmount, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>
               ${parseFloat(appraisedValue).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </Text>
           </View>
         )}
 
-        <Text style={styles.label}>
+        <Text style={[styles.label, { color: colors.textPrimary }]}>
           {isMustSell ? 'Starting Bid ($) - Must-Sell *' : 'Starting Bid ($) *'}
         </Text>
         <TextInput
-          style={[styles.input, isMustSell && styles.mustSellInput]}
+          style={[styles.input, isMustSell && styles.mustSellInput, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: colors.textPrimary, borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
           value={startingBid}
           onChangeText={setStartingBid}
           placeholder={isMustSell ? "0.00 (No minimum!)" : "0.00"}
+          placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
           keyboardType="decimal-pad"
         />
         {isMustSell ? (
@@ -409,17 +471,17 @@ console.log('diamond_specifications:', diamondSpecs);
             </Text>
           </View>
         ) : (
-          <View style={styles.infoBox}>
-            <Ionicons name="information-circle" size={20} color="#6A0DAD" />
-            <Text style={styles.infoText}>
+          <View style={[styles.infoBox, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC' }]}>
+            <Ionicons name="information-circle" size={20} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+            <Text style={[styles.infoText, { color: theme === 'dark' ? '#CCC' : '#4A5568' }]}>
               This is the minimum opening bid. Set it below appraisal value to attract bidders. You can add a Buy It Now price below for instant purchase.
             </Text>
           </View>
         )}
 
-        <Text style={styles.label}>Auction Duration (days) *</Text>
+        <Text style={[styles.label, { color: colors.textPrimary }]}>Auction Duration (days) *</Text>
         <View style={styles.durationRow}>
-          {['7', '14', '30'].map((days) => (
+          {['3', '7', '14', '30'].map((days) => (
             <TouchableOpacity
               key={days}
               style={[
@@ -441,36 +503,37 @@ console.log('diamond_specifications:', diamondSpecs);
         </View>
 
         {/* Advanced Auction Options */}
-        <View style={styles.advancedOptionsContainer}>
-          <Text style={styles.sectionHeader}>💎 Advanced Options</Text>
+        <View style={[styles.advancedOptionsContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}>
+          <Text style={[styles.sectionHeader, { color: colors.textPrimary }]}>💎 Advanced Options</Text>
 
           {/* Reserve Price Option */}
           <TouchableOpacity
             style={styles.optionRow}
             onPress={() => {
-              if (!isMustSell) {
+              if (!isMustSell && !hasBuyItNow) {
                 setHasReserve(!hasReserve);
                 if (hasReserve) setReservePrice('');
               }
             }}
-            disabled={isMustSell}
+            disabled={isMustSell || hasBuyItNow}
           >
             <View style={styles.checkboxContainer}>
-              <View style={[styles.checkbox, hasReserve && styles.checkboxActive, isMustSell && styles.checkboxDisabled]}>
+              <View style={[styles.checkbox, hasReserve && styles.checkboxActive, (isMustSell || hasBuyItNow) && styles.checkboxDisabled]}>
                 {hasReserve && <Ionicons name="checkmark" size={18} color="#fff" />}
               </View>
-              <Text style={[styles.optionLabel, isMustSell && styles.optionLabelDisabled]}>Set Reserve Price</Text>
+              <Text style={[styles.optionLabel, { color: (isMustSell || hasBuyItNow) ? '#A0AEC0' : colors.textPrimary }]}>Set Reserve Price</Text>
             </View>
-            <Ionicons name="shield-checkmark" size={20} color={isMustSell ? "#CBD5E0" : "#6A0DAD"} />
+            <Ionicons name="shield-checkmark" size={20} color={(isMustSell || hasBuyItNow) ? "#CBD5E0" : "#6A0DAD"} />
           </TouchableOpacity>
-          {hasReserve && !isMustSell && (
+          {hasReserve && !isMustSell && !hasBuyItNow && (
             <View style={styles.optionInputContainer}>
-              <Text style={styles.optionHelpText}>Minimum price you'll accept (hidden from buyers)</Text>
+              <Text style={[styles.optionHelpText, { color: theme === 'dark' ? '#999' : '#718096' }]}>Minimum price you&#39;ll accept (hidden from buyers)</Text>
               <TextInput
-                style={styles.optionInput}
+                style={[styles.optionInput, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC', color: colors.textPrimary, borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
                 value={reservePrice}
                 onChangeText={setReservePrice}
                 placeholder="Enter reserve price"
+                placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
                 keyboardType="decimal-pad"
               />
             </View>
@@ -482,7 +545,13 @@ console.log('diamond_specifications:', diamondSpecs);
             onPress={() => {
               if (!isMustSell) {
                 setHasBuyItNow(!hasBuyItNow);
-                if (hasBuyItNow) setBuyItNowPrice('');
+                if (hasBuyItNow) {
+                  setBuyItNowPrice('');
+                } else {
+                  // When enabling Buy It Now, disable and clear Reserve Price
+                  setHasReserve(false);
+                  setReservePrice('');
+                }
               }
             }}
             disabled={isMustSell}
@@ -491,18 +560,19 @@ console.log('diamond_specifications:', diamondSpecs);
               <View style={[styles.checkbox, hasBuyItNow && styles.checkboxActive, isMustSell && styles.checkboxDisabled]}>
                 {hasBuyItNow && <Ionicons name="checkmark" size={18} color="#fff" />}
               </View>
-              <Text style={[styles.optionLabel, isMustSell && styles.optionLabelDisabled]}>Add Buy It Now</Text>
+              <Text style={[styles.optionLabel, { color: isMustSell ? '#A0AEC0' : colors.textPrimary }]}>Add Buy It Now</Text>
             </View>
             <Ionicons name="flash" size={20} color={isMustSell ? "#CBD5E0" : "#FF6B35"} />
           </TouchableOpacity>
           {hasBuyItNow && !isMustSell && (
             <View style={styles.optionInputContainer}>
-              <Text style={styles.optionHelpText}>Instant purchase price</Text>
+              <Text style={[styles.optionHelpText, { color: theme === 'dark' ? '#999' : '#718096' }]}>Instant purchase price</Text>
               <TextInput
-                style={styles.optionInput}
+                style={[styles.optionInput, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC', color: colors.textPrimary, borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
                 value={buyItNowPrice}
                 onChangeText={setBuyItNowPrice}
                 placeholder="Enter Buy It Now price"
+                placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
                 keyboardType="decimal-pad"
               />
             </View>
@@ -526,11 +596,12 @@ console.log('diamond_specifications:', diamondSpecs);
                 setHasBuyItNow(false);
                 setReservePrice('');
                 setBuyItNowPrice('');
-                setDuration('7'); // Reset to max 7 days
+                setDuration('48'); // Default to 48 hours
                 setStartingBid('0.00'); // Auto-set to $0.00 for maximum urgency
               } else {
                 // When disabling must-sell, restore appraised value
                 setStartingBid(appraisedValue);
+                setDuration('7'); // Reset to 7 days
               }
             }}
           >
@@ -538,53 +609,66 @@ console.log('diamond_specifications:', diamondSpecs);
               <View style={[styles.checkbox, isMustSell && styles.checkboxActive]}>
                 {isMustSell && <Ionicons name="checkmark" size={18} color="#fff" />}
               </View>
-              <Text style={styles.optionLabel}>Must Sell (1-7 days)</Text>
+              <Text style={[styles.optionLabel, { color: colors.textPrimary }]}>Must Sell (24-72 hours)</Text>
             </View>
             <Ionicons name="flame" size={20} color="#D97706" />
           </TouchableOpacity>
           {isMustSell && (
             <View style={styles.optionInputContainer}>
-              <Text style={styles.optionHelpText}>⚠️ No reserve, no buy-it-now. Creates urgency!</Text>
+              <Text style={[styles.optionHelpText, { color: theme === 'dark' ? '#999' : '#718096' }]}>⚠️ No reserve, no buy-it-now. Creates urgency!</Text>
               <View style={styles.mustSellDurationRow}>
-                {['1', '3', '5', '7'].map((days) => (
+                {[{label: '24h', hours: '24'}, {label: '48h', hours: '48'}, {label: '72h', hours: '72'}].map((option) => (
                   <TouchableOpacity
-                    key={days}
+                    key={option.hours}
                     style={[
                       styles.mustSellDurationButton,
-                      duration === days && styles.mustSellDurationButtonActive,
+                      duration === option.hours && styles.mustSellDurationButtonActive,
                     ]}
-                    onPress={() => setDuration(days)}
+                    onPress={() => setDuration(option.hours)}
                   >
                     <Text style={[
                       styles.mustSellDurationText,
-                      duration === days && styles.mustSellDurationTextActive,
+                      duration === option.hours && styles.mustSellDurationTextActive,
                     ]}>
-                      {days}d
+                      {option.label}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
+              <TouchableOpacity
+                style={styles.cancelMustSellButton}
+                onPress={() => {
+                  setIsMustSell(false);
+                  setDuration('7');
+                  setStartingBid(appraisedValue);
+                }}
+              >
+                <Text style={styles.cancelMustSellText}>Cancel Must Sell</Text>
+              </TouchableOpacity>
             </View>
           )}
         </View>
 
-        <View style={styles.infoBox}>
+        <View style={[styles.infoBox, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC' }]}>
           <Ionicons name="information-circle" size={20} color="#FF6B35" />
-          <Text style={styles.infoText}>
-            Estimated value: ${params.price}
+          <Text style={[styles.infoText, { color: theme === 'dark' ? '#CCC' : '#4A5568' }]}>
+            Estimated value: ${getParamString(params.price)}
           </Text>
         </View>
 
-        <View style={styles.infoBox}>
+        <View style={[styles.infoBox, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC' }]}>
           <Ionicons name="cash" size={20} color="#38a169" />
-          <Text style={styles.infoText}>
-            You'll receive 89% after BidGoat fees (8% commission + 3% processing)
+          <Text style={[styles.infoText, { color: theme === 'dark' ? '#CCC' : '#4A5568' }]}>
+            You&#39;ll receive 89% after BidGoat fees (8% commission + 3% processing)
           </Text>
         </View>
 
         <View style={styles.buttonContainer}>
           <TouchableOpacity
-            style={styles.cancelButton}
+            style={[styles.cancelButton, {
+              backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC',
+              borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0'
+            }]}
             onPress={() => {
               Alert.alert(
                 'Cancel Listing',
@@ -600,8 +684,8 @@ console.log('diamond_specifications:', diamondSpecs);
               );
             }}
           >
-            <Ionicons name="close-circle" size={20} color="#718096" />
-            <Text style={styles.cancelButtonText}>Cancel</Text>
+            <Ionicons name="close-circle" size={20} color={theme === 'dark' ? '#999' : '#718096'} />
+            <Text style={[styles.cancelButtonText, { color: theme === 'dark' ? '#999' : '#718096' }]}>Cancel</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -609,7 +693,9 @@ console.log('diamond_specifications:', diamondSpecs);
             onPress={handleCreateListing}
           >
             <SpinningDiamond />
-            <Text style={styles.submitButtonText}>List Diamond</Text>
+            <Text style={styles.submitButtonText}>
+              {isEditMode ? 'Update Diamond' : 'List Diamond'}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -621,7 +707,6 @@ console.log('diamond_specifications:', diamondSpecs);
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F7FAFC',
   },
   header: {
     flexDirection: 'row',
@@ -629,14 +714,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 16,
-    backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1A202C',
   },
   previewImage: {
     width: '100%',
@@ -649,18 +731,14 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#2D3748',
     marginBottom: 8,
     marginTop: 16,
   },
   input: {
-    backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    color: '#1A202C',
   },
   textArea: {
     height: 120,
@@ -730,12 +808,10 @@ const styles = StyleSheet.create({
   },
   // Advanced Auction Options Styles
   advancedOptionsContainer: {
-    backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
     marginTop: 24,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -745,7 +821,6 @@ const styles = StyleSheet.create({
   sectionHeader: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#2D3748',
     marginBottom: 16,
     textAlign: 'center',
   },
@@ -785,7 +860,6 @@ const styles = StyleSheet.create({
   optionLabel: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#2D3748',
   },
   optionLabelDisabled: {
     color: '#A0AEC0',
@@ -798,18 +872,14 @@ const styles = StyleSheet.create({
   },
   optionHelpText: {
     fontSize: 12,
-    color: '#718096',
     marginBottom: 8,
     fontStyle: 'italic',
   },
   optionInput: {
-    backgroundColor: '#F7FAFC',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    color: '#1A202C',
   },
   optionDivider: {
     flexDirection: 'row',
@@ -854,6 +924,21 @@ const styles = StyleSheet.create({
   },
   mustSellDurationTextActive: {
     color: '#D97706',
+  },
+  cancelMustSellButton: {
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+  },
+  cancelMustSellText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#718096',
   },
   appraisedValueContainer: {
     backgroundColor: '#F0F4FF',

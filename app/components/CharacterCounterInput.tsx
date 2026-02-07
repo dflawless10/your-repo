@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, StyleSheet, TextInputProps, TextStyle } from 'react-native';
 import { moderateContent, ModerationResult, validateContentQuick } from '../utils/contentModeration';
+import { useTheme } from '@/app/theme/ThemeContext';
 
 interface CharacterCounterInputProps extends TextInputProps {
   value: string;
@@ -24,6 +25,7 @@ export const CharacterCounterInput: React.FC<CharacterCounterInputProps> = ({
   enableModeration = true,
   ...textInputProps
 }) => {
+  const { theme, colors } = useTheme();
   const [moderationResult, setModerationResult] = useState<ModerationResult | null>(null);
 
   // Run content moderation when value changes (debounced)
@@ -69,15 +71,17 @@ export const CharacterCounterInput: React.FC<CharacterCounterInputProps> = ({
 
   return (
     <View style={styles.container}>
-      {label && <Text style={styles.label}>{label}</Text>}
+      {label && <Text style={[styles.label, { color: colors.textPrimary }]}>{label}</Text>}
 
       <TextInput
         {...textInputProps}
         value={value}
         onChangeText={onChangeText}
         maxLength={maxLength}
+        placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
         style={[
           styles.input,
+          { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: colors.textPrimary, borderColor: theme === 'dark' ? '#3C3C3E' : '#DDD' },
           textInputProps.style,
           { marginBottom: 4 },
           getInputStyle(),

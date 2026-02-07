@@ -18,8 +18,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import EnhancedHeader, {HEADER_MAX_HEIGHT} from '@/app/components/EnhancedHeader';
 import GlobalFooter from "@/app/components/GlobalFooter";
+import SalesCelebrationModal from '@/app/components/SalesCelebrationModal';
+import { API_BASE_URL } from '@/config';
+import { formatShippingTimeRemaining } from '@/utils/time';
+import { useTheme } from '@/app/theme/ThemeContext';
 
-const API_URL = 'http://10.0.0.170:5000';
+const API_URL = API_BASE_URL;
 
 type Order = {
   id: number;
@@ -28,7 +32,11 @@ type Order = {
   photo_url: string;
   sale_price: number;
   shipping_cost: number;
+  insurance_cost?: number;
   total_amount: number;
+  bidgoat_commission?: number;
+  seller_payout?: number;
+  seller_username: string;
   buyer: {
     name: string;
     email: string;
@@ -45,20 +53,61 @@ type Order = {
   status: string;
   created_at: string;
   shipped_at?: string;
+  shipping_deadline?: string;
+  urgency_level?: string;
+  urgency_score?: number;
+  listing_type?: string;
+  premium_shipping?: boolean;
+  premium_shipping_hours?: number;
+  premium_shipping_cost?: number;
+  time_remaining?: string;
+  hours_remaining?: number;
+  is_late?: boolean;
 };
 
 export default function SellerOrdersScreen() {
   const router = useRouter();
+  const { theme, colors } = useTheme();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [username, setUsername] = useState<string | null>(null);
   const scrollY = new Animated.Value(0);
+  const headerOpacity = React.useRef(new Animated.Value(0)).current;
+  const headerScale = React.useRef(new Animated.Value(1)).current;
   const [refreshing, setRefreshing] = useState(false);
   const [shipModalVisible, setShipModalVisible] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [trackingNumber, setTrackingNumber] = useState('');
   const [carrier, setCarrier] = useState('USPS');
   const [shipping, setShipping] = useState(false);
+  const [celebrationVisible, setCelebrationVisible] = useState(false);
+  const [celebrationOrder, setCelebrationOrder] = useState<Order | null>(null);
+
+  // Fade in header title and arrow
+  useEffect(() => {
+    setTimeout(() => {
+      Animated.timing(headerOpacity, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+      }).start(() => {
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(headerScale, {
+              toValue: 1.05,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(headerScale, {
+              toValue: 1,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
+      });
+    }, 500);
+  }, []);
 
   useEffect(() => {
     fetchOrders();
@@ -86,6 +135,8 @@ export default function SellerOrdersScreen() {
 
       if (response.ok) {
         const data = await response.json();
+        console.log('🐐 Seller orders fetched:', data.orders?.length, 'orders');
+        console.log('🐐 First order data:', data.orders?.[0]);
         setOrders(data.orders);
       }
     } catch (error) {
@@ -130,8 +181,10 @@ export default function SellerOrdersScreen() {
       });
 
       if (response.ok) {
-        Alert.alert('Success!', 'Order marked as shipped. Buyer has been notified.');
         setShipModalVisible(false);
+        // Show celebration modal
+        setCelebrationOrder(selectedOrder);
+        setCelebrationVisible(true);
         fetchOrders(); // Refresh list
       } else {
         const error = await response.json();
@@ -180,19 +233,35 @@ export default function SellerOrdersScreen() {
     }
   };
 
+  const getUrgencyBadge = (urgencyLevel?: string, isLate?: boolean) => {
+    if (isLate) {
+      return { emoji: '⚠️', label: 'OVERDUE', color: '#E53E3E', bgColor: '#FED7D7' };
+    }
+    switch (urgencyLevel) {
+      case 'urgent':
+        return { emoji: '🔥', label: 'URGENT', color: '#E53E3E', bgColor: '#FED7D7' };
+      case 'high':
+        return { emoji: '⚡', label: 'HIGH', color: '#DD6B20', bgColor: '#FEEBC8' };
+      case 'normal':
+        return { emoji: '📦', label: 'NORMAL', color: '#3182CE', bgColor: '#BEE3F8' };
+      default:
+        return null;
+    }
+  };
+
   const pendingOrders = orders.filter(o => o.status === 'pending_shipment');
   const shippedOrders = orders.filter(o => o.status !== 'pending_shipment');
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
         <EnhancedHeader scrollY={scrollY} />
-        <View style={styles.headerTitleContainer}>
+        <View style={[styles.headerTitleContainer, { backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
           <View style={styles.titleWithArrow}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
-              <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+              <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Selling Orders</Text>
+            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Selling Orders</Text>
           </View>
         </View>
         <ActivityIndicator size="large" color="#FF6B35" style={{ marginTop: 200 }} />
@@ -201,24 +270,25 @@ export default function SellerOrdersScreen() {
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <EnhancedHeader scrollY={scrollY} username={username} onSearch={() => {}} />
 
       {/* Title with Back Arrow */}
-      <View style={styles.headerTitleContainer}>
+      <Animated.View style={[styles.headerTitleContainer, { opacity: headerOpacity, transform: [{ scale: headerScale }], backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
         <View style={styles.titleWithArrow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
-            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+            <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Selling Orders</Text>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Selling Orders</Text>
         </View>
-      </View>
+      </Animated.View>
 
       <Animated.ScrollView
-        style={styles.container}
+        style={[styles.container, { backgroundColor: colors.background }]}
         contentContainerStyle={{
     paddingTop: 240,
     paddingBottom: 40,
+    backgroundColor: colors.background,
   }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -232,76 +302,128 @@ export default function SellerOrdersScreen() {
 
         {/* Stats */}
         <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
+          <View style={[styles.statCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}>
             <Text style={styles.statNumber}>{pendingOrders.length}</Text>
-            <Text style={styles.statLabel}>Pending</Text>
+            <Text style={[styles.statLabel, { color: theme === 'dark' ? '#999' : '#718096' }]}>Pending</Text>
           </View>
-          <View style={styles.statCard}>
+          <View style={[styles.statCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}>
             <Text style={styles.statNumber}>{shippedOrders.length}</Text>
-            <Text style={styles.statLabel}>Shipped</Text>
+            <Text style={[styles.statLabel, { color: theme === 'dark' ? '#999' : '#718096' }]}>Shipped</Text>
           </View>
-          <View style={styles.statCard}>
+          <View style={[styles.statCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}>
             <Text style={styles.statNumber}>{orders.length}</Text>
-            <Text style={styles.statLabel}>Total</Text>
+            <Text style={[styles.statLabel, { color: theme === 'dark' ? '#999' : '#718096' }]}>Total</Text>
           </View>
         </View>
 
         {/* Pending Orders Section */}
         {pendingOrders.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>🚨 Action Required</Text>
-            {pendingOrders.map((order) => (
-              <View key={order.id} style={[styles.orderCard, styles.orderPending]}>
-                <View style={styles.orderHeader}>
-                  <Image source={{ uri: order.photo_url }} style={styles.itemImage} />
-                  <View style={styles.orderInfo}>
-                    <Text style={styles.itemName} numberOfLines={2}>
-                      {order.item_name}
-                    </Text>
-                    <Text style={styles.orderDate}>{formatDate(order.created_at)}</Text>
-                    <Text style={styles.orderPrice}>${order.sale_price.toFixed(2)}</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>🚨 Action Required</Text>
+            {pendingOrders.map((order) => {
+              const urgencyBadge = getUrgencyBadge(order.urgency_level, order.is_late);
+              return (
+                <View key={order.id} style={[styles.orderCard, styles.orderPending, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}>
+                  {/* Urgency Badge */}
+                  {urgencyBadge && (
+                    <View style={[styles.urgencyBadge, { backgroundColor: urgencyBadge.bgColor }]}>
+                      <Text style={styles.urgencyEmoji}>{urgencyBadge.emoji}</Text>
+                      <Text style={[styles.urgencyLabel, { color: urgencyBadge.color }]}>
+                        {urgencyBadge.label}
+                      </Text>
+                      {order.premium_shipping && (
+                        <View style={styles.premiumShippingTag}>
+                          <Ionicons name="flash" size={14} color="#FFF" />
+                          <Text style={styles.premiumShippingText}>RUSH</Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  {/* Time Remaining */}
+                  {order.shipping_deadline && (
+                    <View style={[styles.timeRemainingBanner, order.is_late && styles.timeRemainingLate]}>
+                      <Ionicons
+                        name={order.is_late ? "warning" : "time-outline"}
+                        size={18}
+                        color={order.is_late ? "#E53E3E" : "#2D3748"}
+                      />
+                      <Text style={[styles.timeRemainingText, order.is_late && styles.timeRemainingTextLate]}>
+                        {formatShippingTimeRemaining(order.shipping_deadline)}
+                      </Text>
+                    </View>
+                  )}
+
+                  <View style={styles.orderHeader}>
+                    <Image source={{ uri: order.photo_url }} style={styles.itemImage} />
+                    <View style={styles.orderInfo}>
+                      <Text style={[styles.itemName, { color: colors.textPrimary }]} numberOfLines={2}>
+                        {order.item_name}
+                      </Text>
+                      <Text style={[styles.orderDate, { color: theme === 'dark' ? '#999' : '#718096' }]}>{formatDate(order.created_at)}</Text>
+                      <Text style={styles.orderPrice}>${order.sale_price.toFixed(2)}</Text>
+                    </View>
                   </View>
-                </View>
 
-                {/* Shipping Address */}
-                <View style={styles.addressSection}>
-                  <Text style={styles.addressTitle}>📍 Ship To:</Text>
-                  <Text style={styles.addressText}>{order.buyer.name}</Text>
-                  <Text style={styles.addressText}>{order.shipping_address.address}</Text>
-                  <Text style={styles.addressText}>
-                    {order.shipping_address.city}, {order.shipping_address.state} {order.shipping_address.zip}
-                  </Text>
-                  <Text style={styles.addressText}>{order.shipping_address.country}</Text>
-                </View>
+                  {/* Price Breakdown */}
+                  <View style={[styles.priceBreakdown, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC' }]}>
+                    <View style={styles.priceRow}>
+                      <Text style={[styles.priceLabel, { color: theme === 'dark' ? '#999' : '#718096' }]}>Sale Price</Text>
+                      <Text style={[styles.priceValue, { color: colors.textPrimary }]}>${order.sale_price.toFixed(2)}</Text>
+                    </View>
+                    {order.bidgoat_commission != null && (
+                      <View style={styles.priceRow}>
+                        <Text style={styles.feeLabel}>BidGoat Fee (8%)</Text>
+                        <Text style={styles.feeValue}>-${order.bidgoat_commission.toFixed(2)}</Text>
+                      </View>
+                    )}
+                    <View style={[styles.divider, { backgroundColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]} />
+                    {order.seller_payout != null && (
+                      <View style={styles.priceRow}>
+                        <Text style={[styles.totalLabel, { color: colors.textPrimary }]}>Your Payout</Text>
+                        <Text style={styles.totalValue}>${order.seller_payout.toFixed(2)}</Text>
+                      </View>
+                    )}
+                  </View>
 
-                {/* Ship Button */}
-                <TouchableOpacity
-                  style={styles.shipButton}
-                  onPress={() => openShipModal(order)}
-                >
-                  <Ionicons name="rocket" size={20} color="#fff" />
-                  <Text style={styles.shipButtonText}>Mark as Shipped</Text>
-                </TouchableOpacity>
-              </View>
-            ))}
+                  {/* Shipping Address */}
+                  <View style={[styles.addressSection, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC' }]}>
+                    <Text style={[styles.addressTitle, { color: colors.textPrimary }]}>📍 Ship To:</Text>
+                    <Text style={[styles.addressText, { color: theme === 'dark' ? '#CCC' : '#4A5568' }]}>{order.buyer.name}</Text>
+                    <Text style={[styles.addressText, { color: theme === 'dark' ? '#CCC' : '#4A5568' }]}>{order.shipping_address.address}</Text>
+                    <Text style={[styles.addressText, { color: theme === 'dark' ? '#CCC' : '#4A5568' }]}>
+                      {order.shipping_address.city}, {order.shipping_address.state} {order.shipping_address.zip}
+                    </Text>
+                    <Text style={[styles.addressText, { color: theme === 'dark' ? '#CCC' : '#4A5568' }]}>{order.shipping_address.country}</Text>
+                  </View>
+
+                  {/* Ship Button */}
+                  <TouchableOpacity
+                    style={styles.shipButton}
+                    onPress={() => openShipModal(order)}
+                  >
+                    <Ionicons name="rocket" size={20} color="#fff" />
+                    <Text style={styles.shipButtonText}>Mark as Shipped</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
           </View>
         )}
 
         {/* Shipped Orders Section */}
         {shippedOrders.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>📦 Shipped Orders</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>📦 Shipped Orders</Text>
             {shippedOrders.map((order) => (
-              <View key={order.id} style={styles.orderCard}>
+              <View key={order.id} style={[styles.orderCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}>
                 <View style={styles.orderHeader}>
-                  <View style={{ height: HEADER_MAX_HEIGHT, backgroundColor: 'red' }} />
-
                   <Image source={{ uri: order.photo_url }} style={styles.itemImage} />
                   <View style={styles.orderInfo}>
-                    <Text style={styles.itemName} numberOfLines={2}>
+                    <Text style={[styles.itemName, { color: colors.textPrimary }]} numberOfLines={2}>
                       {order.item_name}
                     </Text>
-                    <Text style={styles.orderDate}>
+                    <Text style={[styles.orderDate, { color: theme === 'dark' ? '#999' : '#718096' }]}>
                       Shipped {order.shipped_at ? formatDate(order.shipped_at) : ''}
                     </Text>
                   </View>
@@ -325,9 +447,9 @@ export default function SellerOrdersScreen() {
 
         {orders.length === 0 && (
           <View style={styles.emptyState}>
-            <Ionicons name="cube-outline" size={64} color="#CBD5E0" />
-            <Text style={styles.emptyText}>No orders yet</Text>
-            <Text style={styles.emptySubtext}>Orders will appear here when buyers purchase your items</Text>
+            <Ionicons name="cube-outline" size={64} color={theme === 'dark' ? '#555' : '#CBD5E0'} />
+            <Text style={[styles.emptyText, { color: colors.textPrimary }]}>No orders yet</Text>
+            <Text style={[styles.emptySubtext, { color: theme === 'dark' ? '#999' : '#718096' }]}>Orders will appear here when buyers purchase your items</Text>
           </View>
         )}
       </Animated.ScrollView>
@@ -340,11 +462,11 @@ export default function SellerOrdersScreen() {
         onRequestClose={() => setShipModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Mark as Shipped</Text>
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Mark as Shipped</Text>
               <TouchableOpacity onPress={() => setShipModalVisible(false)}>
-                <Ionicons name="close" size={24} color="#666" />
+                <Ionicons name="close" size={24} color={theme === 'dark' ? '#999' : '#666'} />
               </TouchableOpacity>
             </View>
 
@@ -357,10 +479,10 @@ export default function SellerOrdersScreen() {
                 />
               )}
 
-              <Text style={styles.modalItemName}>{selectedOrder?.item_name}</Text>
+              <Text style={[styles.modalItemName, { color: theme === 'dark' ? '#999' : '#4A5568' }]}>{selectedOrder?.item_name}</Text>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Carrier</Text>
+                <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>Carrier</Text>
                 <View style={styles.carrierButtons}>
                   {['USPS', 'UPS', 'FedEx', 'DHL'].map((c) => (
                     <TouchableOpacity
@@ -377,12 +499,13 @@ export default function SellerOrdersScreen() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Tracking Number</Text>
+                <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>Tracking Number</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#FFF', color: colors.textPrimary, borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
                   value={trackingNumber}
                   onChangeText={setTrackingNumber}
                   placeholder="Enter tracking number"
+                  placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
                   autoCapitalize="characters"
                 />
               </View>
@@ -402,7 +525,36 @@ export default function SellerOrdersScreen() {
           </View>
         </View>
       </Modal>
-      <GlobalFooter />
+
+      {/* Celebration Modal */}
+      {celebrationOrder && (
+        <SalesCelebrationModal
+          visible={celebrationVisible}
+          onClose={() => setCelebrationVisible(false)}
+          itemName={celebrationOrder.item_name}
+          salePrice={celebrationOrder.sale_price}
+          buyerUsername={celebrationOrder.buyer.name}
+          sellerPayout={celebrationOrder.seller_payout || celebrationOrder.sale_price * 0.92}
+          bidgoatFee={celebrationOrder.bidgoat_commission || celebrationOrder.sale_price * 0.08}
+          orderId={celebrationOrder.id}
+          itemId={celebrationOrder.item_id}
+          premiumShipping={
+            celebrationOrder.premium_shipping_hours
+              ? {
+                  hours: celebrationOrder.premium_shipping_hours,
+                  emoji: celebrationOrder.premium_shipping_hours === 6 ? '🚀' :
+                         celebrationOrder.premium_shipping_hours === 12 ? '⚡' :
+                         celebrationOrder.premium_shipping_hours === 24 ? '💨' : '📦',
+                  name: celebrationOrder.premium_shipping_hours === 6 ? '6-Hour Rush' :
+                        celebrationOrder.premium_shipping_hours === 12 ? '12-Hour Rush' :
+                        celebrationOrder.premium_shipping_hours === 24 ? '24-Hour Express' : '48-Hour Priority',
+                }
+              : undefined
+          }
+        />
+      )}
+
+      <GlobalFooter/>
     </View>
   );
 }
@@ -428,9 +580,7 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: 16,
     paddingVertical: 16,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    backgroundColor:'#F7FAFC',
     zIndex: 100,
   },
   titleWithArrow: {
@@ -442,7 +592,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
     color: '#1A202C',
   },
@@ -525,6 +675,50 @@ const styles = StyleSheet.create({
   },
   orderPrice: {
     fontSize: 18,
+    fontWeight: '700',
+    color: '#48BB78',
+  },
+  priceBreakdown: {
+    backgroundColor: '#F7FAFC',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  priceLabel: {
+    fontSize: 14,
+    color: '#718096',
+  },
+  priceValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2D3748',
+  },
+  feeLabel: {
+    fontSize: 14,
+    color: '#E53E3E',
+  },
+  feeValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#E53E3E',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#E2E8F0',
+    marginVertical: 8,
+  },
+  totalLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1A202C',
+  },
+  totalValue: {
+    fontSize: 16,
     fontWeight: '700',
     color: '#48BB78',
   },
@@ -693,5 +887,57 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '700',
+  },
+  urgencyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginBottom: 12,
+    gap: 8,
+  },
+  urgencyEmoji: {
+    fontSize: 18,
+  },
+  urgencyLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  premiumShippingTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#805AD5',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginLeft: 'auto',
+    gap: 4,
+  },
+  premiumShippingText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  timeRemainingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EDF2F7',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginBottom: 12,
+    gap: 8,
+  },
+  timeRemainingLate: {
+    backgroundColor: '#FED7D7',
+  },
+  timeRemainingText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#2D3748',
+  },
+  timeRemainingTextLate: {
+    color: '#E53E3E',
   },
 });

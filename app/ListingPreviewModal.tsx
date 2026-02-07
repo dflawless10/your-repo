@@ -9,7 +9,7 @@ type Props = {
   onCancel: () => void;
 };
 
-export default function ListingPreviewModal({ asset, onConfirm, onCancel }: Props) {
+export default function ListingPreviewModal({ asset, onConfirm, onCancel }: Readonly<Props>) {
   return (
     <Modal transparent animationType="fade">
       <View style={styles.overlay}>

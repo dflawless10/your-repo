@@ -1,51 +1,77 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Linking, Animated, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import EnhancedHeader from '../components/EnhancedHeader';
 import {HEADER_MAX_HEIGHT} from "@/components/EnhancedHeader";
 import GlobalFooter from "@/app/components/GlobalFooter";
+import { useTheme } from '@/app/theme/ThemeContext';
 
 export default function CommunityGuidelinesScreen() {
   const router = useRouter();
+  const { theme, colors } = useTheme();
   const scrollY = new Animated.Value(0);
+  const headerOpacity = useRef(new Animated.Value(0)).current;
+  const headerScale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    // Fade in header title and arrow
+    setTimeout(() => {
+      Animated.timing(headerOpacity, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+      }).start(() => {
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(headerScale, {
+              toValue: 1.05,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(headerScale, {
+              toValue: 1,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
+      });
+    }, 500);
+  }, []);
 
   const handleReportIssue = () => {
     Linking.openURL('mailto:support@bidgoat.com?subject=Community Guidelines Question');
   };
 
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, { backgroundColor: colors.background }]}>
       <EnhancedHeader scrollY={scrollY} />
 
-        {/* Title with Back Arrow */}
-      <View style={styles.headerTitleContainer}>
-        <View style={styles.titleWithArrow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
-            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Community Guidlines</Text>
-
-        </View>
-      </View>
-
-
       <Animated.ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.contentContainer}
+        style={[styles.container, { backgroundColor: colors.background }]}
+        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20, backgroundColor: colors.background }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
         )}
         scrollEventThrottle={16}
       >
+        {/* Title with Back Arrow */}
+        <Animated.View style={[styles.pageHeader, { opacity: headerOpacity, transform: [{ scale: headerScale }], backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E5E5E5' }]}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
+            <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Community Guidelines</Text>
+        </Animated.View>
+
 
 
       {/* Do Section */}
-      <View style={styles.section}>
+      <View style={[styles.section, { backgroundColor: theme === 'dark' ? '#1C1C1E' : 'white' }]}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionIcon}>✅</Text>
-          <Text style={styles.sectionTitle}>Do:</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Do:</Text>
         </View>
 
         <View style={styles.guidelinesList}>
@@ -61,10 +87,10 @@ export default function CommunityGuidelinesScreen() {
       </View>
 
       {/* Don't Section */}
-      <View style={styles.section}>
+      <View style={[styles.section, { backgroundColor: theme === 'dark' ? '#1C1C1E' : 'white' }]}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionIcon}>❌</Text>
-          <Text style={styles.sectionTitle}>Don&apos;t:</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Don&apos;t:</Text>
         </View>
 
         <View style={styles.guidelinesList}>
@@ -104,10 +130,10 @@ export default function CommunityGuidelinesScreen() {
       </View>
 
       {/* Prohibited Items */}
-      <View style={styles.section}>
+      <View style={[styles.section, { backgroundColor: theme === 'dark' ? '#1C1C1E' : 'white' }]}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionIcon}>🚫</Text>
-          <Text style={styles.sectionTitle}>Prohibited Items:</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Prohibited Items:</Text>
         </View>
 
         <View style={styles.guidelinesList}>
@@ -120,10 +146,10 @@ export default function CommunityGuidelinesScreen() {
       </View>
 
       {/* Consequences */}
-      <View style={styles.section}>
+      <View style={[styles.section, { backgroundColor: theme === 'dark' ? '#1C1C1E' : 'white' }]}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionIcon}>⚖️</Text>
-          <Text style={styles.sectionTitle}>Consequences:</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Consequences:</Text>
         </View>
 
         <View style={styles.consequencesList}>
@@ -153,30 +179,30 @@ export default function CommunityGuidelinesScreen() {
       </View>
 
       {/* New Seller Review */}
-      <View style={styles.section}>
+      <View style={[styles.section, { backgroundColor: theme === 'dark' ? '#1C1C1E' : 'white' }]}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionIcon}>👀</Text>
-          <Text style={styles.sectionTitle}>New Seller Review:</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>New Seller Review:</Text>
         </View>
 
-        <Text style={styles.bodyText}>
+        <Text style={[styles.bodyText, { color: theme === 'dark' ? '#999' : '#374151' }]}>
           To maintain marketplace quality, your first 5 listings will be manually reviewed by our team before going live.
           This typically takes 1-24 hours.
         </Text>
 
-        <Text style={styles.bodyText}>
+        <Text style={[styles.bodyText, { color: theme === 'dark' ? '#999' : '#374151' }]}>
           Once you have 5 approved listings, your future listings will go live instantly (subject to automated moderation).
         </Text>
       </View>
 
       {/* Automated Moderation */}
-      <View style={styles.section}>
+      <View style={[styles.section, { backgroundColor: theme === 'dark' ? '#1C1C1E' : 'white' }]}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionIcon}>🤖</Text>
-          <Text style={styles.sectionTitle}>Automated Moderation:</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Automated Moderation:</Text>
         </View>
 
-        <Text style={styles.bodyText}>
+        <Text style={[styles.bodyText, { color: theme === 'dark' ? '#999' : '#374151' }]}>
           We use automated systems to check all listings for:
         </Text>
 
@@ -189,23 +215,23 @@ export default function CommunityGuidelinesScreen() {
           <GuidelineItem text="Counterfeit indicators" />
         </View>
 
-        <Text style={styles.bodyText}>
+        <Text style={[styles.bodyText, { color: theme === 'dark' ? '#999' : '#374151' }]}>
           You&apos;ll get instant feedback while creating your listing, so you can fix issues before submitting.
         </Text>
       </View>
 
       {/* Report Issues */}
-      <View style={styles.section}>
+      <View style={[styles.section, { backgroundColor: theme === 'dark' ? '#1C1C1E' : 'white' }]}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionIcon}>🚩</Text>
-          <Text style={styles.sectionTitle}>Report Violations:</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Report Violations:</Text>
         </View>
 
-        <Text style={styles.bodyText}>
+        <Text style={[styles.bodyText, { color: theme === 'dark' ? '#999' : '#374151' }]}>
           See something that violates our guidelines? Report it!
         </Text>
 
-        <Text style={styles.bodyText}>
+        <Text style={[styles.bodyText, { color: theme === 'dark' ? '#999' : '#374151' }]}>
           On any listing, tap the &quot;Report&quot; button and select the reason. Our team will review within 24 hours.
         </Text>
 
@@ -215,16 +241,17 @@ export default function CommunityGuidelinesScreen() {
       </View>
 
       {/* Footer */}
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>
+      <View style={[styles.footer, { borderTopColor: theme === 'dark' ? '#333' : '#E5E7EB' }]}>
+        <Text style={[styles.footerText, { color: theme === 'dark' ? '#86EFAC' : '#059669' }]}>
           Thank you for helping keep BidGoat safe and trustworthy! 🐐
         </Text>
-        <Text style={styles.footerSubtext}>
+        <Text style={[styles.footerSubtext, { color: theme === 'dark' ? '#666' : '#9CA3AF' }]}>
           Last updated: December 2024
         </Text>
       </View>
       <View style={{ height: 40 }} />
     </Animated.ScrollView>
+
     </View>
   );
 }
@@ -236,15 +263,17 @@ interface GuidelineItemProps {
 }
 
 function GuidelineItem({ text, severity }: Readonly<GuidelineItemProps>) {
+  const { theme } = useTheme();
+
   const getSeverityColor = () => {
     if (severity === 'high') return '#DC2626';
     if (severity === 'medium') return '#F59E0B';
-    return '#6B7280';
+    return theme === 'dark' ? '#999' : '#6B7280';
   };
 
   return (
     <View style={styles.guidelineItem}>
-      <Text style={styles.bullet}>•</Text>
+      <Text style={[styles.bullet, { color: theme === 'dark' ? '#999' : '#6B7280' }]}>•</Text>
       <Text style={[styles.guidelineText, { color: getSeverityColor() }]}>{text}</Text>
     </View>
   );
@@ -257,14 +286,18 @@ interface ConsequenceItemProps {
 }
 
 function ConsequenceItem({ offense, consequence, description }: Readonly<ConsequenceItemProps>) {
+  const { theme } = useTheme();
+
   return (
-    <View style={styles.consequenceItem}>
+    <View style={[styles.consequenceItem, {
+      backgroundColor: theme === 'dark' ? '#2C2416' : '#FEF3C7',
+      borderLeftColor: theme === 'dark' ? '#B45309' : '#F59E0B'
+    }]}>
       <View style={styles.consequenceHeader}>
-        <Text style={styles.offenseText}>{offense}</Text>
-        <Text style={styles.consequenceText}>{consequence}</Text>
+        <Text style={[styles.offenseText, { color: theme === 'dark' ? '#FCD34D' : '#92400E' }]}>{offense}</Text>
+        <Text style={[styles.consequenceText, { color: theme === 'dark' ? '#FCA5A5' : '#B45309' }]}>{consequence}</Text>
       </View>
-      <Text style={styles.consequenceDescription}>{description}</Text>
-       <GlobalFooter />
+      <Text style={[styles.consequenceDescription, { color: theme === 'dark' ? '#FDE68A' : '#78350F' }]}>{description}</Text>
     </View>
   );
 }
@@ -288,28 +321,15 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E0E0E0',
     zIndex: 100,
   },
-  headerTitleContainer: {
-    position: 'absolute',
-    top: HEADER_MAX_HEIGHT + 36,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-    zIndex: 100,
-  },
-  titleWithArrow: {
+  pageHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 40,
+    paddingBottom: 8,
+    backgroundColor: '#FFF',
   },
   backArrow: {
-    marginRight: 12,
-    padding: 8,
-  },
-
-  backButton: {
     marginRight: 12,
     padding: 4,
   },

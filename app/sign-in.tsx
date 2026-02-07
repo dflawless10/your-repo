@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   Platform,
   Animated,
   Image,
+  ScrollView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
@@ -18,18 +19,52 @@ import { getUserProfile, loginUser } from "@/api/auth";
 import { useSession } from '@/ctx';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
-import {useAuth} from "@/hooks/AuthContext"; // already imported
+import { useAuth } from "@/hooks/AuthContext";
+import { LinearGradient } from 'expo-linear-gradient';
 
 const LoginScreen = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
   const { login: authLogin } = useAuth();
 
   const goatAnim = useRef(new Animated.Value(0)).current;
- const [showPassword, setShowPassword] = useState(false);
+  const stampRotate = useRef(new Animated.Value(0)).current;
+  const stampScale = useRef(new Animated.Value(1)).current;
 
+  // Subtle idle animation for the goat stamp
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.parallel([
+          Animated.timing(stampRotate, {
+            toValue: 1,
+            duration: 3000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(stampScale, {
+            toValue: 1.05,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.parallel([
+          Animated.timing(stampRotate, {
+            toValue: 0,
+            duration: 3000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(stampScale, {
+            toValue: 1,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+        ]),
+      ])
+    ).start();
+  }, []);
 
   const triggerGoatBounce = () => {
     Animated.sequence([
@@ -47,6 +82,11 @@ const LoginScreen = () => {
   };
 
   const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('Missing Information', 'Please enter both email and password.');
+      return;
+    }
+
     try {
       setLoading(true);
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -60,6 +100,10 @@ const LoginScreen = () => {
         if (userProfile?.username) {
           // Use AuthContext login to schedule token refresh
           await authLogin(token, userProfile.username);
+
+          // Save full profile to AsyncStorage (including is_admin)
+          await AsyncStorage.setItem('profile', JSON.stringify(userProfile));
+          console.log('🐐 Profile saved:', userProfile);
 
           // Save userId to AsyncStorage
           if (userProfile.id) {
@@ -77,8 +121,10 @@ const LoginScreen = () => {
         }
 
         triggerGoatBounce(); // 🐐 Ritual bounce
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
         setTimeout(() => {
-          router.replace('/(tabs)/JewelryBoxScreen');
+          router.replace('/(tabs)/');
         }, 600);
       } else {
         Alert.alert(
@@ -106,7 +152,11 @@ const LoginScreen = () => {
 
   const handleForgotPassword = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('//sign-in');
+    Alert.alert(
+      'Reset Password',
+      'Password reset functionality coming soon! Please contact support for assistance.',
+      [{ text: 'OK' }]
+    );
   };
 
   return (
@@ -114,85 +164,150 @@ const LoginScreen = () => {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
-      <View style={styles.content}>
-        <Animated.Image
-          source={require('@/assets/goat-stamp.png')}
-          style={[
-            styles.goatStamp,
-            {
-              transform: [{
-                scale: goatAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [1, 1.2],
-                })
-              }]
-            }
-          ]}
-        />
-
-        <Text style={styles.title}>Welcome to BidGoat 🐐</Text>
-        <Text style={styles.subtitle}>Sign in to continue</Text>
-
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoCorrect={false}
-          value={email}
-          onChangeText={setEmail}
-          editable={!loading}
-        />
-
-        <View style={styles.passwordContainer}>
-  <TextInput
-    style={styles.passwordInput}
-    placeholder="Password"
-    secureTextEntry={!showPassword}
-    value={password}
-    onChangeText={setPassword}
-  />
-  <Text onPress={() => setShowPassword(prev => !prev)} style={styles.toggle}>
-    {showPassword ? '🙈 Hide' : '👁️ Show'}
-  </Text>
-</View>
-
-        <TouchableOpacity
-          style={styles.forgotPassword}
-          onPress={handleForgotPassword}
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <LinearGradient
+          colors={['#8B5CF6', '#FF6B35']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.header}
         >
-          <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-        </TouchableOpacity>
+          <Animated.Image
+            source={require('@/assets/goat-stamp.png')}
+            style={[
+              styles.goatStamp,
+              {
+                transform: [
+                  {
+                    scale: Animated.multiply(
+                      stampScale,
+                      goatAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [1, 1.2],
+                      })
+                    ),
+                  },
+                  {
+                    rotate: stampRotate.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: ['-5deg', '5deg'],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          />
+          <Text style={styles.title}>Welcome Back!</Text>
+          <Text style={styles.subtitle}>
+            Sign in to continue your intelligent auction journey
+          </Text>
+        </LinearGradient>
 
-        <TouchableOpacity
-          style={[
-            styles.loginButton,
-            (!email || !password || loading) && styles.loginButtonDisabled
-          ]}
-          onPress={handleLogin}
-          disabled={!email || !password || loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.loginButtonText}>Sign In</Text>
-          )}
-        </TouchableOpacity>
+        {/* Form Section */}
+        <View style={styles.formContainer}>
+          <View style={styles.inputWrapper}>
+            <Ionicons name="mail-outline" size={20} color="#8B5CF6" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor="#9CA3AF"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              value={email}
+              onChangeText={setEmail}
+              editable={!loading}
+            />
+          </View>
 
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>OR</Text>
-          <View style={styles.dividerLine} />
+          <View style={styles.inputWrapper}>
+            <Ionicons name="lock-closed-outline" size={20} color="#8B5CF6" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              placeholderTextColor="#9CA3AF"
+              secureTextEntry={!showPassword}
+              value={password}
+              onChangeText={setPassword}
+              editable={!loading}
+            />
+            <TouchableOpacity
+              onPress={() => setShowPassword(prev => !prev)}
+              style={styles.eyeButton}
+            >
+              <Ionicons
+                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={22}
+                color="#6B7280"
+              />
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity
+            style={styles.forgotPassword}
+            onPress={handleForgotPassword}
+          >
+            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+          </TouchableOpacity>
+
+          {/* Sign In Button */}
+          <TouchableOpacity
+            style={[styles.loginButton, loading && styles.buttonDisabled]}
+            onPress={handleLogin}
+            disabled={loading}
+          >
+            <LinearGradient
+              colors={loading ? ['#9CA3AF', '#9CA3AF'] : ['#8B5CF6', '#7C3AED']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.buttonGradient}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <>
+                  <Ionicons name="log-in" size={20} color="#FFF" />
+                  <Text style={styles.buttonText}>Sign In</Text>
+                </>
+              )}
+            </LinearGradient>
+          </TouchableOpacity>
+
+          {/* Divider */}
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>OR</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Create Account Button */}
+          <TouchableOpacity
+            style={styles.signUpButton}
+            onPress={handleSignUp}
+            disabled={loading}
+          >
+            <LinearGradient
+              colors={['#FFF', '#FFF']}
+              style={styles.signUpGradient}
+            >
+              <Ionicons name="person-add" size={20} color="#8B5CF6" />
+              <Text style={styles.signUpButtonText}>Create Account</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          {/* Why BidGoat Link */}
+          <View style={styles.whyBidGoatContainer}>
+            <Text style={styles.whyBidGoatText}>New to BidGoat? </Text>
+            <TouchableOpacity onPress={() => router.push('/landing')}>
+              <Text style={styles.whyBidGoatLink}>Learn Why We're Different</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-
-        <TouchableOpacity
-          style={styles.signUpButton}
-          onPress={handleSignUp}
-          disabled={loading}
-        >
-          <Text style={styles.signUpButtonText}>Create Account</Text>
-        </TouchableOpacity>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 };
@@ -200,67 +315,105 @@ const LoginScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#F9FAFB',
   },
-  content: {
-    flex: 1,
-    padding: 24,
-    justifyContent: 'center',
+  scrollContent: {
+    flexGrow: 1,
+  },
+  header: {
+    paddingTop: 80,
+    paddingBottom: 50,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
   },
   goatStamp: {
-    width: 120,
-    height: 120,
-    alignSelf: 'center',
-    marginBottom: 16,
-    backgroundColor: 'transparent',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
+    width: 100,
+    height: 100,
+    marginBottom: 20,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontSize: 32,
+    fontWeight: '900',
+    color: '#FFF',
     marginBottom: 8,
-    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 32,
+    fontSize: 15,
+    color: 'rgba(255, 255, 255, 0.95)',
     textAlign: 'center',
+    fontWeight: '500',
+    lineHeight: 22,
+  },
+  formContainer: {
+    padding: 24,
+    paddingTop: 32,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    marginBottom: 16,
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  inputIcon: {
+    marginRight: 12,
   },
   input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    padding: 16,
-    marginBottom: 16,
-    borderRadius: 12,
+    flex: 1,
+    paddingVertical: 16,
     fontSize: 16,
-    backgroundColor: '#f8f9fa',
+    color: '#1F2937',
+  },
+  eyeButton: {
+    padding: 8,
   },
   forgotPassword: {
     alignSelf: 'flex-end',
     marginBottom: 24,
   },
   forgotPasswordText: {
-    color: '#007AFF',
+    color: '#8B5CF6',
     fontSize: 14,
+    fontWeight: '600',
   },
   loginButton: {
-    backgroundColor: '#007AFF',
-    padding: 16,
     borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  buttonGradient: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 10,
   },
-  loginButtonDisabled: {
-    backgroundColor: '#ccc',
+  buttonDisabled: {
+    opacity: 0.6,
+    shadowOpacity: 0,
+    elevation: 0,
   },
-  loginButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+  buttonText: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '700',
   },
   divider: {
     flexDirection: 'row',
@@ -270,46 +423,47 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#ddd',
+    backgroundColor: '#E5E7EB',
   },
   dividerText: {
     marginHorizontal: 16,
-    color: '#666',
+    color: '#9CA3AF',
+    fontWeight: '600',
+    fontSize: 14,
   },
   signUpButton: {
-    borderWidth: 1,
-    borderColor: '#007AFF',
-    padding: 16,
     borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#8B5CF6',
+  },
+  signUpGradient: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 10,
   },
   signUpButtonText: {
-    color: '#007AFF',
-    fontSize: 16,
-    fontWeight: '600',
+    color: '#8B5CF6',
+    fontSize: 18,
+    fontWeight: '700',
   },
-  passwordContainer: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  borderWidth: 1,
-  borderColor: '#bfae82',
-  backgroundColor: '#fffef8',
-  paddingHorizontal: 12,
-  paddingVertical: 8,
-  marginBottom: 16,
-  borderRadius: 12,
-},
-passwordInput: {
-  flex: 1,
-  fontSize: 16,
-  paddingVertical: 8,
-},
-toggle: {
-  marginLeft: 12,
-  color: '#007aff',
-  fontWeight: '500',
-}
-
+  whyBidGoatContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 24,
+  },
+  whyBidGoatText: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  whyBidGoatLink: {
+    fontSize: 14,
+    color: '#FF6B35',
+    fontWeight: '700',
+  },
 });
 
 export default LoginScreen;

@@ -13,6 +13,7 @@ import { GoatFlip } from "@/components/GoatAnimator/goatFlip";
 import { useRouter } from 'expo-router';
 import { validateContentQuick } from 'app/utils/contentModeration';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
+import { API_BASE_URL } from '@/config';
 
 
 const guessMime = (uri: string): string => {
@@ -38,7 +39,7 @@ type FormDataFile = {
 
 
 
-const API_URL = 'http://10.0.0.170:5000';
+const API_URL = API_BASE_URL;
 
 function ItemScreen() {
   const buildUploadFormData = async (imageUri: string | null): Promise<FormData> => {
@@ -110,13 +111,13 @@ const { goatTrigger, lastBidAmount, triggerGoat } = useGoatBid();
     // Layer 1: Client-side Content Moderation
     const nameModeration = validateContentQuick(name, 'Item name');
     if (!nameModeration.isValid) {
-      Alert.alert('Content Policy Violation', nameModeration.errorMessage!);
+      Alert.alert('Content Policy Violation', nameModeration.errorMessage);
       return;
     }
 
     const descModeration = validateContentQuick(description, 'Description');
     if (!descModeration.isValid) {
-      Alert.alert('Content Policy Violation', descModeration.errorMessage!);
+      Alert.alert('Content Policy Violation', descModeration.errorMessage);
       return;
     }
 

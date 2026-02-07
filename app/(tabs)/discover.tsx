@@ -1,3 +1,5 @@
+import { API_BASE_URL } from '@/config';
+
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   FlatList, View, Text, Image, TouchableOpacity, RefreshControl,
@@ -10,13 +12,14 @@ import Animated from 'react-native-reanimated';
 import { playGoatSoundByName } from 'assets/sounds/officialGoatSoundsSoundtrack';
 import { useFocusEffect } from '@react-navigation/native';
 import {BlurView} from "expo-blur";
-import { MaterialCommunityIcons} from "@expo/vector-icons";
+import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import {formatTimeWithSeconds} from "@/utils/time";
 import {useWishlist} from "app/wishlistContext"; // ✅ External header component
 import { useAppDispatch } from 'hooks/reduxHooks';
 import {addToWishlist} from 'app/wishlistslice';
 import GoatGenieBadge from 'app/GoatGenieBadge';
 import useThemeColor from '@/hooks/useThemeColor';
+import { useTheme } from '@/app/theme/ThemeContext';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
 
 
@@ -39,6 +42,8 @@ interface AuctionItem {
   timeLeft: string;
   listed_at: string;
   is_trending: boolean;
+  is_must_sell: number;
+  selling_strategy: string;
   reserve_price: number;
   final_price: number;
   sold_to: string;
@@ -68,9 +73,13 @@ interface AuctionItem {
 
   end_time: string;
   bidCount: number;
-  seller: {
-    name: string;
-    avatar: string;
+  seller?: {
+    id: number;
+    username: string;
+    avatar?: string;
+    avg_rating?: number;
+    total_reviews?: number;
+    positive_percent?: number;
   };
   category?: string;
   amount: number;
@@ -85,6 +94,7 @@ interface AuctionItem {
 
 
 export default function Discover() {
+  const { theme, colors } = useTheme();
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -121,6 +131,8 @@ const fetchItems = async () => {
       auction_ends_at: normalizeAuctionEndsAt(item),
       bid_count: item.bidCount,
       buy_it_now: item.buy_it_now, // Explicitly preserve buy_it_now
+      is_must_sell: item.is_must_sell,
+      selling_strategy: item.selling_strategy,
     }));
     console.log('🔍 Normalized first item buy_it_now:', normalized[0]?.buy_it_now);
     setItems(normalized);
@@ -228,7 +240,23 @@ const backgroundColor = useThemeColor({}, 'background');
       <Text style={styles.buyItNowText}>BUY NOW</Text>
     </View>
   )}
+
+           {/* Must Sell Badge */}
+{(Number(item.is_must_sell) === 1 || item.selling_strategy === 'must_sell') && (
+  <View style={styles.mustSellBadge}>
+    <Text style={styles.mustSellText}>⚡ MUST SELL</Text>
   </View>
+)}
+
+
+  {/* Wishlist Goat Badge - Bottom Right of Image */}
+  <Animated.View style={styles.wishlistIconWrapper}>
+    <GoatGenieBadge onWish={() => handleAddToWishlist(item)} />
+  </Animated.View>
+  </View>
+
+           <View style={styles.infoContainer}>
+            <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
 
           <View style={styles.priceRow}>
             <Text style={styles.cardPrice}>
@@ -239,21 +267,6 @@ const backgroundColor = useThemeColor({}, 'background');
             )}
           </View>
 
-
-
-
-         <Animated.View style={styles.wishlistIconWrapper}>
-          <GoatGenieBadge onWish={() => handleAddToWishlist(item)} />
-         </Animated.View>
-
-
-           <View style={styles.infoContainer}>
-            <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
-
-           {!!item.seller?.avatar && (
-            <Image source={{ uri: item.seller.avatar }} style={styles.sellerAvatar} />
-           )}
-
             <View style={styles.statsContainer}>
               <Text style={styles.statsText}>👀 {Math.floor(Math.random() * 20) + 5} watching</Text>
               <MaterialCommunityIcons name="clock-outline" size={14} color={isUrgent ? '#c62828' : '#2e7d32'} style={{marginHorizontal: 4}}/>
@@ -261,6 +274,32 @@ const backgroundColor = useThemeColor({}, 'background');
               {item.auction_ends_at ? formatTimeWithSeconds(item.auction_ends_at, now) : 'Not auctioned'}
              </Text>
             </View>
+
+           {item.seller && (
+             <View style={styles.sellerRow}>
+               {!!(item.seller.avatar) && (
+                 <Image source={{ uri: item.seller.avatar }} style={styles.sellerAvatar} />
+               )}
+               <TouchableOpacity
+                 style={styles.sellerNameContainer}
+                 onPress={() => {
+                   if (item.seller?.id) {
+                     router.push(`/seller/${item.seller.id}`);
+                   }
+                 }}
+               >
+                 <Text style={styles.sellerName} numberOfLines={1}>{item.seller.username}</Text>
+               </TouchableOpacity>
+               {typeof item.seller.avg_rating === 'number' && item.seller.avg_rating > 0 && (
+                 <View style={styles.ratingContainer}>
+                   <Ionicons name="star" size={12} color="#FFD700" />
+                   <Text style={styles.ratingText} numberOfLines={1}>
+                     {item.seller.avg_rating.toFixed(1)} ({item.seller.total_reviews || 0})
+                   </Text>
+                 </View>
+               )}
+             </View>
+           )}
 
 {item.isDerived && !isAuctionEnded && (
   <Text style={{ fontSize: 10, color: '#999' }}>⏳ Estimated end time</Text>
@@ -273,7 +312,7 @@ const backgroundColor = useThemeColor({}, 'background');
     );
   };
  return (
-  <View style={{ flex: 1, backgroundColor: '#fff' }}>
+  <View style={{ flex: 1, backgroundColor }}>
     <EnhancedHeader scrollY={scrollY} onSearch={() => {}} />
     <FlatList
       data={items}
@@ -285,9 +324,14 @@ const backgroundColor = useThemeColor({}, 'background');
 
       ListHeaderComponent={
         <View style={{ backgroundColor }}>
-          <View style={{ padding: 16, paddingTop: 32, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: '#eee' }}>
-            <Text style={{ fontSize: 24, fontWeight: '700' }}>Discover Treasures</Text>
-            <Text style={{ fontSize: 14, color: '#666' }}>Find unique pieces from verified sellers</Text>
+          <View style={{ padding: 16, paddingTop: 32, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme === 'dark' ? '#333' : '#eee', flexDirection: 'row', alignItems: 'center' }}>
+            <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 12 }}>
+              <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 24, fontWeight: '700', color: colors.textPrimary }}>Discover Treasures</Text>
+              <Text style={{ fontSize: 14, color: theme === 'dark' ? '#999' : '#666' }}>Find unique pieces from verified sellers</Text>
+            </View>
           </View>
         </View>
 
@@ -324,12 +368,16 @@ const styles = StyleSheet.create({
   },
   wishlistIconWrapper: {
     position: 'absolute',
-    top: 8,
+    bottom: 8,
     right: 8,
     zIndex: 2,
     padding: 1,
     borderRadius: 20,
     backgroundColor: 'rgba(255,255,255,0.8)',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
   },
   timeText: {
     color: '#38a169',
@@ -339,6 +387,23 @@ const styles = StyleSheet.create({
     color: '#c62828',
     fontWeight: '700',
   },
+  mustSellBadge: {
+  position: 'absolute',
+  top: 8,
+  left: 8,
+  backgroundColor: '#FF6B35',
+  paddingHorizontal: 10,
+  paddingVertical: 6,
+  borderRadius: 6,
+  zIndex: 5,
+},
+mustSellText: {
+  color: '#fff',
+  fontSize: 10,
+  fontWeight: '800',
+  letterSpacing: 0.5,
+},
+
   columnWrapper: {
     gap: COLUMN_GAP,
     justifyContent: 'space-between',
@@ -418,24 +483,57 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   infoContainer: {
-    padding: 12,
+    padding: 14,
   },
   title: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
+    color: '#1a1a1a',
     marginBottom: 8,
+    lineHeight: 17,
   },
   sellerAvatar: {
     width: 20,
     height: 20,
     borderRadius: 10,
+    marginRight: 4,
+  },
+  sellerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginLeft: 16,
+    marginRight: 8,
+  },
+  sellerNameContainer: {
+    flexShrink: 1,
+    flexGrow: 0,
     marginRight: 6,
+  },
+  sellerName: {
+    fontSize: 11,
+    color: '#007AFF',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+    marginLeft: 4,
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 0,
+    marginLeft: 2,
+  },
+  ratingText: {
+    fontSize: 11,
+    color: '#666',
+    marginLeft: 2,
   },
   statsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
     marginTop: 4,
+    marginBottom: 6,
   },
   statsText: {
     fontSize: 12,
@@ -445,12 +543,11 @@ const styles = StyleSheet.create({
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    gap: 8,
+    marginBottom: 6,
   },
   cardPrice: {
-    fontSize: 18,
+    fontSize: 13,
     fontWeight: '700',
     color: '#6A0DAD',
   },

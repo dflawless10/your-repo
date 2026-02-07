@@ -1,8 +1,10 @@
+import { API_BASE_URL } from '@/config';
+
 import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, Button, TouchableOpacity } from 'react-native';
 import { formatDistanceToNow } from 'date-fns';
-import UnTappedHeart from '../assets/unTappedHeart.svg';
-import TappedHeart from '../assets/TappedHeart.svg';
+import UnTappedHeart from '@/assets/unTappedHeart.svg';
+import TappedHeart from '@/assets/TappedHeart.svg';
 
 type Auction = {
   auction_id: number;
@@ -15,7 +17,7 @@ type Auction = {
   buy_it_now?: number;
 };
 
-const API_URL = 'http://10.0.0.170:5000';
+const API_URL = API_BASE_URL;
 
 export default function AuctionsModule() {
   const [auctions, setAuctions] = useState<Auction[]>([]);
@@ -56,7 +58,7 @@ export default function AuctionsModule() {
     return (
       <View style={styles.card}>
         {/* Buy It Now Badge */}
-        {item.buy_it_now && (
+        {!!(item.buy_it_now) && (
           <View style={styles.buyItNowBadge}>
             <Text style={styles.buyItNowText}>BUY NOW</Text>
           </View>

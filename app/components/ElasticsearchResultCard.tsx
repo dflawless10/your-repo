@@ -5,6 +5,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { formatDistanceToNowStrict } from 'date-fns';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE_URL } from '@/config';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width - 32;
@@ -34,6 +35,8 @@ type Props = {
   showRelevanceScore?: boolean;
 };
 
+const API_URL = API_BASE_URL;
+
 export const ElasticsearchResultCard: React.FC<Props> = ({
   item,
   onPress,
@@ -50,34 +53,48 @@ export const ElasticsearchResultCard: React.FC<Props> = ({
   const hasBuyNow = Boolean(item.buy_it_now);
 
   // Rarity configuration
-  const rarityConfig = {
-    legendary: {
-      gradient: ['#FFD700', '#FFA500'],
-      borderColor: '#FFD700',
-      shadowColor: '#FFD700',
-      icon: '💎',
-      label: 'Legendary',
-      glowColor: 'rgba(255, 215, 0, 0.3)',
-    },
-    rare: {
-      gradient: ['#9B59B6', '#8E44AD'],
-      borderColor: '#9B59B6',
-      shadowColor: '#9B59B6',
-      icon: '✨',
-      label: 'Rare',
-      glowColor: 'rgba(155, 89, 182, 0.3)',
-    },
-    common: {
-      gradient: ['#95a5a6', '#7f8c8d'],
-      borderColor: '#95a5a6',
-      shadowColor: '#000',
-      icon: '🌾',
-      label: 'Common',
-      glowColor: 'rgba(149, 165, 166, 0.2)',
-    },
-  };
+ type RarityKey = 'legendary' | 'rare' | 'common';
 
-  const config = rarityConfig[item.rarity || 'common'];
+interface RarityConfigEntry {
+  gradient: readonly [string, string]; // <-- EXACTLY two colors
+  borderColor: string;
+  shadowColor: string;
+  icon: string;
+  label: string;
+  glowColor: string;
+}
+
+const rarityConfig: Record<RarityKey, RarityConfigEntry> = {
+  legendary: {
+    gradient: ['#FFD700', '#FFA500'],
+    borderColor: '#FFD700',
+    shadowColor: '#FFD700',
+    icon: '💎',
+    label: 'Legendary',
+    glowColor: 'rgba(255, 215, 0, 0.3)',
+  },
+  rare: {
+    gradient: ['#9B59B6', '#8E44AD'],
+    borderColor: '#9B59B6',
+    shadowColor: '#9B59B6',
+    icon: '✨',
+    label: 'Rare',
+    glowColor: 'rgba(155, 89, 182, 0.3)',
+  },
+  common: {
+    gradient: ['#95a5a6', '#7f8c8d'],
+    borderColor: '#95a5a6',
+    shadowColor: '#000',
+    icon: '🌾',
+    label: 'Common',
+    glowColor: 'rgba(149, 165, 166, 0.2)',
+  },
+};
+
+
+
+  const rarity = (item.rarity as RarityKey) || 'common';
+  const config = rarityConfig[rarity] || rarityConfig['common'];
 
   // Time urgency color
   const getTimeColor = (): { color: string; fontWeight: '600' | 'bold' } => {
@@ -131,7 +148,7 @@ export const ElasticsearchResultCard: React.FC<Props> = ({
         });
         console.log(`🐐 ElasticsearchCard: Item ${item.item_id} added to favorites`);
 
-        // Navigate to JewelryBoxScreen
+        // Navigate to JewelryBoxScreen (consistent with other screens)
         router.push('/(tabs)/JewelryBoxScreen');
       } else {
         // Remove from favorites
@@ -153,6 +170,8 @@ export const ElasticsearchResultCard: React.FC<Props> = ({
       console.error('🐐 ElasticsearchCard: Failed to toggle favorite:', err);
     }
   };
+
+
 
   return (
     <TouchableOpacity
@@ -195,12 +214,14 @@ export const ElasticsearchResultCard: React.FC<Props> = ({
         <View style={styles.topBadgesRow}>
           {/* Rarity Badge */}
           {item.rarity && (
-            <LinearGradient
-              colors={config.gradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.rarityBadge}
-            >
+           <LinearGradient
+  colors={['#FF6B35', '#FFB347']}
+
+  start={{ x: 0, y: 0 }}
+  end={{ x: 1, y: 1 }}
+  style={styles.rarityBadge}
+>
+
               <Text style={styles.rarityIcon}>{config.icon}</Text>
               <Text style={styles.rarityText}>{config.label}</Text>
             </LinearGradient>
@@ -234,7 +255,7 @@ export const ElasticsearchResultCard: React.FC<Props> = ({
               <Ionicons
                 name={isFavorited ? 'heart' : 'heart-outline'}
                 size={22}
-                color={isFavorited ? '#FF6B6B' : '#666'}
+                color={isFavorited ? '#E53E3E' : '#E53E3E'}
               />
             </View>
           </TouchableOpacity>

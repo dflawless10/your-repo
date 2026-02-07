@@ -62,7 +62,7 @@ const LoginScreen = () => {
 </View>
 
 <Text onPress={() => router.push('/login')} style={styles.link}>
-  Don't have an account? Register
+  Don&#39;t have an account? Register
 </Text>
 
 

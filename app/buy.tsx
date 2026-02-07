@@ -1,3 +1,5 @@
+import { API_BASE_URL } from '@/config';
+
 import React from 'react';
 import {
   View,

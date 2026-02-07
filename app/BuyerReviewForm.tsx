@@ -1,3 +1,5 @@
+import { API_BASE_URL } from '@/config';
+
 import React, { useState } from 'react';
 import {
   View,
@@ -14,13 +16,15 @@ import {
 } from 'react-native';
 import StarRating from 'app/seller/StarRating';
 import { validateContentQuick } from 'app/utils/contentModeration';
+import { useTheme } from '@/app/theme/ThemeContext';
 
 
 type Seller = { id: number };
 
-const API_BASE = 'http://10.0.0.170:5000';
+const API_BASE = API_BASE_URL;
 
 export default function BuyerReviewForm({ seller }: Readonly<{ seller: Seller }>) {
+  const { theme, colors } = useTheme();
   const [review, setReview] = useState({
     reviewer_name: '',
     rating: 5,
@@ -38,13 +42,13 @@ export default function BuyerReviewForm({ seller }: Readonly<{ seller: Seller }>
     // Content Moderation
     const nameModeration = validateContentQuick(review.reviewer_name, 'Reviewer name');
     if (!nameModeration.isValid) {
-      Alert.alert('Content Policy Violation', nameModeration.errorMessage!);
+      Alert.alert('Content Policy Violation', nameModeration.errorMessage);
       return;
     }
 
     const commentModeration = validateContentQuick(review.comment, 'Review comment');
     if (!commentModeration.isValid) {
-      Alert.alert('Content Policy Violation', commentModeration.errorMessage!);
+      Alert.alert('Content Policy Violation', commentModeration.errorMessage);
       return;
     }
 
@@ -75,10 +79,10 @@ export default function BuyerReviewForm({ seller }: Readonly<{ seller: Seller }>
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.header}>Leave a Review</Text>
+    <View style={[styles.container, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}>
+      <Text style={[styles.header, { color: colors.textPrimary }]}>Leave a Review</Text>
 
-      <Text style={styles.label}>Your Rating</Text>
+      <Text style={[styles.label, { color: theme === 'dark' ? '#CCC' : '#4a5568' }]}>Your Rating</Text>
       <StarRating
         rating={review.rating}
         count={0}
@@ -86,36 +90,49 @@ export default function BuyerReviewForm({ seller }: Readonly<{ seller: Seller }>
         onChange={(newRating: number) => setReview((r) => ({ ...r, rating: newRating }))}
       />
 
-      <Text style={styles.label}>Your Name</Text>
+      <Text style={[styles.label, { color: theme === 'dark' ? '#CCC' : '#4a5568' }]}>Your Name</Text>
       <TextInput
         placeholder="Your name"
+        placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
         value={review.reviewer_name}
         onChangeText={(text) => setReview((r) => ({ ...r, reviewer_name: text }))}
-        style={styles.input}
+        style={[styles.input, {
+          backgroundColor: theme === 'dark' ? '#2C2C2E' : '#fafafa',
+          borderColor: theme === 'dark' ? '#3C3C3E' : '#d1d5db',
+          color: colors.textPrimary
+        }]}
         returnKeyType="next"
         blurOnSubmit={false}
       />
 
-      <Text style={styles.label}>Your Review</Text>
+      <Text style={[styles.label, { color: theme === 'dark' ? '#CCC' : '#4a5568' }]}>Your Review</Text>
       <TextInput
         placeholder="Share your experience..."
+        placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
         multiline
         numberOfLines={4}
         value={review.comment}
         onChangeText={(text) => setReview((r) => ({ ...r, comment: text }))}
-        style={[styles.input, styles.multiline]}
+        style={[styles.input, styles.multiline, {
+          backgroundColor: theme === 'dark' ? '#2C2C2E' : '#fafafa',
+          borderColor: theme === 'dark' ? '#3C3C3E' : '#d1d5db',
+          color: colors.textPrimary
+        }]}
         returnKeyType="done"
         blurOnSubmit={true}
       />
 
-      <Text style={styles.label}>Mood</Text>
+      <Text style={[styles.label, { color: theme === 'dark' ? '#CCC' : '#4a5568' }]}>Mood</Text>
       <View style={styles.moodRow}>
         {['🐐', '😎', '🤔', '😡'].map((mood) => (
           <TouchableOpacity
             key={mood}
             onPress={() => setReview((r) => ({ ...r, mascot_mood: mood }))}
           >
-            <Text style={review.mascot_mood === mood ? styles.selectedMood : styles.mood}>
+            <Text style={[
+              review.mascot_mood === mood ? styles.selectedMood : styles.mood,
+              review.mascot_mood === mood && { backgroundColor: theme === 'dark' ? '#3C3C3E' : '#e2e8f0' }
+            ]}>
               {mood}
             </Text>
           </TouchableOpacity>
@@ -124,7 +141,9 @@ export default function BuyerReviewForm({ seller }: Readonly<{ seller: Seller }>
 
       <TouchableOpacity
         onPress={handleSubmitReview}
-        style={[styles.submitButton, submitting && { opacity: 0.7 }]}
+        style={[styles.submitButton, {
+          backgroundColor: theme === 'dark' ? '#B794F4' : '#6A0DAD'
+        }, submitting && { opacity: 0.7 }]}
         disabled={submitting}
       >
         <Text style={styles.submitText}>{submitting ? 'Submitting…' : 'Submit Review'}</Text>

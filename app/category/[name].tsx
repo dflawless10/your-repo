@@ -1,3 +1,5 @@
+import { API_BASE_URL } from '@/config';
+
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -14,8 +16,10 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
 import { Image } from 'expo-image';
+import { useTheme } from '@/app/theme/ThemeContext';
+import GlobalFooter from '@/app/components/GlobalFooter';
 
-const API_URL = 'http://10.0.0.170:5000';
+const API_URL = API_BASE_URL;
 
 type GenderFilter = 'all' | 'women' | 'men' | 'unisex' | 'kids' | 'pets';
 
@@ -33,6 +37,7 @@ interface Item {
 export default function CategoryScreen() {
   const { name } = useLocalSearchParams();
   const router = useRouter();
+  const { theme, colors } = useTheme();
   const scrollY = useRef(new Animated.Value(0)).current;
 
   const [items, setItems] = useState<Item[]>([]);
@@ -113,7 +118,14 @@ export default function CategoryScreen() {
       key={filter}
       style={[
         styles.filterChip,
-        selectedGender === filter && styles.filterChipActive,
+        {
+          backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF',
+          borderColor: theme === 'dark' ? '#3C3C3E' : '#E0E0E0'
+        },
+        selectedGender === filter && {
+          backgroundColor: theme === 'dark' ? '#3730A3' : '#6A0DAD',
+          borderColor: theme === 'dark' ? '#4C1D95' : '#6A0DAD'
+        },
       ]}
       onPress={() => setSelectedGender(filter)}
     >
@@ -121,7 +133,8 @@ export default function CategoryScreen() {
       <Text
         style={[
           styles.filterChipText,
-          selectedGender === filter && styles.filterChipTextActive,
+          { color: theme === 'dark' ? '#ECEDEE' : '#333' },
+          selectedGender === filter && { color: '#FFF' },
         ]}
       >
         {label}
@@ -131,7 +144,7 @@ export default function CategoryScreen() {
 
   const renderItem = ({ item }: { item: Item }) => (
     <TouchableOpacity
-      style={styles.itemCard}
+      style={[styles.itemCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}
       onPress={() => router.push(`/item/${item.id}`)}
     >
       <Image
@@ -141,19 +154,21 @@ export default function CategoryScreen() {
         placeholder={require('../../assets/goat-icon.png')}
       />
       <View style={styles.itemInfo}>
-        <Text style={styles.itemName} numberOfLines={2}>
+        <Text style={[styles.itemName, { color: colors.textPrimary }]} numberOfLines={2}>
           {item.name}
         </Text>
         <View style={styles.priceRow}>
           {item.current_bid ? (
             <>
-              <Text style={styles.currentBid}>
+              <Text style={[styles.currentBid, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>
                 ${item.current_bid.toFixed(2)}
               </Text>
-              <Text style={styles.bidLabel}>Current Bid</Text>
+              <Text style={[styles.bidLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Current Bid</Text>
             </>
           ) : (
-            <Text style={styles.price}>${item.price.toFixed(2)}</Text>
+            <Text style={[styles.price, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>
+              ${item.price.toFixed(2)}
+            </Text>
           )}
         </View>
         {item.auction_ends_at && (
@@ -167,21 +182,24 @@ export default function CategoryScreen() {
   );
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <EnhancedHeader scrollY={scrollY} />
 
-      <View style={styles.headerTitleContainer}>
+      <View style={[styles.headerTitleContainer, {
+        backgroundColor: colors.background,
+        borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0'
+      }]}>
         <View style={styles.headerRow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#1A202C" />
+            <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#1A202C'} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>{name}</Text>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{name}</Text>
           <View style={{ width: 24 }} />
         </View>
       </View>
 
       {/* Filter Chips */}
-      <View style={styles.filterContainer}>
+      <View style={[styles.filterContainer, { backgroundColor: colors.background }]}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -199,14 +217,16 @@ export default function CategoryScreen() {
       {/* Items Grid */}
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#6A0DAD" />
-          <Text style={styles.loadingText}>Loading {categoryDisplayName}...</Text>
+          <ActivityIndicator size="large" color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+          <Text style={[styles.loadingText, { color: theme === 'dark' ? '#999' : '#666' }]}>
+            Loading {categoryDisplayName}...
+          </Text>
         </View>
       ) : items.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Ionicons name="diamond-outline" size={64} color="#ccc" />
-          <Text style={styles.emptyText}>No items found</Text>
-          <Text style={styles.emptySubtext}>
+          <Ionicons name="diamond-outline" size={64} color={theme === 'dark' ? '#555' : '#ccc'} />
+          <Text style={[styles.emptyText, { color: colors.textPrimary }]}>No items found</Text>
+          <Text style={[styles.emptySubtext, { color: theme === 'dark' ? '#999' : '#666' }]}>
             Check back soon for new {categoryDisplayName.toLowerCase()}!
           </Text>
         </View>
@@ -225,6 +245,8 @@ export default function CategoryScreen() {
           scrollEventThrottle={16}
         />
       )}
+
+      <GlobalFooter />
     </View>
   );
 }

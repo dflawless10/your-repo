@@ -20,17 +20,47 @@ import {
   Offer,
 } from '@/api/offers';
 import GlobalFooter from "@/app/components/GlobalFooter";
+import { useTheme } from '@/app/theme/ThemeContext';
 
 
 
 export default function SentOffersScreen() {
+  const { theme, colors } = useTheme();
+  const styles = createStyles(theme === 'dark', colors);
   const router = useRouter();
   const scrollY = useRef(new Animated.Value(0)).current;
+  const headerOpacity = useRef(new Animated.Value(0)).current;
+  const headerScale = useRef(new Animated.Value(1)).current;
   const [offers, setOffers] = useState<Offer[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
+    // Fade in header title and arrow - wait for screen to fully render first
+    setTimeout(() => {
+      Animated.timing(headerOpacity, {
+        toValue: 1,
+        duration: 2000, // 2 seconds - slow and dramatic
+        useNativeDriver: true,
+      }).start(() => {
+        // After fade-in completes, start pulsing animation
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(headerScale, {
+              toValue: 1.05,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(headerScale, {
+              toValue: 1,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
+      });
+    }, 500); // 500ms delay - let screen render fully first
+
     fetchOffers();
   }, []);
 
@@ -59,7 +89,7 @@ export default function SentOffersScreen() {
 
     return (
       <TouchableOpacity
-        style={styles.offerCard}
+        style={[styles.offerCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}
         onPress={() => handleOfferPress(item)}
         activeOpacity={0.7}
       >
@@ -67,24 +97,24 @@ export default function SentOffersScreen() {
         <View style={styles.offerHeader}>
           <Image source={{ uri: item.photo_url }} style={styles.itemImage} />
           <View style={styles.itemInfo}>
-            <Text style={styles.itemName} numberOfLines={2}>
+            <Text style={[styles.itemName, { color: colors.textPrimary }]} numberOfLines={2}>
               {item.item_name}
             </Text>
-            <Text style={styles.sellerName}>Seller: {item.seller_username}</Text>
+            <Text style={[styles.sellerName, { color: theme === 'dark' ? '#999' : '#666' }]}>Seller: {item.seller_username}</Text>
           </View>
         </View>
 
         {/* Offer Amount */}
-        <View style={styles.amountContainer}>
-          <Text style={styles.amountLabel}>Your Offer</Text>
+        <View style={[styles.amountContainer, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC' }]}>
+          <Text style={[styles.amountLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Your Offer</Text>
           <Text style={styles.amountValue}>${item.offer_amount.toFixed(2)}</Text>
         </View>
 
         {/* Message */}
         {item.message && (
-          <View style={styles.messageContainer}>
-            <Ionicons name="chatbubble-outline" size={16} color="#666" />
-            <Text style={styles.messageText}>{item.message}</Text>
+          <View style={[styles.messageContainer, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#EBF8FF' }]}>
+            <Ionicons name="chatbubble-outline" size={16} color={theme === 'dark' ? '#999' : '#666'} />
+            <Text style={[styles.messageText, { color: theme === 'dark' ? '#CCC' : '#2C5282' }]}>{item.message}</Text>
           </View>
         )}
 
@@ -94,7 +124,7 @@ export default function SentOffersScreen() {
             <Text style={styles.statusText}>{getOfferStatusLabel(item.status)}</Text>
           </View>
           {isPending && (
-            <Text style={styles.timeRemaining}>{timeRemaining}</Text>
+            <Text style={[styles.timeRemaining, { color: '#FF6B6B' }]}>{timeRemaining}</Text>
           )}
         </View>
 
@@ -140,16 +170,14 @@ export default function SentOffersScreen() {
 
   if (loading) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color="#FF6B35" style={styles.loader} />
-        <GlobalFooter />
-
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <EnhancedHeader scrollY={scrollY} />
 
       <Animated.FlatList
@@ -166,21 +194,29 @@ export default function SentOffersScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
         ListHeaderComponent={
-          <View style={styles.pageHeader}>
+          <Animated.View style={[
+            styles.pageHeader,
+            {
+              opacity: headerOpacity,
+              transform: [{ scale: headerScale }],
+              backgroundColor: colors.background,
+              borderBottomColor: theme === 'dark' ? '#333' : '#E5E5E5'
+            }
+          ]}>
             <TouchableOpacity
               onPress={() => router.back()}
               style={styles.backButton}
             >
-              <Ionicons name="arrow-back" size={24} color="#1a1a1a" />
+              <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
             </TouchableOpacity>
-            <Text style={styles.pageTitle}>📤 Sent Offers</Text>
-          </View>
+            <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Sent Offers</Text>
+          </Animated.View>
         }
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Ionicons name="paper-plane-outline" size={64} color="#CCC" />
-            <Text style={styles.emptyText}>No offers sent yet</Text>
-            <Text style={styles.emptySubtext}>
+            <Ionicons name="paper-plane-outline" size={64} color={theme === 'dark' ? '#666' : '#CCC'} />
+            <Text style={[styles.emptyText, { color: colors.textPrimary }]}>No offers sent yet</Text>
+            <Text style={[styles.emptySubtext, { color: theme === 'dark' ? '#999' : '#666' }]}>
               Make offers on expired items to negotiate with sellers
             </Text>
           </View>
@@ -192,10 +228,9 @@ export default function SentOffersScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (isDark: boolean, colors: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F7FAFC',
   },
   loader: {
     flex: 1,
@@ -208,23 +243,26 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     paddingHorizontal: 4,
     paddingTop: 24,
+    borderBottomWidth: 1,
+    paddingBottom: 12,
   },
   backButton: {
-    marginRight: 16,
-    padding: 8,
+    marginRight: 12,
+    padding: 4,
   },
   pageTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.textPrimary,
   },
+
   listContent: {
     paddingTop: HEADER_MAX_HEIGHT + 20,
     paddingHorizontal: 16,
     paddingBottom: 20,
   },
   offerCard: {
-    backgroundColor: '#FFF',
+    backgroundColor: isDark ? '#1C1C1E' : '#FFF',
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
@@ -252,15 +290,12 @@ const styles = StyleSheet.create({
   itemName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1A202C',
     marginBottom: 6,
   },
   sellerName: {
     fontSize: 14,
-    color: '#718096',
   },
   amountContainer: {
-    backgroundColor: '#F7FAFC',
     padding: 12,
     borderRadius: 8,
     marginBottom: 12,
@@ -268,7 +303,6 @@ const styles = StyleSheet.create({
   },
   amountLabel: {
     fontSize: 12,
-    color: '#718096',
     marginBottom: 4,
   },
   amountValue: {
@@ -280,7 +314,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
-    backgroundColor: '#EBF8FF',
     padding: 12,
     borderRadius: 8,
     marginBottom: 12,
@@ -288,7 +321,6 @@ const styles = StyleSheet.create({
   messageText: {
     flex: 1,
     fontSize: 14,
-    color: '#2C5282',
     lineHeight: 20,
   },
   statusRow: {
@@ -310,7 +342,6 @@ const styles = StyleSheet.create({
   timeRemaining: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#FF6B6B',
   },
   successMessage: {
     flexDirection: 'row',
@@ -370,13 +401,11 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#2D3748',
     marginTop: 16,
     marginBottom: 8,
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#718096',
     textAlign: 'center',
     lineHeight: 20,
   },

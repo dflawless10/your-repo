@@ -17,6 +17,7 @@ import { API_BASE_URL } from '@/config';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '../components/EnhancedHeader';
 import { LinearGradient } from 'expo-linear-gradient';
 import GlobalFooter from "@/app/components/GlobalFooter";
+import { useTheme } from '@/app/theme/ThemeContext';
 
 interface Auction {
   item_id: number;
@@ -30,6 +31,8 @@ interface Auction {
 
 export default function AuctionManagementScreen() {
   const router = useRouter();
+  const { theme, colors } = useTheme();
+  const isDark = theme === 'dark';
   const scrollY = new Animated.Value(0);
 
   const [auctions, setAuctions] = useState<Auction[]>([]);
@@ -65,7 +68,7 @@ export default function AuctionManagementScreen() {
     loadAuctions();
   };
 
-  const handleEndAuction = async (itemId: number) => {
+  const handleEndAuction = (itemId: number) => {
     Alert.alert(
       'End Auction Early',
       'Are you sure you want to end this auction early?',
@@ -74,21 +77,24 @@ export default function AuctionManagementScreen() {
         {
           text: 'End Auction',
           style: 'destructive',
-          onPress: async () => {
-            try {
-              const token = await AsyncStorage.getItem('jwtToken');
-              const response = await fetch(`${API_BASE_URL}/api/admin/auctions/${itemId}/end`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${token}` },
-              });
+          onPress: () => {
+            (async () => {
+              try {
+                const token = await AsyncStorage.getItem('jwtToken');
+                const response = await fetch(`${API_BASE_URL}/api/admin/auctions/${itemId}/end`, {
+                  method: 'POST',
+                  headers: { Authorization: `Bearer ${token}` },
+                });
 
-              if (response.ok) {
-                Alert.alert('Success', 'Auction ended');
-                loadAuctions();
+                if (response.ok) {
+                  Alert.alert('Success', 'Auction ended');
+                  await loadAuctions();
+                }
+              } catch (error) {
+                console.error('Failed to end auction:', error);
+                Alert.alert('Error', 'Failed to end auction');
               }
-            } catch (error) {
-              Alert.alert('Error', 'Failed to end auction');
-            }
+            })();
           },
         },
       ]
@@ -96,30 +102,56 @@ export default function AuctionManagementScreen() {
   };
 
   const renderAuction = (auction: Auction) => {
-    const hoursLeft = Math.max(0, Math.floor((new Date(auction.end_time).getTime() - Date.now()) / (1000 * 60 * 60)));
-    const isEndingSoon = hoursLeft < 24 && hoursLeft > 0;
+    const timeLeft = Math.max(0, new Date(auction.end_time).getTime() - Date.now());
+    const daysLeft = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
+    const hoursLeft = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutesLeft = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+
+    const isEndingSoon = timeLeft < 24 * 60 * 60 * 1000 && timeLeft > 0;
+    const hasEnded = timeLeft === 0;
+
+    const getTimeLeftText = () => {
+      if (hasEnded) {
+        return 'Ended';
+      }
+      if (daysLeft > 0) {
+        return `${daysLeft}d ${hoursLeft}h left`;
+      } else if (hoursLeft > 0) {
+        return `${hoursLeft}h ${minutesLeft}m left`;
+      } else {
+        return `${minutesLeft}m left`;
+      }
+    };
 
     return (
-      <View key={auction.item_id} style={styles.card}>
+      <View key={auction.item_id} style={[styles.card, { backgroundColor: colors.surface, borderColor: isDark ? '#333' : '#E0E0E0' }]}>
         <View style={styles.cardHeader}>
           <View style={styles.cardTitleRow}>
-            <Text style={styles.itemName}>{auction.name}</Text>
+            <Text style={[styles.itemName, { color: colors.textPrimary }]}>{auction.name}</Text>
             {isEndingSoon && (
               <View style={styles.urgentBadge}>
-                <Ionicons name="time" size={12} color="#FFF" />
+                <Ionicons name="flame" size={12} color="#FFF" />
                 <Text style={styles.urgentBadgeText}>ENDING SOON</Text>
+              </View>
+            )}
+            {hasEnded && (
+              <View style={[styles.urgentBadge, { backgroundColor: '#666' }]}>
+                <Ionicons name="checkmark-circle" size={12} color="#FFF" />
+                <Text style={styles.urgentBadgeText}>ENDED</Text>
               </View>
             )}
           </View>
 
           <Text style={styles.currentBid}>${auction.current_bid.toFixed(2)}</Text>
-          <Text style={styles.bidCount}>{auction.bid_count} bids</Text>
-          <Text style={styles.seller}>Seller: {auction.seller_name}</Text>
-          <Text style={styles.endTime}>
-            <Ionicons name="time-outline" size={14} color="#666" />
-            {' '}Ends {new Date(auction.end_time).toLocaleString()}
-            {' '}({hoursLeft}h left)
-          </Text>
+          <Text style={[styles.bidCount, { color: colors.textSecondary }]}>{auction.bid_count} bids</Text>
+          <Text style={[styles.seller, { color: colors.textSecondary }]}>Seller: {auction.seller_name}</Text>
+          <View style={styles.endTime}>
+            <Ionicons name="time-outline" size={14} color={isDark ? '#999' : '#666'} />
+            <Text style={[styles.endTimeText, { color: colors.textSecondary }]}>
+              {' '}Ends {new Date(auction.end_time).toLocaleString()}
+              {' '}({getTimeLeftText()})
+            </Text>
+          </View>
         </View>
 
         <View style={styles.cardActions}>
@@ -131,13 +163,15 @@ export default function AuctionManagementScreen() {
             <Text style={[styles.actionButtonText, { color: '#2196F3' }]}>View</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.actionButton, styles.endButton]}
-            onPress={() => handleEndAuction(auction.item_id)}
-          >
-            <Ionicons name="stop-circle" size={16} color="#F44336" />
-            <Text style={[styles.actionButtonText, { color: '#F44336' }]}>End Early</Text>
-          </TouchableOpacity>
+          {!hasEnded && (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.endButton]}
+              onPress={() => handleEndAuction(auction.item_id)}
+            >
+              <Ionicons name="stop-circle" size={16} color="#F44336" />
+              <Text style={[styles.actionButtonText, { color: '#F44336' }]}>End Early</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     );
@@ -146,19 +180,25 @@ export default function AuctionManagementScreen() {
   const filteredAuctions = auctions.filter(a => {
     if (filterStatus === 'all') return true;
     if (filterStatus === 'ending_soon') {
-      const hoursLeft = Math.floor((new Date(a.end_time).getTime() - Date.now()) / (1000 * 60 * 60));
-      return hoursLeft < 24 && hoursLeft > 0;
+      const timeLeft = new Date(a.end_time).getTime() - Date.now();
+      return timeLeft < 24 * 60 * 60 * 1000 && timeLeft > 0;
+    }
+    if (filterStatus === 'ended') {
+      return new Date(a.end_time).getTime() <= Date.now();
+    }
+    if (filterStatus === 'active') {
+      return new Date(a.end_time).getTime() > Date.now();
     }
     return a.status === filterStatus;
   });
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ headerShown: false }} />
       <EnhancedHeader scrollY={scrollY} />
 
       <Animated.ScrollView
-        style={styles.scrollView}
+        style={[styles.scrollView, { backgroundColor: colors.background }]}
         contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20 }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -170,26 +210,26 @@ export default function AuctionManagementScreen() {
         }
       >
         {/* Page Header with Back Arrow */}
-        <View style={styles.pageHeader}>
+        <View style={[styles.pageHeader, { backgroundColor: colors.surface }]}>
           <TouchableOpacity
             onPress={() => router.back()}
             style={styles.backButton}
           >
-            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+            <Ionicons name="arrow-back" size={24} color={isDark ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
-          <Text style={styles.pageTitle}>Auction Management</Text>
+          <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Auction Management</Text>
         </View>
 
         {/* Filter Chips */}
-        <View style={styles.filterContainer}>
+        <View style={[styles.filterContainer, { backgroundColor: colors.surface, borderColor: isDark ? '#333' : '#E0E0E0' }]}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           {['all', 'active', 'ending_soon', 'ended'].map((status) => (
             <TouchableOpacity
               key={status}
-              style={[styles.filterChip, filterStatus === status && styles.filterChipActive]}
+              style={[styles.filterChip, { backgroundColor: isDark ? '#1a1a1a' : '#F5F5F5' }, filterStatus === status && styles.filterChipActive]}
               onPress={() => setFilterStatus(status as any)}
             >
-              <Text style={[styles.filterChipText, filterStatus === status && styles.filterChipTextActive]}>
+              <Text style={[styles.filterChipText, { color: isDark ? '#999' : '#666' }, filterStatus === status && styles.filterChipTextActive]}>
                 {status.replace('_', ' ').charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
               </Text>
             </TouchableOpacity>
@@ -222,9 +262,9 @@ export default function AuctionManagementScreen() {
           filteredAuctions.map(renderAuction)
         ) : (
           <View style={styles.emptyState}>
-            <Ionicons name="hammer" size={64} color="#D1D5DB" />
-            <Text style={styles.emptyTitle}>No Auctions</Text>
-            <Text style={styles.emptySubtitle}>No auctions match your filter</Text>
+            <Ionicons name="hammer" size={64} color={isDark ? '#444' : '#D1D5DB'} />
+            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No Auctions</Text>
+            <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>No auctions match your filter</Text>
           </View>
         )}
         <View style={{ height: 40 }} />
@@ -300,17 +340,18 @@ const styles = StyleSheet.create({
   urgentBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F44336',
+    backgroundColor: '#e53e3e',
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
+    paddingVertical: 6,
+    borderRadius: 10,
     gap: 4,
   },
-  urgentBadgeText: { fontSize: 10, fontWeight: '700', color: '#FFF' },
+  urgentBadgeText: { fontSize: 9, fontWeight: '800', color: '#FFF', letterSpacing: 0.5 },
   currentBid: { fontSize: 20, fontWeight: '700', color: '#4CAF50', marginBottom: 4 },
   bidCount: { fontSize: 14, color: '#666', marginBottom: 4 },
   seller: { fontSize: 13, color: '#999', marginBottom: 4 },
-  endTime: { fontSize: 13, color: '#666' },
+  endTime: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  endTimeText: { fontSize: 13, color: '#666' },
   cardActions: { flexDirection: 'row', gap: 8 },
   actionButton: {
     flex: 1,

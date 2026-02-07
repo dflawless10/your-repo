@@ -1,3 +1,5 @@
+import { API_BASE_URL } from '@/config';
+
 import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
@@ -16,6 +18,7 @@ import { useRouter } from 'expo-router';
 import { Avatar } from './Avatar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme } from '@/app/theme/ThemeContext';
 
 interface BidGoatMenuModalProps {
   visible: boolean;
@@ -38,6 +41,7 @@ interface UserProfile {
 }
 
 interface MenuSection {
+  id: string; // Unique stable ID for React keys
   title: string;
   icon?: keyof typeof Ionicons.glyphMap;
   customIcon?: any; // For custom image icons
@@ -47,7 +51,11 @@ interface MenuSection {
   onPress?: () => void;
   badge?: number;
   isNew?: boolean;
+  subtitle?: string; // For additional context text
+  isPremiumHighlight?: boolean; // For special premium styling
 }
+
+const API_URL = API_BASE_URL;
 
 export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
   visible,
@@ -56,7 +64,9 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
   avatarUrl,
   onGiftFinderPress,
 }) => {
+  console.log('🐐 BidGoatMenuModal received - username:', username, 'avatarUrl:', avatarUrl);
   const router = useRouter();
+  const { theme, colors } = useTheme();
   const [slideAnim] = useState(new Animated.Value(400));
   const [userStats, setUserStats] = useState<UserStats>({
     activeBids: 0,
@@ -71,6 +81,12 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
   const [buyingExpanded, setBuyingExpanded] = useState(true);
   const [sellingExpanded, setSellingExpanded] = useState(true);
   const [accountExpanded, setAccountExpanded] = useState(true);
+  const [cartSlideAnim] = useState(new Animated.Value(0));
+  const [lastViewedCounts, setLastViewedCounts] = useState({
+    jewelryBox: 0,
+    myBids: 0,
+    favorites: 0,
+  });
 
   useEffect(() => {
     if (visible) {
@@ -81,6 +97,25 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
         friction: 11,
       }).start();
       loadUserStats();
+      loadLastViewedCounts();
+
+      // Start the goat cart animation - slide back and forth
+      Animated.loop(
+        Animated.sequence([
+          // Slide to the right
+          Animated.timing(cartSlideAnim, {
+            toValue: 1,
+            duration: 3000, // 3 seconds to cross
+            useNativeDriver: true,
+          }),
+          // Slide back to the left
+          Animated.timing(cartSlideAnim, {
+            toValue: 0,
+            duration: 3000, // 3 seconds to return
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
     } else {
       Animated.timing(slideAnim, {
         toValue: 400,
@@ -90,15 +125,29 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
     }
   }, [visible]);
 
+  const loadLastViewedCounts = async () => {
+    try {
+      const stored = await AsyncStorage.getItem('lastViewedCounts');
+      if (stored) {
+        setLastViewedCounts(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.warn('Failed to load last viewed counts:', e);
+    }
+  };
+
   const loadUserStats = async () => {
+    console.log('🐐 BidGoatMenuModal: loadUserStats called');
     try {
       const token = await AsyncStorage.getItem('jwtToken');
       if (!token) {
+        console.log('🐐 BidGoatMenuModal: No token found');
         setUserStats({ activeBids: 0, watching: 0, sales: 0, purchases: 0 });
         return;
       }
+      console.log('🐐 BidGoatMenuModal: Token found, fetching stats...');
 
-      // Fetch active bids count
+      // Fetch active bids count (only truly active bids, not won/lost)
       let activeBidsCount = 0;
       try {
         const bidsResponse = await fetch('http://10.0.0.170:5000/api/my-bids', {
@@ -107,7 +156,10 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
         if (bidsResponse.ok) {
           const bidsData = await bidsResponse.json();
           const bids = bidsData.bids || bidsData.results || [];
-          activeBidsCount = bids.length;
+          // Only count bids with status 'active' or 'outbid' (excluding won/lost)
+          activeBidsCount = bids.filter((bid: any) =>
+            bid.status === 'active' || bid.status === 'outbid'
+          ).length;
         }
       } catch (e) {
         console.warn('Failed to fetch bids:', e);
@@ -128,26 +180,67 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
         console.warn('Failed to fetch favorites:', e);
       }
 
-      // TODO: Fetch real sales and purchases data when endpoints are available
+      // Fetch seller sales count (delivered orders)
+      let salesCount = 0;
+      try {
+        console.log('🐐 BidGoatMenuModal: Fetching seller orders...');
+        const ordersResponse = await fetch('http://10.0.0.170:5000/api/seller/orders', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        console.log('🐐 BidGoatMenuModal: Orders response status:', ordersResponse.status);
+        if (ordersResponse.ok) {
+          const ordersData = await ordersResponse.json();
+          const orders = ordersData.orders || [];
+          console.log('🐐 BidGoatMenuModal: Total orders:', orders.length);
+          // Count only delivered orders as sales
+          const deliveredOrders = orders.filter((order: any) => order.order_status === 'delivered');
+          salesCount = deliveredOrders.length;
+          console.log('🐐 BidGoatMenuModal: Delivered orders (sales):', salesCount);
+        }
+      } catch (e) {
+        console.warn('🐐 BidGoatMenuModal: Failed to fetch sales:', e);
+      }
+
+      // Fetch purchases/collected items
+      let purchasesCount = 0;
+      try {
+        const purchasesResponse = await fetch('http://10.0.0.170:5000/api/buyer/purchases', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (purchasesResponse.ok) {
+          const purchasesData = await purchasesResponse.json();
+          const purchasedItems = purchasesData.items || [];
+          purchasesCount = purchasedItems.length;
+        }
+      } catch (e) {
+        console.warn('Failed to fetch purchases:', e);
+      }
+
       setUserStats({
         activeBids: activeBidsCount,
         watching: watchingCount,
-        sales: 0,
-        purchases: 0,
+        sales: salesCount,
+        purchases: purchasesCount,
       });
 
       // Check if user is admin
       const profile = await AsyncStorage.getItem('profile');
+      console.log('🐐 BidGoatMenuModal: Raw profile from AsyncStorage:', profile);
       if (profile) {
         try {
           const profileData = JSON.parse(profile);
+          console.log('🐐 BidGoatMenuModal: Parsed profile data:', profileData);
+          console.log('🐐 BidGoatMenuModal: is_admin value:', profileData.is_admin);
           setUserProfile({
             isAdmin: profileData.is_admin || false,
             isPremium: profileData.is_premium_seller || false,
           });
+          console.log('🐐 BidGoatMenuModal: Set userProfile.isAdmin to:', profileData.is_admin || false);
         } catch (e) {
           console.error('Failed to parse profile:', e);
         }
+      } else {
+        console.log('🐐 BidGoatMenuModal: No profile found in AsyncStorage');
       }
     } catch (error) {
       console.error('Error loading user stats:', error);
@@ -155,7 +248,39 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
     }
   };
 
+  const markAsViewed = async (
+  section: 'jewelryBox' | 'myBids' | 'favorites'
+) => {
+  let newValue;
+
+  if (section === 'jewelryBox') {
+    newValue = userStats.purchases;
+  } else if (section === 'myBids') {
+    newValue = userStats.activeBids;
+  } else {
+    newValue = userStats.watching;
+  }
+
+  const newCounts = {
+    ...lastViewedCounts,
+    [section]: newValue,
+  };
+
+  setLastViewedCounts(newCounts);
+  await AsyncStorage.setItem('lastViewedCounts', JSON.stringify(newCounts));
+};
+
+
   const handleNavigation = async (route: string) => {
+    // Mark sections as viewed when navigating to them
+    if (route === '/jewelry-box') {
+      await markAsViewed('jewelryBox');
+    } else if (route === '/(tabs)/MyBidsScreen') {
+      await markAsViewed('myBids');
+    } else if (route === '/(tabs)/JewelryBoxScreen') {
+      await markAsViewed('favorites');
+    }
+
     // Handle "My Reviews" - route to user's seller profile
     if (route === '/reviews') {
       let userId = await AsyncStorage.getItem('userId');
@@ -206,40 +331,37 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
 
   const quickActions: MenuSection[] = [
     {
-      title: 'Explore',
-      icon: 'search',
-      iconColor: '#FF6B35',
-      iconBg: '#FFF5F2',
-      route: '/(tabs)/explore',
+      id: 'quick-jewelry-box',
+      title: 'My Jewelry Box',
+      icon: 'diamond',
+      iconColor: '#E91E63',
+      iconBg: '#FCE4EC',
+      route: '/jewelry-box',
+      badge: userStats.purchases > lastViewedCounts.jewelryBox ? userStats.purchases - lastViewedCounts.jewelryBox : undefined,
     },
     {
-      title: 'Discover',
-      icon: 'compass',
-      iconColor: '#00BCD4',
-      iconBg: '#E0F7FA',
-      route: '/discover',
-    },
-    {
+      id: 'quick-my-bids',
       title: 'My Bids',
       icon: 'time',
       iconColor: '#6A0DAD',
       iconBg: '#F5F0FF',
       route: '/(tabs)/MyBidsScreen',
-      badge: userStats.activeBids,
+      badge: userStats.activeBids > lastViewedCounts.myBids ? userStats.activeBids - lastViewedCounts.myBids : undefined,
     },
     {
-      title: 'Favorites',
+      id: 'quick-favorites',
+      title: 'My Favorites',
       icon: 'heart',
-      iconColor: '#E91E63',
-      iconBg: '#FCE4EC',
+      iconColor: '#FF6B35',
+      iconBg: '#FFF5F2',
       route: '/(tabs)/JewelryBoxScreen',
-      badge: userStats.watching,
+      badge: userStats.watching > lastViewedCounts.favorites ? userStats.watching - lastViewedCounts.favorites : undefined,
     },
-
   ];
 
   const buyingMenu: MenuSection[] = [
     {
+      id: 'buying-purchases',
       title: 'My Purchases & Rewards',
       icon: 'receipt-outline',
       iconColor: '#2196F3',
@@ -247,6 +369,7 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
       route: '/orders',
     },
     {
+      id: 'buying-relisted',
       title: 'Relisted Deals',
       icon: 'pricetag-outline',
       iconColor: '#F44336',
@@ -255,6 +378,7 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
       isNew: true,
     },
     {
+      id: 'buying-sent-offers',
       title: 'Sent Offers',
       icon: 'paper-plane-outline',
       iconColor: '#FF6B35',
@@ -264,7 +388,29 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
   ];
 
   const sellingMenu: MenuSection[] = [
+    // Premium upgrade - TOP position for maximum visibility (beats competitors)
+    ...(userProfile.isPremium ? [{
+      id: 'selling-premium-active',
+      title: '⭐ Premium Member',
+      icon: 'star' as keyof typeof Ionicons.glyphMap,
+      iconColor: '#FFD700',
+      iconBg: '#FFF9E6',
+      route: '/seller/premium',
+      subtitle: 'Saving 3% on every sale',
+      isPremiumHighlight: true,
+    }] : [{
+      id: 'selling-premium-upgrade',
+      title: '⭐ Unlock Premium - Save 3%',
+      icon: 'star' as keyof typeof Ionicons.glyphMap,
+      iconColor: '#FFD700',
+      iconBg: '#FFF9E6',
+      route: '/seller/premium',
+      isNew: true,
+      subtitle: 'Only 5% commission vs 8%',
+      isPremiumHighlight: true,
+    }]),
     {
+      id: 'selling-buy-it-now',
       title: 'List Buy It Now',
       icon: 'flash-outline',
       iconColor: '#FF6B35',
@@ -272,6 +418,7 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
       route: '/(tabs)/list-item',
     },
     {
+      id: 'selling-create-auction',
       title: 'List Create Auction',
       icon: 'hammer-outline',
       iconColor: '#673AB7',
@@ -279,6 +426,7 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
       route: '/CreateAuctionScreen',
     },
     {
+      id: 'selling-diamond',
       title: 'List My Diamond',
       icon: 'diamond-outline',
       iconColor: '#00BCD4',
@@ -286,6 +434,7 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
       route: '/diamond-appraisal',
     },
     {
+      id: 'selling-watch',
       title: 'List My Watch',
       icon: 'watch-outline',
       iconColor: '#795548',
@@ -293,6 +442,7 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
       route: '/watch-appraisal',
     },
     {
+      id: 'selling-must-sell',
       title: 'List Must Sell',
       icon: 'flame-outline',
       iconColor: '#FF4500',
@@ -300,51 +450,62 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
       route: '/MustSellScreen',
     },
     {
-      title: 'Orders to Ship',
-      icon: 'cube-outline',
-      iconColor: '#FF5722',
-      iconBg: '#FBE9E7',
-      route: '/seller/orders',
-    },
-    {
-      title: 'Revenue',
-      icon: 'cash-outline',
-      iconColor: '#4CAF50',
-      iconBg: '#E8F5E9',
-      route: '/seller/revenue',
-    },
-    {
+      id: 'selling-dashboard',
       title: 'Selling Dashboard',
       icon: 'analytics-outline',
       iconColor: '#00BCD4',
       iconBg: '#E0F7FA',
       route: '/seller/dashboard',
     },
+    {
+      id: 'selling-returns',
+      title: 'Manage Returns',
+      icon: 'return-up-back-outline',
+      iconColor: '#6A0DAD',
+      iconBg: '#F3E8FF',
+      route: '/seller/returns',
+    },
   ];
 
   const accountMenu: MenuSection[] = [
+    // Premium status badge - prominent position
+    ...(userProfile.isPremium ? [{
+      id: 'account-premium-active',
+      title: '✨ Premium Active',
+      icon: 'diamond' as keyof typeof Ionicons.glyphMap,
+      iconColor: '#9C27B0',
+      iconBg: '#F3E5F5',
+      route: '/seller/premium',
+      subtitle: '5% commission • Priority support',
+      isPremiumHighlight: true,
+    }] : [{
+      id: 'account-premium-upgrade',
+      title: '✨ Get Premium & Save',
+      icon: 'diamond' as keyof typeof Ionicons.glyphMap,
+      iconColor: '#9C27B0',
+      iconBg: '#F3E5F5',
+      route: '/seller/premium',
+      subtitle: '$19.99/mo • Lower fees',
+      isPremiumHighlight: true,
+    }]),
     {
+      id: 'account-settings',
       title: 'Account Settings',
       icon: 'settings-outline',
       iconColor: '#607D8B',
       iconBg: '#ECEFF1',
       route: '/account/settings',
     },
-    {
-      title: 'Admin On Duty',
+    ...(userProfile.isAdmin ? [{
+      id: 'admin',
+      title: 'Admin',
       customIcon: require('@/assets/images/admin-badge.png'),
       iconColor: '#4CAF50',
       iconBg: '#E8F5E9',
       route: '/admin-on-duty',
-    },
+    }] : []),
     {
-      title: 'My Analytics',
-      icon: 'stats-chart-outline',
-      iconColor: '#2196F3',
-      iconBg: '#E3F2FD',
-      route: '/seller/analytics',
-    },
-    {
+      id: 'account-reviews',
       title: 'My Reviews',
       icon: 'star-outline',
       iconColor: '#FFC107',
@@ -355,8 +516,13 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
 
   const renderMenuItem = (item: MenuSection) => (
     <TouchableOpacity
-      key={item.title}
-      style={styles.menuCard}
+      key={item.id}
+      style={[
+        styles.menuCard,
+        { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' },
+        item.isPremiumHighlight && styles.premiumMenuCard,
+        item.isPremiumHighlight && { backgroundColor: theme === 'dark' ? '#2C2416' : '#FFFEF0' },
+      ]}
       onPress={() => item.route && void handleNavigation(item.route)}
       activeOpacity={0.7}
     >
@@ -367,7 +533,19 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
           <Ionicons name={item.icon} size={22} color={item.iconColor} />
         )}
       </View>
-      <Text style={styles.menuCardText}>{item.title}</Text>
+      <View style={styles.menuTextContainer}>
+        <Text style={[
+          styles.menuCardText,
+          { color: colors.textPrimary },
+          item.isPremiumHighlight && styles.premiumMenuText,
+          item.isPremiumHighlight && { color: theme === 'dark' ? '#FFD700' : '#B8860B' }
+        ]}>
+          {item.title}
+        </Text>
+        {item.subtitle && (
+          <Text style={[styles.menuSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]}>{item.subtitle}</Text>
+        )}
+      </View>
       {item.badge !== undefined && item.badge > 0 && (
         <View style={styles.menuBadge}>
           <Text style={styles.menuBadgeText}>{item.badge}</Text>
@@ -378,13 +556,13 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
           <Text style={styles.newBadgeText}>NEW</Text>
         </View>
       )}
-      <Ionicons name="chevron-forward" size={18} color="#CCC" style={styles.chevron} />
+      <Ionicons name="chevron-forward" size={18} color={theme === 'dark' ? '#666' : '#CCC'} style={styles.chevron} />
     </TouchableOpacity>
   );
 
   const renderQuickAction = (item: MenuSection) => (
     <TouchableOpacity
-      key={item.title}
+      key={item.id}
       style={styles.quickActionCard}
       onPress={() => item.route && handleNavigation(item.route)}
       activeOpacity={0.7}
@@ -401,7 +579,7 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
           </View>
         )}
       </View>
-      <Text style={styles.quickActionText}>{item.title}</Text>
+      <Text style={[styles.quickActionText, { color: colors.textPrimary }]}>{item.title}</Text>
     </TouchableOpacity>
   );
 
@@ -415,6 +593,7 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
             styles.menuContainer,
             {
               transform: [{ translateX: slideAnim }],
+              backgroundColor: colors.background,
             },
           ]}
         >
@@ -431,10 +610,11 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
             
             <View style={styles.headerContent}>
               <Avatar
-                uri={avatarUrl ?? undefined}
+                uri={avatarUrl || undefined}
                 size={64}
                 variant="gradient"
                 fallbackSource={require('../../assets/goat-icon.png')}
+                cacheKey={avatarUrl || 'default-goat'}
               />
               <View style={styles.userInfo}>
                 <Text style={styles.userName}>{username || 'Guest'}</Text>
@@ -475,35 +655,60 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
           </LinearGradient>
 
           <ScrollView
-            style={styles.scrollContent}
+            style={[styles.scrollContent, { backgroundColor: colors.background }]}
             showsVerticalScrollIndicator={false}
             bounces={true}
           >
             {/* Quick Actions */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Quick Actions</Text>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Quick Actions</Text>
               <View style={styles.quickActionsGrid}>
                 {quickActions.map(renderQuickAction)}
               </View>
             </View>
 
-             {/* Custom Cart Block */}
-  <TouchableOpacity
-  onPress={() => router.push('/cart')}
-  style={{
-    alignItems: 'center',
-    marginTop: 16,
-  }}
->
-  <Image
-    source={require('@/assets/images/goat-cart.png')}
-    style={{ width: 60, height: 60, resizeMode: 'contain' }}
-  />
+             {/* Custom Cart Block - Animated Goat Pushing Cart */}
+  <View style={{ marginTop: 16, position: 'relative', width: '100%', overflow: 'hidden' }}>
+    <Animated.View
+      style={{
+        opacity: cartSlideAnim.interpolate({
+          inputRange: [0, 0.1, 0.9, 1],
+          outputRange: [0.3, 1, 1, 0.3], // Fade at edges
+        }),
+        transform: [
+          {
+            translateX: cartSlideAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [-80, 348], // Slide from left edge to right edge (full modal width)
+            }),
+          },
+          {
+            scaleX: cartSlideAnim.interpolate({
+              inputRange: [0, 0.5, 0.5, 1],
+              outputRange: [1, 1, -1, -1], // Flip at midpoint
+            }),
+          },
+        ],
+      }}
+    >
+      <TouchableOpacity
+        onPress={() => router.push('/cart')}
+        style={{
+          alignItems: 'center',
+        }}
+      >
+        <Image
+          source={require('@/assets/images/goat-cart.png')}
+          style={{ width: 60, height: 60, resizeMode: 'contain' }}
+          defaultSource={require('@/assets/images/goat-cart.png')}
+        />
+      </TouchableOpacity>
+    </Animated.View>
 
-  <Text style={[styles.cartFinderSubtitle, { marginTop: 6 }]}>
-    Your Shopping Cart
-  </Text>
-</TouchableOpacity>
+    <Text style={[styles.cartFinderSubtitle, { marginTop: 12, textAlign: 'center', color: colors.textPrimary }]}>
+      Your Shopping Cart
+    </Text>
+  </View>
 
 
             {/* Gift Finder Special Card */}
@@ -535,7 +740,7 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
             </TouchableOpacity>
 
             {/* Buying Section */}
-{username && (
+{!!(username) && (
   <View style={styles.section}>
     <TouchableOpacity
       style={styles.sectionHeader}
@@ -546,14 +751,15 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
         <Image
           source={require('@/assets/images/goat-cart.png')}
           style={{ width: 48, height: 48, resizeMode: 'contain' }}
+          defaultSource={require('@/assets/images/goat-cart.png')}
         />
 
-        <Text style={styles.sectionTitle}>Buying</Text>
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Buying</Text>
 
         <Ionicons
           name={buyingExpanded ? 'chevron-up' : 'chevron-down'}
           size={20}
-          color="#666"
+          color={theme === 'dark' ? '#999' : '#666'}
           style={{ marginLeft: 'auto' }}
         />
       </View>
@@ -576,11 +782,11 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
                   onPress={() => setSellingExpanded(!sellingExpanded)}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.sectionTitle}>💰 Selling</Text>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>💰 Selling</Text>
                   <Ionicons
                     name={sellingExpanded ? 'chevron-up' : 'chevron-down'}
                     size={20}
-                    color="#666"
+                    color={theme === 'dark' ? '#999' : '#666'}
                   />
                 </TouchableOpacity>
                 {sellingExpanded && (
@@ -597,11 +803,11 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
                   onPress={() => setAccountExpanded(!accountExpanded)}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.sectionTitle}>⚙️ Account</Text>
+                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>⚙️ Account</Text>
                   <Ionicons
                     name={accountExpanded ? 'chevron-up' : 'chevron-down'}
                     size={20}
-                    color="#666"
+                    color={theme === 'dark' ? '#999' : '#666'}
                   />
                 </TouchableOpacity>
                 {accountExpanded && (
@@ -612,39 +818,39 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
 
             {/* Help & Settings */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>More</Text>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>More</Text>
               <View style={styles.menuList}>
                 <TouchableOpacity
-                  style={styles.menuCard}
+                  style={[styles.menuCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}
                   onPress={() => handleNavigation('/(tabs)/community-guidelines')}
                 >
                   <View style={[styles.menuIconContainer, { backgroundColor: '#FEF3C7' }]}>
                     <Ionicons name="shield-checkmark-outline" size={22} color="#F59E0B" />
                   </View>
-                  <Text style={styles.menuCardText}>Community Guidelines</Text>
-                  <Ionicons name="chevron-forward" size={18} color="#CCC" style={styles.chevron} />
+                  <Text style={[styles.menuCardText, { color: colors.textPrimary }]}>Community Guidelines</Text>
+                  <Ionicons name="chevron-forward" size={18} color={theme === 'dark' ? '#666' : '#CCC'} style={styles.chevron} />
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={styles.menuCard}
+                  style={[styles.menuCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}
                   onPress={() => handleNavigation('/help')}
                 >
                   <View style={[styles.menuIconContainer, { backgroundColor: '#E3F2FD' }]}>
                     <Ionicons name="help-circle-outline" size={22} color="#2196F3" />
                   </View>
-                  <Text style={styles.menuCardText}>Help Center</Text>
-                  <Ionicons name="chevron-forward" size={18} color="#CCC" style={styles.chevron} />
+                  <Text style={[styles.menuCardText, { color: colors.textPrimary }]}>Help Center</Text>
+                  <Ionicons name="chevron-forward" size={18} color={theme === 'dark' ? '#666' : '#CCC'} style={styles.chevron} />
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={styles.menuCard}
+                  style={[styles.menuCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}
                   onPress={() => handleNavigation('/about')}
                 >
                   <View style={[styles.menuIconContainer, { backgroundColor: '#F3E5F5' }]}>
                     <Ionicons name="information-circle-outline" size={22} color="#9C27B0" />
                   </View>
-                  <Text style={styles.menuCardText}>About BidGoat</Text>
-                  <Ionicons name="chevron-forward" size={18} color="#CCC" style={styles.chevron} />
+                  <Text style={[styles.menuCardText, { color: colors.textPrimary }]}>About BidGoat</Text>
+                  <Ionicons name="chevron-forward" size={18} color={theme === 'dark' ? '#666' : '#CCC'} style={styles.chevron} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -652,7 +858,16 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
             {/* Sign In/Out */}
             <View style={styles.section}>
               {username ? (
-                <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+                <TouchableOpacity
+                  style={[
+                    styles.signOutButton,
+                    {
+                      backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF',
+                      borderColor: theme === 'dark' ? '#8B2F2F' : '#FFCDD2'
+                    }
+                  ]}
+                  onPress={handleSignOut}
+                >
                   <Ionicons name="log-out-outline" size={20} color="#F44336" />
                   <Text style={styles.signOutText}>Sign Out</Text>
                 </TouchableOpacity>
@@ -665,10 +880,13 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
                     <Text style={styles.signInButtonText}>Sign In</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={styles.registerButton}
+                    style={[
+                      styles.registerButton,
+                      { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }
+                    ]}
                     onPress={() => handleNavigation('/register')}
                   >
-                    <Text style={styles.registerButtonText}>Register</Text>
+                    <Text style={[styles.registerButtonText, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>Register</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -790,26 +1008,30 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#333',
     marginBottom: 12,
   },
   quickActionsGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    justifyContent: 'space-between',
     gap: 12,
   },
   quickActionCard: {
-    width: '22%',
+    flex: 1,
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   quickActionIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 16,
+    width: 72,
+    height: 72,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
   quickActionBadge: {
     position: 'absolute',
@@ -829,10 +1051,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   quickActionText: {
-    fontSize: 12,
-    color: '#333',
+    fontSize: 13,
     textAlign: 'center',
-    fontWeight: '500',
+    fontWeight: '600',
   },
   giftFinderCard: {
     marginHorizontal: 16,
@@ -909,7 +1130,6 @@ const styles = StyleSheet.create({
   },
   cartFinderSubtitle: {
     fontSize: 16,
-    color: '#333',
     marginBottom: 22,
     textAlign: 'left',
     opacity: 0.9,
@@ -920,7 +1140,6 @@ const styles = StyleSheet.create({
   menuCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF',
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderRadius: 12,
@@ -944,11 +1163,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  menuCardText: {
+  menuTextContainer: {
     flex: 1,
+  },
+  menuCardText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#333',
+  },
+  menuSubtitle: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  premiumMenuCard: {
+    borderWidth: 2,
+    borderColor: '#FFD700',
+  },
+  premiumMenuText: {
+    fontWeight: '700',
   },
   menuBadge: {
     backgroundColor: '#F44336',
@@ -982,12 +1214,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFF',
     paddingVertical: 14,
     borderRadius: 12,
     gap: 8,
     borderWidth: 1,
-    borderColor: '#FFCDD2',
   },
   signOutText: {
     fontSize: 15,
@@ -1012,7 +1242,6 @@ const styles = StyleSheet.create({
   },
   registerButton: {
     flex: 1,
-    backgroundColor: '#FFF',
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',

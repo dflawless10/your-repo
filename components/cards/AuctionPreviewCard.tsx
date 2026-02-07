@@ -28,7 +28,7 @@ const AuctionPreviewCard: React.FC<AuctionPreviewCardProps> = ({ preview, onGoat
         ) : null}
 
         {/* Buy It Now Badge */}
-        {preview.buy_it_now && (
+        {!!(preview.buy_it_now) && (
           <View style={styles.buyItNowBadge}>
             <Text style={styles.buyItNowText}>BUY NOW</Text>
           </View>

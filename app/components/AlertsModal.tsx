@@ -80,7 +80,7 @@ export default function AlertsModal({
         Alert.alert(
           '🔔 Alerts Set!',
           `You'll be notified about ${selectedAlerts.size} event${
-            selectedAlerts.size !== 1 ? 's' : ''
+            selectedAlerts.size === 1 ? '' : 's'
           } for "${itemName}"`
         );
         onClose();
@@ -88,7 +88,7 @@ export default function AlertsModal({
         Alert.alert(
           '⚠️ Partial Success',
           `${results.length - failedAlerts.length} alert${
-            results.length - failedAlerts.length !== 1 ? 's' : ''
+            results.length - failedAlerts.length === 1 ? '' : 's'
           } registered successfully, but ${failedAlerts.length} failed.`
         );
       } else {
@@ -191,7 +191,7 @@ export default function AlertsModal({
               <>
                 <Ionicons name="checkmark-circle" size={24} color="#FFF" />
                 <Text style={styles.saveButtonText}>
-                  Set {selectedAlerts.size} Alert{selectedAlerts.size !== 1 ? 's' : ''}
+                  Set {selectedAlerts.size} Alert{selectedAlerts.size === 1 ? '' : 's'}
                 </Text>
               </>
             )}

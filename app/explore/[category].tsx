@@ -2,6 +2,10 @@ import React, { JSX, Suspense, lazy } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { Text, View, StyleSheet } from 'react-native';
 
+
+// 🐐 Optional: mascot overlay
+import MascotOverlay from 'app/components/MascotOverlay';
+
 // 🐐 Lazy-loaded category screens
 const WelcomeScreen = lazy(() => import('@/components/categories/WelcomeScreen'));
 const SellerExploreScreen = lazy(() => import('@/components/categories/SellerExploreScreen'));
@@ -28,10 +32,6 @@ const categoryComponents: Record<string, React.LazyExoticComponent<() => JSX.Ele
   reviews: ReviewsScreen,
   'diamond-appraisal': DiamondAppraisalScreen, // 🐐 Add this line
 };
-
-
-// 🐐 Optional: mascot overlay
-import MascotOverlay from 'app/components/MascotOverlay';
 
 function CategoryScreen() {
   const { category } = useLocalSearchParams();

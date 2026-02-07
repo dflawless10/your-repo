@@ -12,6 +12,7 @@ import {
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '@/app/theme/ThemeContext';
 
 type ImageUploaderProps = {
   maxImages?: number;
@@ -28,6 +29,7 @@ export default function ImageUploader({
   subtitle = `Add up to ${5} photos`,
   imageUris: externalImageUris,
 }: ImageUploaderProps) {
+  const { theme, colors } = useTheme();
   const [imageUris, setImageUris] = useState<string[]>(externalImageUris || []);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0);
@@ -125,8 +127,8 @@ export default function ImageUploader({
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.subtitle}>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
+          <Text style={[styles.subtitle, { color: theme === 'dark' ? '#999' : '#666' }]}>
             {subtitle} ({imageUris.length}/{maxImages})
           </Text>
         </View>
@@ -139,20 +141,29 @@ export default function ImageUploader({
 
       {/* Image Grid or Empty State */}
       {imageUris.length === 0 ? (
-        <TouchableOpacity style={styles.emptyState} onPress={showActionSheet}>
-          <View style={styles.emptyIconContainer}>
-            <Ionicons name="images-outline" size={48} color="#6A0DAD" />
+        <TouchableOpacity
+          style={[
+            styles.emptyState,
+            {
+              backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F7FAFC',
+              borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0'
+            }
+          ]}
+          onPress={showActionSheet}
+        >
+          <View style={[styles.emptyIconContainer, { backgroundColor: theme === 'dark' ? '#2C2C3E' : '#F0F4FF' }]}>
+            <Ionicons name="images-outline" size={48} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
           </View>
-          <Text style={styles.emptyTitle}>Add Photos</Text>
-          <Text style={styles.emptySubtitle}>Tap to upload or take a photo</Text>
+          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Add Photos</Text>
+          <Text style={[styles.emptySubtitle, { color: theme === 'dark' ? '#999' : '#718096' }]}>Tap to upload or take a photo</Text>
           <View style={styles.emptyActions}>
             <View style={styles.emptyAction}>
-              <Ionicons name="camera-outline" size={20} color="#666" />
-              <Text style={styles.emptyActionText}>Camera</Text>
+              <Ionicons name="camera-outline" size={20} color={theme === 'dark' ? '#999' : '#666'} />
+              <Text style={[styles.emptyActionText, { color: theme === 'dark' ? '#999' : '#666' }]}>Camera</Text>
             </View>
             <View style={styles.emptyAction}>
-              <Ionicons name="images-outline" size={20} color="#666" />
-              <Text style={styles.emptyActionText}>Gallery</Text>
+              <Ionicons name="images-outline" size={20} color={theme === 'dark' ? '#999' : '#666'} />
+              <Text style={[styles.emptyActionText, { color: theme === 'dark' ? '#999' : '#666' }]}>Gallery</Text>
             </View>
           </View>
         </TouchableOpacity>
@@ -184,18 +195,27 @@ export default function ImageUploader({
 
           {/* Add More Button */}
           {imageUris.length < maxImages && (
-            <TouchableOpacity style={styles.addButton} onPress={showActionSheet}>
-              <Ionicons name="add-circle-outline" size={40} color="#6A0DAD" />
-              <Text style={styles.addButtonText}>Add More</Text>
+            <TouchableOpacity
+              style={[
+                styles.addButton,
+                {
+                  backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F7FAFC',
+                  borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0'
+                }
+              ]}
+              onPress={showActionSheet}
+            >
+              <Ionicons name="add-circle-outline" size={40} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+              <Text style={[styles.addButtonText, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>Add More</Text>
             </TouchableOpacity>
           )}
         </ScrollView>
       )}
 
       {/* Tips */}
-      <View style={styles.tips}>
-        <Ionicons name="information-circle-outline" size={16} color="#666" />
-        <Text style={styles.tipsText}>
+      <View style={[styles.tips, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F7FAFC' }]}>
+        <Ionicons name="information-circle-outline" size={16} color={theme === 'dark' ? '#999' : '#666'} />
+        <Text style={[styles.tipsText, { color: theme === 'dark' ? '#999' : '#666' }]}>
           First photo will be the main image. Drag to reorder.
         </Text>
       </View>

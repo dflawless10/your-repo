@@ -85,7 +85,7 @@ export default function ReviewFilterPanel({ filter, setFilter }: Readonly<Props>
   onSelect={(val) => setFilter({ ...filter, sortBy: val })}
 />
 
- <GlobalFooter />
+
     </View>
 
   );

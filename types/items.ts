@@ -17,6 +17,22 @@ export type AuctionItem = {
     Auction_id: number;
     AuctionItem: {}
   };
+    seller?: {
+  id: number;
+  itemDetails: string;
+  username: string;
+  firstname: string;
+  lastname: string;
+  avatar: string;
+  avg_rating?: number;
+  total_reviews: number;
+  retingText: string;
+  address?: string | undefined;
+  city?: string | undefined;
+  state?: string | undefined;
+  // ...other fields
+};
+
   current_bid: number;
   category_id: number;
   category: string;
@@ -58,8 +74,8 @@ material: '',
   is_must_sell?: number | boolean;
   must_sell_duration?: number;
   selling_strategy?: string; // 'auction', 'relist', 'relisted_discount', 'buy_it_now', 'must_sell'
+  total_reviews: string;
   buy_it_now?: number;
-
   isFavorite: boolean;
   mascot_name?: string;
   MASCOT_MOODS?: string;
@@ -73,81 +89,107 @@ material: '',
 export type Rarity = 'common' | 'rare' | 'legendary';
 
 export type ListedItem = {
+  // Core required fields
   id: number;
-  item_id: number;
-  Item: number;
   name: string;
-  description: string;
-  quantity_available: number;
-  watchers: string;
   price: number;
-  discount_pct?: number;
-    status?: "active" | "sold" | "closed" | "deleted"; // ✅ strict union type
-  mustSell: string;
-  selling_strategy?: string;
-  is_super_deal: boolean;
-  highest_bid?: number; // Current highest bid amount
   photo_url: string;
-  isWishlisted: string;
-  Watchers?: string;
-  seller_username: string;
-  category: string;
-  image_url: string;
-  image: string;
-  tags: string;
   listed_at: string;
+
+  // Optional legacy/duplicate IDs
+  auction_id?: number;
+  AuctionId?: number;
+  Auction_id?: number;
+  item_id?: number;
+  Item?: number;
+
+  // Content fields
+  description?: string;
+  quantity_available?: number;
+  watchers?: string;
+  discount_pct?: number;
+  status?: "active" | "sold" | "closed" | "deleted";
+  mustSell?: number | boolean;
+  is_must_sell?: number | boolean;
+  selling_strategy?: string;
+  is_super_deal?: boolean;
+  isJustListed?: boolean;
+  highest_bid?: number;
+  isWishlisted?: string;
+  Watchers?: string;
+  seller_username?: string;
+  sold_at?: string;
+  category?: string;
+  image_url?: string;
+  image?: string;
+  tags?: string;
+  total_reviews?: number;
   listedAt?: string; // Backend sometimes sends camelCase
-  relisted_at?:  string;
+  relisted_at?: string;
   original_price?: number;
+  current_bid?: number;
+  category_id?: number;
+  ItemDetails?: string;
+  must_sell_start?: string;
+  title?: string;
+  isWatched?: string;
+  gem?: string;
+  carat?: string;
+  color?: string;
+  size?: string;
+  condition?: string;
+  origin?: string;
+  certification?: string;
+  material?: string;
+  isFavorite?: boolean;
   relist_count?: number;
-  preview: boolean;
-  registration_time: string;
+  preview?: boolean;
+  registration_time?: string;
+  countdown?: string;
   end_time?: string;
-    auction_id: number;
-    AuctionId: number;
-    Auction_id: number;
-    AuctionItem: {
-      id: number;
-    }
-  formatAuctionEnd?: string
-  auction_ends_at: string;
-    watching_count?: number;
-  bid_count?: number; // <- make optional to match SparkleItemCard
-  bidCount: number;
-wishlistItem?: boolean;
-  timeLeft: string;
+  AuctionItem?: {
+    id: number;
+  };
+  formatAuctionEnd?: string;
+  auction_ends_at?: string;
+  watching_count?: number;
+  bid_count?: number;
+  bidCount?: number;
+  wishlistItem?: boolean;
+  timeLeft?: string;
   rarity?: 'common' | 'rare' | 'legendary';
   animate?: string;
   buy_it_now?: number;
-  seller: {
+  seller?: {
     name: string;
     avatar: string;
-    id: number;
-    ItemDetails: string;
+    id: number | string;
+    ItemDetails?: string;
     username: string;
-    firstname: string;
-    lastname: string;
+    firstname?: string;
+    lastname?: string;
     address?: string;
     city?: string;
     state?: string;
     zip?: string;
     country?: string;
+    phone_number?: number;
     jewelryBox?: {};
     joined?: string;
     avg_rating?: number;
+    total_reviews?: number;
+    ratingText?: string;
   };
-  is_trending: boolean;
-  reserve_price: number;
-  final_price: number;
-  is_sold: boolean;
-  sold_to: string;
-   getCountdown: () => { timeText: string; isUrgent: boolean };
-    item: ListedItem;
-  isFavorited: boolean;
-  toggleFavorite: (id: number) => void;
-  onAddToCart?: (item: ListedItem) => void; // add
-
-
+  is_trending?: boolean;
+  reserve_price?: number;
+  final_price?: number;
+  is_sold?: boolean;
+  sold_to?: string;
+  getCountdown?: () => { timeText: string; isUrgent: boolean };
+  item?: ListedItem;
+  isFavorited?: boolean;
+  toggleFavorite?: (id: number) => void;
+  onAddToCart?: (item: ListedItem) => void;
 };
 
 export type WishlistItem = {

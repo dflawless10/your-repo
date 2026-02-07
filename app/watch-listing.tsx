@@ -1,3 +1,5 @@
+import { API_BASE_URL } from '@/config';
+
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
@@ -21,10 +23,12 @@ import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHead
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useImageValidation } from '@/hooks/useImageValidation';
 import ImageValidationFeedback from '@/app/components/ImageValidationFeedback';
+import { useTheme } from '@/app/theme/ThemeContext';
 
 
 
 export default function WatchListingScreen() {
+  const { theme, colors } = useTheme();
   const router = useRouter();
   const params = useLocalSearchParams();
   const { token } = useAuth();
@@ -125,8 +129,8 @@ useEffect(() => {
   // Validate Must Sell constraints
   if (isMustSell) {
     const durationNum = parseInt(duration);
-    if (durationNum < 1 || durationNum > 7) {
-      Alert.alert('Error', 'Must Sell duration must be between 1 and 7 days');
+    if (durationNum < 24 || durationNum > 72) {
+      Alert.alert('Error', 'Must Sell duration must be 24, 48, or 72 hours');
       return;
     }
     if (hasReserve || hasBuyItNow) {
@@ -166,13 +170,13 @@ useEffect(() => {
   // Character count validation with moderation
   const titleValidation = validateCharacterCount(title, CHARACTER_LIMITS.NAME_MIN, CHARACTER_LIMITS.NAME_MAX, 'Title');
   if (!titleValidation.isValid) {
-    Alert.alert('Title Invalid', titleValidation.errorMessage!);
+    Alert.alert('Title Invalid', titleValidation.errorMessage);
     return;
   }
 
   const descValidation = validateCharacterCount(description, CHARACTER_LIMITS.DESCRIPTION_MIN, CHARACTER_LIMITS.DESCRIPTION_MAX, 'Description');
   if (!descValidation.isValid) {
-    Alert.alert('Description Invalid', descValidation.errorMessage!);
+    Alert.alert('Description Invalid', descValidation.errorMessage);
     return;
   }
 
@@ -299,11 +303,11 @@ try {
 
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#F7FAFC' }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <EnhancedHeader scrollY={scrollY} username={username} onSearch={() => {}} />
       <Animated.ScrollView
-        style={styles.container}
-        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20, paddingBottom: 150 }}
+        style={[styles.container, { backgroundColor: colors.background }]}
+        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20, paddingBottom: 150, backgroundColor: colors.background }}
         keyboardShouldPersistTaps="handled"
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -312,21 +316,21 @@ try {
         scrollEventThrottle={16}
       >
         {/* Page Title with Back Button */}
-        <View style={styles.pageHeader}>
+        <View style={[styles.pageHeader, { backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E5E5E5' }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#1a1a1a" />
+            <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
-          <Text style={styles.pageTitle}>List Your Watch</Text>
+          <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>List Your Watch</Text>
         </View>
 
       {/* Watch Preview Card */}
-      <View style={styles.previewCard}>
-        <Text style={styles.previewTitle}>⌚ Your Watch Preview</Text>
+      <View style={[styles.previewCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}>
+        <Text style={[styles.previewTitle, { color: colors.textPrimary }]}>⌚ Your Watch Preview</Text>
         <View style={styles.watchInfo}>
-          <Text style={styles.watchBrand}>{params.brand} {params.model}</Text>
+          <Text style={[styles.watchBrand, { color: colors.textPrimary }]}>{params.brand} {params.model}</Text>
           <Text style={styles.watchPrice}>💰 Estimated: ${params.price}</Text>
         <View style={styles.watchInfo}>
-  <Text style={styles.watchBrand}>{params.brand} {params.model}</Text>
+  <Text style={[styles.watchBrand, { color: colors.textPrimary }]}>{params.brand} {params.model}</Text>
 
 </View>
 
@@ -361,7 +365,7 @@ try {
         )}
       </View>
 
-      <View style={styles.form}>
+      <View style={[styles.form, { backgroundColor: colors.background }]}>
         <CharacterCounterInput
           label="Title"
           placeholder="e.g., Rolex Submariner"
@@ -386,12 +390,13 @@ try {
         />
 
 
-        <Text style={styles.label}>Starting Bid ($) *</Text>
+        <Text style={[styles.label, { color: colors.textPrimary }]}>Starting Bid ($) *</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: colors.textPrimary, borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
           value={startingBid}
           onChangeText={setStartingBid}
           placeholder="0.00"
+          placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
           keyboardType="decimal-pad"
         />
         <View style={styles.infoBox}>
@@ -401,9 +406,9 @@ try {
           </Text>
         </View>
 
-        <Text style={styles.label}>Auction Duration (days) *</Text>
+        <Text style={[styles.label, { color: colors.textPrimary }]}>Auction Duration (days) *</Text>
         <View style={styles.durationRow}>
-          {['3','8', '14', '30'].map((days) => (
+          {['3','7', '14', '30'].map((days) => (
             <TouchableOpacity
               key={days}
               style={[
@@ -425,32 +430,32 @@ try {
         </View>
 
         {/* Advanced Auction Options */}
-        <View style={styles.advancedOptionsContainer}>
-          <Text style={styles.sectionHeader}>⌚ Advanced Options</Text>
+        <View style={[styles.advancedOptionsContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}>
+          <Text style={[styles.sectionHeader, { color: colors.textPrimary }]}>⌚ Advanced Options</Text>
 
           {/* Reserve Price Option */}
           <TouchableOpacity
             style={styles.optionRow}
             onPress={() => {
-              if (!isMustSell) {
+              if (!isMustSell && !hasBuyItNow) {
                 setHasReserve(!hasReserve);
                 if (hasReserve) setReservePrice('');
               }
             }}
-            disabled={isMustSell}
+            disabled={isMustSell || hasBuyItNow}
             activeOpacity={0.7}
           >
             <View style={styles.checkboxContainer}>
-              <View style={[styles.checkbox, hasReserve && styles.checkboxActive, isMustSell && styles.checkboxDisabled]}>
+              <View style={[styles.checkbox, hasReserve && styles.checkboxActive, (isMustSell || hasBuyItNow) && styles.checkboxDisabled]}>
                 {hasReserve && <Ionicons name="checkmark" size={18} color="#fff" />}
               </View>
-              <Text style={[styles.optionLabel, isMustSell && styles.optionLabelDisabled]}>Set Reserve Price</Text>
+              <Text style={[styles.optionLabel, (isMustSell || hasBuyItNow) && styles.optionLabelDisabled]}>Set Reserve Price</Text>
             </View>
-            <Ionicons name="shield-checkmark" size={20} color={isMustSell ? "#CBD5E0" : "#6A0DAD"} />
+            <Ionicons name="shield-checkmark" size={20} color={(isMustSell || hasBuyItNow) ? "#CBD5E0" : "#6A0DAD"} />
           </TouchableOpacity>
-          {hasReserve && !isMustSell && (
+          {hasReserve && !isMustSell && !hasBuyItNow && (
             <View style={styles.optionInputContainer}>
-              <Text style={styles.optionHelpText}>Minimum price you will accept (hidden from buyers)</Text>
+              <Text style={[styles.optionHelpText, { color: theme === 'dark' ? '#999' : '#718096' }]}>Minimum price you will accept (hidden from buyers)</Text>
               {params.price && (
                 <View style={styles.quickSelectRow}>
                   <TouchableOpacity
@@ -480,10 +485,11 @@ try {
                 </View>
               )}
               <TextInput
-                style={styles.optionInput}
+                style={[styles.optionInput, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC', color: colors.textPrimary, borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
                 value={reservePrice}
                 onChangeText={setReservePrice}
                 placeholder="0.00"
+                placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
                 keyboardType="decimal-pad"
               />
             </View>
@@ -495,7 +501,13 @@ try {
             onPress={() => {
               if (!isMustSell) {
                 setHasBuyItNow(!hasBuyItNow);
-                if (hasBuyItNow) setBuyItNowPrice('');
+                if (hasBuyItNow) {
+                  setBuyItNowPrice('');
+                } else {
+                  // When enabling Buy It Now, disable and clear Reserve Price
+                  setHasReserve(false);
+                  setReservePrice('');
+                }
               }
             }}
             disabled={isMustSell}
@@ -511,12 +523,13 @@ try {
           </TouchableOpacity>
           {hasBuyItNow && !isMustSell && (
             <View style={styles.optionInputContainer}>
-              <Text style={styles.optionHelpText}>Let buyers purchase instantly at this price</Text>
+              <Text style={[styles.optionHelpText, { color: theme === 'dark' ? '#999' : '#718096' }]}>Let buyers purchase instantly at this price</Text>
               <TextInput
-                style={styles.optionInput}
+                style={[styles.optionInput, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC', color: colors.textPrimary, borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
                 value={buyItNowPrice}
                 onChangeText={setBuyItNowPrice}
                 placeholder="0.00"
+                placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
                 keyboardType="decimal-pad"
               />
             </View>
@@ -540,7 +553,9 @@ try {
                 setReservePrice('');
                 setHasBuyItNow(false);
                 setBuyItNowPrice('');
-                setDuration('7');
+                setDuration('48'); // Default to 48 hours
+              } else {
+                setDuration('7'); // Reset to 7 days when disabling
               }
             }}
             activeOpacity={0.7}
@@ -555,26 +570,35 @@ try {
           </TouchableOpacity>
           {isMustSell && (
             <View style={styles.optionInputContainer}>
-              <Text style={styles.optionHelpText}>Item MUST sell to highest bidder (no reserve, 1-7 days only)</Text>
+              <Text style={[styles.optionHelpText, { color: theme === 'dark' ? '#999' : '#718096' }]}>Item MUST sell to highest bidder (no reserve, 24-72 hours only)</Text>
               <View style={styles.mustSellDurationRow}>
-                {['1', '3', '5', '7'].map((days) => (
+                {[{label: '24h', hours: '24'}, {label: '48h', hours: '48'}, {label: '72h', hours: '72'}].map((option) => (
                   <TouchableOpacity
-                    key={days}
+                    key={option.hours}
                     style={[
                       styles.mustSellDurationButton,
-                      duration === days && styles.mustSellDurationButtonActive,
+                      duration === option.hours && styles.mustSellDurationButtonActive,
                     ]}
-                    onPress={() => setDuration(days)}
+                    onPress={() => setDuration(option.hours)}
                   >
                     <Text style={[
                       styles.mustSellDurationText,
-                      duration === days && styles.mustSellDurationTextActive,
+                      duration === option.hours && styles.mustSellDurationTextActive,
                     ]}>
-                      {days}d
+                      {option.label}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
+              <TouchableOpacity
+                style={styles.cancelMustSellButton}
+                onPress={() => {
+                  setIsMustSell(false);
+                  setDuration('7');
+                }}
+              >
+                <Text style={styles.cancelMustSellText}>Cancel Must Sell</Text>
+              </TouchableOpacity>
             </View>
           )}
         </View>
@@ -599,6 +623,13 @@ try {
         >
           <Text style={styles.submitButtonText}>⌚ List Watch</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.cancelButton}
+          onPress={() => router.back()}
+        >
+          <Text style={styles.cancelButtonText}>Cancel</Text>
+        </TouchableOpacity>
       </View>
     </Animated.ScrollView>
     </View>
@@ -608,7 +639,6 @@ try {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F7FAFC',
   },
   pageHeader: {
     flexDirection: 'row',
@@ -616,7 +646,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 8,
-    backgroundColor: '#F7FAFC',
     marginTop: 16,
   },
   backButton: {
@@ -626,10 +655,8 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1A202C',
   },
   previewCard: {
-    backgroundColor: '#fff',
     margin: 16,
     padding: 20,
     borderRadius: 16,
@@ -642,7 +669,6 @@ const styles = StyleSheet.create({
   previewTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1A202C',
     textAlign: 'center',
     marginBottom: 12,
   },
@@ -653,7 +679,6 @@ const styles = StyleSheet.create({
   watchBrand: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#2D3748',
     marginBottom: 4,
   },
   watchPrice: {
@@ -712,18 +737,14 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#2D3748',
     marginBottom: 8,
     marginTop: 16,
   },
   input: {
-    backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    color: '#1A202C',
   },
   textArea: {
     height: 120,
@@ -789,14 +810,28 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#fff',
   },
+  cancelButton: {
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    marginBottom: 32,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#fff',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#718096',
+  },
   // Advanced Auction Options Styles
   advancedOptionsContainer: {
-    backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
     marginTop: 24,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -806,7 +841,6 @@ const styles = StyleSheet.create({
   sectionHeader: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#2D3748',
     marginBottom: 16,
     textAlign: 'center',
   },
@@ -859,7 +893,6 @@ const styles = StyleSheet.create({
   },
   optionHelpText: {
     fontSize: 12,
-    color: '#718096',
     marginBottom: 8,
     fontStyle: 'italic',
   },
@@ -882,13 +915,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   optionInput: {
-    backgroundColor: '#F7FAFC',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    color: '#1A202C',
   },
   optionDivider: {
     flexDirection: 'row',
@@ -933,5 +963,20 @@ const styles = StyleSheet.create({
   },
   mustSellDurationTextActive: {
     color: '#D97706',
+  },
+  cancelMustSellButton: {
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+  },
+  cancelMustSellText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#718096',
   },
 });

@@ -1,3 +1,5 @@
+import { API_BASE_URL } from '@/config';
+
 import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
@@ -19,8 +21,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '../components/EnhancedHeader';
 import { getUserProfile, logoutUser } from '@/api/auth';
 import { User } from '@/types';
-import { Link, router } from 'expo-router';
+import { Link, router, useFocusEffect } from 'expo-router';
 import { playGoatSoundByName } from '@/assets/sounds/officialGoatSoundsSoundtrack';
+import { useCallback } from 'react';
 
 type MascotMood =
   | 'Celebrate'
@@ -49,24 +52,32 @@ export default function ProfileScreen() {
   const [user, setUser] = useState<User | null>(null);
   const [profileImage, setProfileImage] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      const token = await AsyncStorage.getItem('jwtToken');
-      if (!token) return;
+  const fetchProfile = useCallback(async () => {
+    const token = await AsyncStorage.getItem('jwtToken');
+    if (!token) return;
 
-      try {
-        const data = await getUserProfile(token);
-        if (data) {
-          setUser(data);
-          setProfileImage(data.avatar_url ?? null);
-        }
-      } catch (error) {
-        console.error('Failed to fetch profile:', error);
+    try {
+      const data = await getUserProfile(token);
+      if (data) {
+        setUser(data);
+        setProfileImage(data.avatar_url ?? null);
       }
-    };
-
-    void fetchProfile();
+    } catch (error) {
+      console.error('Failed to fetch profile:', error);
+    }
   }, []);
+
+  // Fetch profile on mount
+  useEffect(() => {
+    void fetchProfile();
+  }, [fetchProfile]);
+
+  // Re-fetch profile when screen comes into focus (e.g., after editing)
+  useFocusEffect(
+    useCallback(() => {
+      void fetchProfile();
+    }, [fetchProfile])
+  );
 
   const uploadProfileImage = async (uri: string) => {
     const token = await AsyncStorage.getItem('jwtToken');
@@ -219,7 +230,9 @@ export default function ProfileScreen() {
               <Switch
                 value={isDarkMode}
                 onValueChange={toggleTheme}
-                thumbColor={isDarkMode ? '#fff' : '#000'}
+                thumbColor={isDarkMode ? '#6A0DAD' : '#F3F4F6'}
+                trackColor={{ false: '#D1D5DB', true: '#A78BFA' }}
+                ios_backgroundColor="#D1D5DB"
               />
             </View>
             <ProfileItem label="Notifications" value="Enabled" isDarkMode={isDarkMode} />
@@ -228,18 +241,19 @@ export default function ProfileScreen() {
             <View style={themedStyles.pickerContainer}>
               <Picker
                 selectedValue={mascotMood}
-                style={themedStyles.picker}
+                style={[themedStyles.picker, { color: isDarkMode ? '#ECEDEE' : '#1A1A1A' }]}
                 itemStyle={themedStyles.pickerItem}
                 onValueChange={(value: MascotMood) => setMascotMood(value)}
+                dropdownIconColor={isDarkMode ? '#ECEDEE' : '#1A1A1A'}
               >
-                <Picker.Item label="🎉 Celebrate" value="Celebrate" />
-                <Picker.Item label="😈 Mischievous" value="Mischievous" />
-                <Picker.Item label="😊 Joyful" value="Joyful" />
-                <Picker.Item label="😠 Grumpy" value="Grumpy" />
-                <Picker.Item label="😢 Sad" value="Sad" />
-                <Picker.Item label="🤔 Curious" value="Curious" />
-                <Picker.Item label="😴 Sleepy" value="Sleepy" />
-                <Picker.Item label="🤪 Chaotic" value="Chaotic" />
+                <Picker.Item label="🎉 Celebrate" value="Celebrate" color={isDarkMode ? '#ECEDEE' : '#1A1A1A'} />
+                <Picker.Item label="😈 Mischievous" value="Mischievous" color={isDarkMode ? '#ECEDEE' : '#1A1A1A'} />
+                <Picker.Item label="😊 Joyful" value="Joyful" color={isDarkMode ? '#ECEDEE' : '#1A1A1A'} />
+                <Picker.Item label="😠 Grumpy" value="Grumpy" color={isDarkMode ? '#ECEDEE' : '#1A1A1A'} />
+                <Picker.Item label="😢 Sad" value="Sad" color={isDarkMode ? '#ECEDEE' : '#1A1A1A'} />
+                <Picker.Item label="🤔 Curious" value="Curious" color={isDarkMode ? '#ECEDEE' : '#1A1A1A'} />
+                <Picker.Item label="😴 Sleepy" value="Sleepy" color={isDarkMode ? '#ECEDEE' : '#1A1A1A'} />
+                <Picker.Item label="🤪 Chaotic" value="Chaotic" color={isDarkMode ? '#ECEDEE' : '#1A1A1A'} />
               </Picker>
             </View>
 
@@ -309,12 +323,12 @@ function getThemedStyles(isDarkMode: boolean) {
       height: Platform.OS === 'ios' ? 180 : 56,
       width: '100%',
       fontSize: 16,
-      color: '#1A1A1A',
+      color: isDarkMode ? '#ECEDEE' : '#1A1A1A',
     },
     pickerItem: {
       height: Platform.OS === 'ios' ? 180 : 56,
       fontSize: 16,
-      color: '#1A1A1A',
+      color: isDarkMode ? '#ECEDEE' : '#1A1A1A',
     },
     imageContainer: {
       alignItems: 'center',

@@ -11,6 +11,7 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '@/app/theme/ThemeContext';
 
 
 type Props = {
@@ -25,6 +26,7 @@ type Props = {
   ethicallySourced?: string;
   rarity?: string;
   price: string;
+  title?: string;
 };
 
 
@@ -42,7 +44,9 @@ const DiamondListingCard = ({
   ethicallySourced,
   rarity,
   price,
+  title,
 }: Props) => {
+  const { theme, colors } = useTheme();
   const [imageUris, setImageUris] = useState<string[]>([]);
   const router = useRouter();
   const [coverIndex, setCoverIndex] = useState(0);
@@ -125,15 +129,15 @@ const DiamondListingCard = ({
 
 
   return (
-  <ScrollView contentContainerStyle={styles.scrollContainer}>
-    <Text style={styles.previewHeader}>Your Diamond Preview</Text>
-    <View style={styles.card}>
+  <ScrollView contentContainerStyle={[styles.scrollContainer, { backgroundColor: colors.background }]}>
+    <Text style={[styles.previewHeader, { color: colors.textPrimary }]}>Your Diamond Preview</Text>
+    <View style={[styles.card, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#ffffff' }]}>
         <View style={styles.specSection}>
           <Text style={styles.shapeIcons}>💎</Text>
-          <Text style={styles.title}>{carat}ct {shape}</Text>
-          <Text style={styles.specs}>🧬 Color: {color} | ✨ Clarity: {clarity}</Text>
-          <Text style={styles.specs}>📜 Certified: {certified === 'Yes' ? 'GIA Verified' : 'Uncertified Magic'}</Text>
-          <Text style={styles.price}>💰 ${price}</Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>{carat}ct {shape}</Text>
+          <Text style={[styles.specs, { color: theme === 'dark' ? '#CCC' : '#555' }]}>🧬 Color: {color} | ✨ Clarity: {clarity}</Text>
+          <Text style={[styles.specs, { color: theme === 'dark' ? '#CCC' : '#555' }]}>📜 Certified: {certified === 'Yes' ? 'GIA Verified' : 'Uncertified Magic'}</Text>
+          <Text style={[styles.price, { color: theme === 'dark' ? '#0A84FF' : '#0077cc' }]}>💰 ${price}</Text>
         </View>
 
 
@@ -193,6 +197,7 @@ const DiamondListingCard = ({
       params: {
         mediaArray: JSON.stringify(imageUris),
         index: coverIndex.toString(),
+        title: title || `${carat} ${color} ${clarity} ${shape} Diamond`,
       },
     })
   }
@@ -202,18 +207,21 @@ const DiamondListingCard = ({
 
           </ScrollView>
         ) : (
-          <View style={styles.placeholderImage}>
-            <Ionicons name="camera-outline" size={60} color="#CBD5E0" />
-            <Text style={styles.placeholderText}>No photo uploaded yet</Text>
+          <View style={[styles.placeholderImage, {
+            backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC',
+            borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0'
+          }]}>
+            <Ionicons name="camera-outline" size={60} color={theme === 'dark' ? '#666' : '#CBD5E0'} />
+            <Text style={[styles.placeholderText, { color: theme === 'dark' ? '#999' : '#A0AEC0' }]}>No photo uploaded yet</Text>
           </View>
         )}
        <View style={{ height: 12 }} />
 
         <View style={styles.buttonRow}>
-          <TouchableOpacity style={styles.button} onPress={pickImage}>
+          <TouchableOpacity style={[styles.button, { backgroundColor: theme === 'dark' ? '#0A84FF' : '#0077cc' }]} onPress={pickImage}>
             <Text style={styles.buttonText}>📷 Upload Photo</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.button} onPress={handleListDiamond}>
+          <TouchableOpacity style={[styles.button, { backgroundColor: theme === 'dark' ? '#0A84FF' : '#0077cc' }]} onPress={handleListDiamond}>
             <Text style={styles.buttonText}>📦 List Diamond</Text>
           </TouchableOpacity>
         </View>

@@ -10,6 +10,7 @@ import EnhancedHeader, { HEADER_MAX_HEIGHT } from '../components/EnhancedHeader'
 import { ListedItem } from "@/types/items";
 import { generateInsight, GoatInsight } from "@/utils/analyticsEngine";
 import GlobalFooter from "@/app/components/GlobalFooter";
+import { useTheme } from '@/app/theme/ThemeContext';
 
 // -----------------------------------------------------------------------------
 // Types
@@ -75,6 +76,7 @@ const Divider = () => (
 
 export default function AnalyticsScreen() {
   const router = useRouter();
+  const { theme, colors } = useTheme();
 
   // --- STATE ----------------------------------------------------------------
   const [items, setItems] = useState<ListedItem[]>([]);
@@ -181,29 +183,13 @@ useEffect(() => {
   });
 
   // --- GOAT INSIGHTS --------------------------------------------------------
-
+  // Real insights only - no mock data
   const goatInsights: GoatInsight[] = [
-    generateInsight("RELISTED", {
-      relistCount: 2,
-      watchers: avgWatchers,
-      bids: avgBidCount,
-    }),
-    generateInsight("APPRAISAL_WATCH", {
-      estimated: 8400,
-      range: { min: 7800, max: 9100 },
-      confidence: "Strong",
-    }),
-    generateInsight("APPRAISAL_DIAMOND", {
-      rapValue: 6200,
-      carat: 1.0,
-      color: "H",
-      clarity: "SI1",
-    }),
-    generateInsight("NO_BIDS", {
+    avgBidCount === 0 && generateInsight("NO_BIDS", {
       hoursLeft: 48,
       bidCount: avgBidCount,
     }),
-    generateInsight("WATCHERS", {
+    avgWatchers > 5 && generateInsight("WATCHERS", {
       watchers: avgWatchers,
     }),
   ].filter((i): i is GoatInsight => i !== null);
@@ -216,21 +202,14 @@ useEffect(() => {
       icon: "happy",
       color: "#2ecc71",
       title: "Strong Interest",
-      message: "Lots of eyes on your item. Keep the momentum going.",
+      message: `Average ${avgBidCount.toFixed(1)} bids and ${avgWatchers.toFixed(1)} watchers per item. Keep the momentum going!`,
     },
 
-    !strongInterest && {
+    !strongInterest && totalItems > 0 && {
       icon: "alert-circle",
       color: "#f1c40f",
       title: "Could Use More Love",
-      message: "Try improving photos or lowering the starting price.",
-    },
-
-    {
-      icon: "eye",
-      color: "#3498db",
-      title: "+14% More Views This Week",
-      message: "Your listings are trending upward. Nice work.",
+      message: `Average ${avgBidCount.toFixed(1)} bids and ${avgWatchers.toFixed(1)} watchers. Try improving photos or adjusting the starting price.`,
     },
 
     // Pricing
@@ -238,48 +217,48 @@ useEffect(() => {
       icon: "pricetag",
       color: "#f1c40f",
       title: "Price Check",
-      message: "This item is priced a bit higher than similar ones.",
+      message: `${itemsAboveMarket.length} ${itemsAboveMarket.length === 1 ? 'item is' : 'items are'} priced higher than similar listings in their category.`,
     },
 
-    itemsAboveMarket.length === 0 && {
+    itemsAboveMarket.length === 0 && totalItems > 0 && {
       icon: "cash",
       color: "#2ecc71",
       title: "Great Pricing",
-      message: "Your prices match the market nicely.",
+      message: "Your prices are competitive with similar items in the market.",
     },
 
     // Search
     searchStats?.topSearches?.length > 0 && {
       icon: "search",
       color: "#3498db",
-      title: "Popular Search",
-      message: "Lots of buyers are searching for 'diamond stud earrings'.",
+      title: "Popular Searches",
+      message: `Top searches: ${searchStats.topSearches.slice(0, 3).join(', ')}`,
     },
 
     // Category
-    {
+    categoryStats.bestCategory !== "None" && {
       icon: "trophy",
       color: "#2ecc71",
       title: "Top Category",
       message: `${categoryStats.bestCategory} is performing the best.`,
     },
 
-    {
+    categoryStats.weakestCategory !== "None" && {
       icon: "trending-down",
       color: "#e74c3c",
       title: "Needs Attention",
-      message: `${categoryStats.weakestCategory} is underperforming.`,
+      message: `${categoryStats.weakestCategory} could use improvement.`,
     },
 
     // Timing
     endingInLowTraffic.length > 0 && {
       icon: "moon",
       color: "#e74c3c",
-      title: "Sleepy Time Ending",
-      message: "Your auction ends when most buyers are snoozing.",
+      title: "Late Night Endings",
+      message: `${endingInLowTraffic.length} ${endingInLowTraffic.length === 1 ? 'auction ends' : 'auctions end'} between 10pm-8am when traffic is lower.`,
     },
 
-    {
+    timingStats.sellsFastestOn !== "Unknown" && {
       icon: "calendar",
       color: "#3498db",
       title: "Best Selling Days",
@@ -290,9 +269,17 @@ useEffect(() => {
     ...goatInsights.map((insight) => ({
       icon: insight.icon,
       color: insight.color,
-      title: `${insight.section} ${insight.title}`,
-      message: `${insight.message}\nGoat Tip: ${insight.tip}`,
+      title: insight.title,
+      message: `${insight.message}\n💡 Tip: ${insight.tip}`,
     })),
+
+    // Empty state
+    totalItems === 0 && {
+      icon: "cube-outline",
+      color: "#999",
+      title: "No Listings Yet",
+      message: "Create your first listing to start seeing analytics and insights.",
+    },
   ].filter((i): i is FeedInsight => Boolean(i));
 
   // --- HEALTH SCORE (simple example) ----------------------------------------
@@ -313,32 +300,32 @@ useEffect(() => {
   // --- RENDER ---------------------------------------------------------------
 
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, { backgroundColor: colors.background }]}>
       <EnhancedHeader scrollY={scrollY} />
 
       <Animated.ScrollView
-        style={styles.container}
+        style={[styles.container, { backgroundColor: colors.background }]}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
         )}
         scrollEventThrottle={16}
-        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 60, paddingHorizontal: 16 }}
+        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 60, paddingHorizontal: 16, backgroundColor: colors.background }}
       >
         <View style={styles.headerContainer}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+            <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Analytics</Text>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Analytics</Text>
         </View>
 
-        <Text style={styles.header}>📊 Your Listing Insights</Text>
+        <Text style={[styles.header, { color: colors.textPrimary }]}>📊 Your Listing Insights</Text>
 
       {/* Health score card */}
-      <View style={styles.healthCard}>
+      <View style={[styles.healthCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#ffffff' }]}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.healthLabel}>Listing Health</Text>
-          <Text style={styles.healthSubtitle}>
+          <Text style={[styles.healthLabel, { color: theme === 'dark' ? '#ECEDEE' : '#555' }]}>Listing Health</Text>
+          <Text style={[styles.healthSubtitle, { color: theme === 'dark' ? '#999' : '#777' }]}>
             A quick snapshot of how your listings are doing overall.
           </Text>
         </View>
@@ -360,19 +347,19 @@ useEffect(() => {
               />
 
               <View style={{ flex: 1 }}>
-                <Text style={styles.feedTitle}>{insight.title}</Text>
-                <Text style={styles.feedMessage}>{insight.message}</Text>
+                <Text style={[styles.feedTitle, { color: colors.textPrimary }]}>{insight.title}</Text>
+                <Text style={[styles.feedMessage, { color: theme === 'dark' ? '#999' : '#555' }]}>{insight.message}</Text>
               </View>
             </View>
 
-            {index < feed.length - 1 && <Divider />}
+            {index < feed.length - 1 && <View style={[styles.divider, { backgroundColor: theme === 'dark' ? '#333' : '#eee' }]} />}
           </React.Fragment>
         ))}
       </View>
 
         <View style={{ height: 80 }} />
       </Animated.ScrollView>
-       <GlobalFooter />
+       <GlobalFooter/>
     </View>
   );
 }
@@ -392,7 +379,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   header: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: "bold",
     marginTop: 20,
     color: "#1a1a1a",
@@ -461,7 +448,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
     color: '#1A1A1A',
   },
