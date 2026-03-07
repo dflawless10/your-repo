@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { formatDistanceToNow } from 'date-fns';
+import {Ionicons} from '@expo/vector-icons';
+import {router} from 'expo-router';
 
 type DisplayItem = {
   id: string;
@@ -22,6 +24,15 @@ export type AuctionPreview = {
   auction_ends_at: string; // ✅ Canonical field
   imageUrl?: string;
   buy_it_now?: number;
+  seller?: {
+    id: number | string;
+    username?: string;
+    avatar?: string;
+    avg_rating?: number;
+    total_reviews?: number;
+  };
+  is_must_sell?: boolean | number;
+  selling_strategy?: string;
 };
 
 
@@ -118,6 +129,14 @@ export const AuctionCard: React.FC<Props> = ({ preview, onGoatTap, Item, rarity 
         </View>
       )}
 
+      {/* ⚡ Must Sell Badge */}
+      {(preview?.is_must_sell === 1 || preview?.selling_strategy === 'must_sell') && (
+        <View style={styles.mustSellBadge}>
+          <Ionicons name="flash" size={10} color="#FFF" />
+          <Text style={styles.mustSellText}>MUST SELL</Text>
+        </View>
+      )}
+
       {/* 🖼️ Item Image */}
       <Image
         source={{ uri: imageUrl }}
@@ -143,6 +162,39 @@ export const AuctionCard: React.FC<Props> = ({ preview, onGoatTap, Item, rarity 
         >
           ⏳ {timeLeft}
         </Text>
+      )}
+
+      {/* Seller Info */}
+      {preview?.seller && (
+        <TouchableOpacity
+          style={styles.sellerRow}
+          onPress={(e) => {
+            e.stopPropagation();
+            if (preview.seller?.id) {
+              router.push(`/seller/${preview.seller.id}` as any);
+            }
+          }}
+        >
+          {preview.seller.avatar && (
+            <Image source={{ uri: preview.seller.avatar }} style={styles.sellerAvatar} />
+          )}
+          <View style={styles.sellerInfo}>
+            <Text style={styles.sellerName} numberOfLines={1}>
+              {preview.seller.username}
+            </Text>
+            {typeof preview.seller.avg_rating === 'number' && (
+              <View style={styles.ratingRow}>
+                <Ionicons name="star" size={12} color="#FFD700" />
+                <Text style={styles.ratingText}>
+                  {preview.seller.avg_rating.toFixed(1)}{' '}
+                </Text>
+                <Text style={styles.reviewCount}>
+                  ({preview.seller.total_reviews || 0})
+                </Text>
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
       )}
     </TouchableOpacity>
   );
@@ -203,5 +255,63 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginTop: 4,
+  },
+  mustSellBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#E53E3E',
+    zIndex: 2,
+  },
+  mustSellText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  sellerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  sellerAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#eee',
+  },
+  sellerInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  sellerName: {
+    fontSize: 12,
+    color: '#444',
+    fontWeight: '500',
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  ratingText: {
+    fontSize: 11,
+    color: '#666',
+    fontWeight: '600',
+  },
+  reviewCount: {
+    fontSize: 11,
+    color: '#666',
+    textDecorationLine: 'underline',
   },
 });

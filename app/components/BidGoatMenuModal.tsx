@@ -150,7 +150,7 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
       // Fetch active bids count (only truly active bids, not won/lost)
       let activeBidsCount = 0;
       try {
-        const bidsResponse = await fetch('http://10.0.0.170:5000/api/my-bids', {
+        const bidsResponse = await fetch(`${API_BASE_URL}/api/my-bids`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (bidsResponse.ok) {
@@ -168,7 +168,7 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
       // Fetch favorites/watching count
       let watchingCount = 0;
       try {
-        const favoritesResponse = await fetch('http://10.0.0.170:5000/api/favorites', {
+        const favoritesResponse = await fetch(`${API_BASE_URL}/api/favorites`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (favoritesResponse.ok) {
@@ -184,7 +184,7 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
       let salesCount = 0;
       try {
         console.log('🐐 BidGoatMenuModal: Fetching seller orders...');
-        const ordersResponse = await fetch('http://10.0.0.170:5000/api/seller/orders', {
+        const ordersResponse = await fetch(`${API_BASE_URL}/api/seller/orders`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         console.log('🐐 BidGoatMenuModal: Orders response status:', ordersResponse.status);
@@ -204,7 +204,7 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
       // Fetch purchases/collected items
       let purchasesCount = 0;
       try {
-        const purchasesResponse = await fetch('http://10.0.0.170:5000/api/buyer/purchases', {
+        const purchasesResponse = await fetch(`${API_BASE_URL}/api/buyer/purchases`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (purchasesResponse.ok) {
@@ -291,7 +291,7 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
         const token = await AsyncStorage.getItem('jwtToken');
         if (token) {
           try {
-            const response = await fetch('http://10.0.0.170:5000/api/user-profile', {
+            const response = await fetch(`${API_BASE_URL}/api/user-profile`, {
               headers: { Authorization: `Bearer ${token}` }
             });
             const userProfile = await response.json();
@@ -369,6 +369,14 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
       route: '/orders',
     },
     {
+      id: 'buying-disputes',
+      title: 'My Disputes & Returns',
+      icon: 'shield-checkmark-outline',
+      iconColor: '#FF9800',
+      iconBg: '#FFF3E0',
+      route: '/my-disputes',
+    },
+    {
       id: 'buying-relisted',
       title: 'Relisted Deals',
       icon: 'pricetag-outline',
@@ -392,21 +400,21 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
     ...(userProfile.isPremium ? [{
       id: 'selling-premium-active',
       title: '⭐ Premium Member',
-      icon: 'star' as keyof typeof Ionicons.glyphMap,
+      icon: 'diamond' as keyof typeof Ionicons.glyphMap,
       iconColor: '#FFD700',
       iconBg: '#FFF9E6',
-      route: '/seller/premium',
+      route: '/premium-benefits',
       subtitle: 'Saving 3% on every sale',
       isPremiumHighlight: true,
     }] : [{
       id: 'selling-premium-upgrade',
-      title: '⭐ Unlock Premium - Save 3%',
-      icon: 'star' as keyof typeof Ionicons.glyphMap,
-      iconColor: '#FFD700',
-      iconBg: '#FFF9E6',
-      route: '/seller/premium',
+      title: '💎 Upgrade to Premium',
+      icon: 'diamond' as keyof typeof Ionicons.glyphMap,
+      iconColor: '#9C27B0',
+      iconBg: '#F3E5F5',
+      route: '/premium-benefits',
       isNew: true,
-      subtitle: 'Only 5% commission vs 8%',
+      subtitle: 'Save 3% on fees + exclusive perks',
       isPremiumHighlight: true,
     }]),
     {
@@ -468,33 +476,32 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
   ];
 
   const accountMenu: MenuSection[] = [
-    // Premium status badge - prominent position
-    ...(userProfile.isPremium ? [{
-      id: 'account-premium-active',
-      title: '✨ Premium Active',
-      icon: 'diamond' as keyof typeof Ionicons.glyphMap,
-      iconColor: '#9C27B0',
-      iconBg: '#F3E5F5',
-      route: '/seller/premium',
-      subtitle: '5% commission • Priority support',
+    {
+      id: 'import-reputation',
+      title: 'Import Reputation',
+      subtitle: 'Get 8% lifetime fee!',
+      icon: 'ribbon-outline',
+      iconColor: '#FF6B35',
+      iconBg: '#FFF5F2',
+      route: '/import-reputation',
       isPremiumHighlight: true,
-    }] : [{
-      id: 'account-premium-upgrade',
-      title: '✨ Get Premium & Save',
-      icon: 'diamond' as keyof typeof Ionicons.glyphMap,
-      iconColor: '#9C27B0',
-      iconBg: '#F3E5F5',
-      route: '/seller/premium',
-      subtitle: '$19.99/mo • Lower fees',
-      isPremiumHighlight: true,
-    }]),
+      isNew: true,
+    },
     {
       id: 'account-settings',
-      title: 'Account Settings',
+      title: 'Settings',
       icon: 'settings-outline',
       iconColor: '#607D8B',
       iconBg: '#ECEFF1',
       route: '/account/settings',
+    },
+    {
+      id: 'past-purchases',
+      title: 'Past Purchases',
+      icon: 'archive-outline',
+      iconColor: '#9C27B0',
+      iconBg: '#F3E5F5',
+      route: '/account/past-purchases',
     },
     ...(userProfile.isAdmin ? [{
       id: 'admin',
@@ -629,7 +636,7 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
             </View>
 
             {/* User Stats */}
-            {username && (
+            {username ? (
               <View style={styles.statsContainer}>
                 <View style={styles.statItem}>
                   <Text style={styles.statValue}>{userStats.activeBids}</Text>
@@ -651,7 +658,7 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
                   <Text style={styles.statLabel}>Collected</Text>
                 </View>
               </View>
-            )}
+            ) : null}
           </LinearGradient>
 
           <ScrollView
@@ -740,7 +747,7 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
             </TouchableOpacity>
 
             {/* Buying Section */}
-{!!(username) && (
+{username ? (
   <View style={styles.section}>
     <TouchableOpacity
       style={styles.sectionHeader}
@@ -765,17 +772,17 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
       </View>
     </TouchableOpacity>
 
-    {buyingExpanded && (
+    {buyingExpanded ? (
       <View style={styles.menuList}>
         {buyingMenu.map(renderMenuItem)}
       </View>
-    )}
+    ) : null}
   </View>
-)}
+) : null}
 
 
             {/* Selling Section */}
-            {username && (
+            {username ? (
               <View style={styles.section}>
                 <TouchableOpacity
                   style={styles.sectionHeader}
@@ -789,14 +796,14 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
                     color={theme === 'dark' ? '#999' : '#666'}
                   />
                 </TouchableOpacity>
-                {sellingExpanded && (
+                {sellingExpanded ? (
                   <View style={styles.menuList}>{sellingMenu.map(renderMenuItem)}</View>
-                )}
+                ) : null}
               </View>
-            )}
+            ) : null}
 
             {/* Account Section */}
-            {username && (
+            {username ? (
               <View style={styles.section}>
                 <TouchableOpacity
                   style={styles.sectionHeader}
@@ -810,11 +817,11 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
                     color={theme === 'dark' ? '#999' : '#666'}
                   />
                 </TouchableOpacity>
-                {accountExpanded && (
+                {accountExpanded ? (
                   <View style={styles.menuList}>{accountMenu.map(renderMenuItem)}</View>
-                )}
+                ) : null}
               </View>
-            )}
+            ) : null}
 
             {/* Help & Settings */}
             <View style={styles.section}>

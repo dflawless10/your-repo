@@ -83,6 +83,12 @@ export default function AnalyticsScreen() {
   const [searchStats, setSearchStats] = useState({ topSearches: [], zeroResultFilters: [] });
   const [categoryStats, setCategoryStats] = useState({ bestCategory: "None", weakestCategory: "None" });
   const [timingStats, setTimingStats] = useState({ sellsFastestOn: "Unknown", lowTrafficHours: [] });
+  const [revenueData, setRevenueData] = useState({
+    total_sales: 0,
+    net_payout: 0,
+    total_bidgoat_fees: 0,
+    transaction_count: 0
+  });
 
   // --- SCROLL VALUE --------------------------------------------------------
 
@@ -141,6 +147,22 @@ useEffect(() => {
         }
       } catch (e) {
         console.log('Analytics stats endpoint not available yet');
+      }
+
+      // Fetch revenue data
+      try {
+        const revenueResponse = await fetch(`${API_BASE_URL}/api/seller/analytics/revenue`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (revenueResponse.ok) {
+          const revenue = await revenueResponse.json();
+          if (revenue.summary) {
+            setRevenueData(revenue.summary);
+          }
+        }
+      } catch (e) {
+        console.log('Revenue endpoint not available yet');
       }
     } catch (error) {
       console.error('Error loading analytics data:', error);
@@ -314,7 +336,7 @@ useEffect(() => {
       >
         <View style={styles.headerContainer}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+            <Ionicons name="arrow-back" size={28} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Analytics</Text>
         </View>
@@ -336,6 +358,38 @@ useEffect(() => {
 </Animated.View>
 
       </View>
+
+      {/* Revenue Overview */}
+      {revenueData.transaction_count > 0 && (
+        <>
+          <Text style={[styles.header, { color: colors.textPrimary, marginTop: 24 }]}>💰 Revenue Overview</Text>
+          <View style={[styles.revenueGrid, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#ffffff' }]}>
+            <View style={styles.revenueItem}>
+              <Ionicons name="cash-outline" size={24} color="#2ecc71" />
+              <Text style={[styles.revenueLabel, { color: theme === 'dark' ? '#999' : '#777' }]}>Total Sales</Text>
+              <Text style={[styles.revenueValue, { color: colors.textPrimary }]}>${revenueData.total_sales.toFixed(2)}</Text>
+            </View>
+
+            <View style={styles.revenueItem}>
+              <Ionicons name="wallet-outline" size={24} color="#BB86FC" />
+              <Text style={[styles.revenueLabel, { color: theme === 'dark' ? '#999' : '#777' }]}>Your Payout</Text>
+              <Text style={[styles.revenueValue, { color: colors.textPrimary }]}>${revenueData.net_payout.toFixed(2)}</Text>
+            </View>
+
+            <View style={styles.revenueItem}>
+              <Ionicons name="pricetag-outline" size={24} color="#f1c40f" />
+              <Text style={[styles.revenueLabel, { color: theme === 'dark' ? '#999' : '#777' }]}>BidGoat Fees</Text>
+              <Text style={[styles.revenueValue, { color: colors.textPrimary }]}>${revenueData.total_bidgoat_fees.toFixed(2)}</Text>
+            </View>
+
+            <View style={styles.revenueItem}>
+              <Ionicons name="cart-outline" size={24} color="#3498db" />
+              <Text style={[styles.revenueLabel, { color: theme === 'dark' ? '#999' : '#777' }]}>Transactions</Text>
+              <Text style={[styles.revenueValue, { color: colors.textPrimary }]}>{revenueData.transaction_count}</Text>
+            </View>
+          </View>
+        </>
+      )}
 
       <View style={styles.feed}>
         {feed.map((insight, index) => (
@@ -440,16 +494,44 @@ const styles = StyleSheet.create({
   headerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
-    paddingVertical: 4,
+    marginBottom: 10,
   },
   backButton: {
     marginRight: 12,
-    padding: 4,
   },
   headerTitle: {
-    fontSize: 16,
+    fontSize: 28,
     fontWeight: '700',
-    color: '#1A1A1A',
+  },
+  revenueGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 12,
+    padding: 16,
+    borderRadius: 16,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  revenueItem: {
+    flex: 1,
+    minWidth: '45%',
+    alignItems: 'center',
+    padding: 12,
+  },
+  revenueLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  revenueValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginTop: 4,
+    textAlign: 'center',
   },
 });

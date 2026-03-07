@@ -207,7 +207,7 @@ export default function SentOffersScreen() {
               onPress={() => router.back()}
               style={styles.backButton}
             >
-              <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+               <Ionicons name="arrow-back" size={28} color="#B794F4"  />
             </TouchableOpacity>
             <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Sent Offers</Text>
           </Animated.View>
@@ -242,7 +242,7 @@ const createStyles = (isDark: boolean, colors: any) => StyleSheet.create({
     alignItems: 'center',
     marginBottom: 24,
     paddingHorizontal: 4,
-    paddingTop: 24,
+    paddingTop: 60,
     borderBottomWidth: 1,
     paddingBottom: 12,
   },

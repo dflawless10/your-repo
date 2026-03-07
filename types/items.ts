@@ -23,7 +23,7 @@ export type AuctionItem = {
   username: string;
   firstname: string;
   lastname: string;
-  avatar: string;
+  avatar_url: string;
   avg_rating?: number;
   total_reviews: number;
   retingText: string;
@@ -83,6 +83,8 @@ material: '',
     emoji: string;
     sound?: string;
   };
+  reminder_active?: boolean;
+  price_alert_active?: boolean;
 };
 
 
@@ -162,7 +164,7 @@ export type ListedItem = {
   buy_it_now?: number;
   seller?: {
     name: string;
-    avatar: string;
+    avatar_url: string;
     id: number | string;
     ItemDetails?: string;
     username: string;

@@ -3,6 +3,8 @@ import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { formatDistanceToNow } from 'date-fns';
 import UnTappedHeart from '../assets/unTappedHeart.svg';
 import TappedHeart from '../assets/TappedHeart.svg';
+import {Ionicons} from '@expo/vector-icons';
+import {router} from 'expo-router';
 
 export type HybridAuctionItem = {
   id: string | number;
@@ -30,8 +32,12 @@ export type HybridAuctionItem = {
   mustSell?: string | boolean;
   is_super_deal?: boolean;
   seller?: {
+    id?: number | string;
     username?: string;
     name?: string;
+    avatar?: string;
+    avg_rating?: number;
+    total_reviews?: number;
   };
   seller_username?: string;
 };
@@ -242,11 +248,37 @@ export const HybridAuctionCard: React.FC<Props> = ({
             : `$${displayPrice.toFixed(2)}`}
         </Text>
 
-        {/* Seller Info */}
-        {sellerName && (
-          <Text style={styles.seller} numberOfLines={1}>
-            by {sellerName}
-          </Text>
+        {/* Seller Info with Rating */}
+        {item.seller && (
+          <TouchableOpacity
+            style={styles.sellerRow}
+            onPress={(e) => {
+              e.stopPropagation();
+              if (item.seller?.id) {
+                router.push(`/seller/${item.seller.id}` as any);
+              }
+            }}
+          >
+            {item.seller.avatar && (
+              <Image source={{ uri: item.seller.avatar }} style={styles.sellerAvatar} />
+            )}
+            <View style={styles.sellerInfo}>
+              <Text style={styles.sellerName} numberOfLines={1}>
+                {item.seller.username || item.seller.name}
+              </Text>
+              {typeof item.seller.avg_rating === 'number' && (
+                <View style={styles.ratingRow}>
+                  <Ionicons name="star" size={12} color="#FFD700" />
+                  <Text style={styles.ratingText}>
+                    {item.seller.avg_rating.toFixed(1)}{' '}
+                  </Text>
+                  <Text style={styles.reviewCount}>
+                    ({item.seller.total_reviews || 0})
+                  </Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
         )}
 
         {/* Time Left */}
@@ -377,6 +409,45 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666',
     marginTop: 2,
+  },
+  sellerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  sellerAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#eee',
+  },
+  sellerInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  sellerName: {
+    fontSize: 12,
+    color: '#444',
+    fontWeight: '500',
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  ratingText: {
+    fontSize: 11,
+    color: '#666',
+    fontWeight: '600',
+  },
+  reviewCount: {
+    fontSize: 11,
+    color: '#666',
+    textDecorationLine: 'underline',
   },
   timeLeft: {
     fontSize: 14,

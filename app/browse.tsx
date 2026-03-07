@@ -37,7 +37,7 @@ export default function BrowseScreen() {
   const fetchWatchesFromAPI = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://10.0.0.170:5000/api/watches');
+      const response = await fetch(`${API_BASE_URL}/api/watches`);
       const data = await response.json();
       // Combine with hardcoded watches or replace
       setWatches([...SAMPLE_WATCHES, ...data]);
@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   listContent: {
-    paddingBottom: 100,
+    paddingBottom: 120,
   },
   card: {
     backgroundColor: '#fff',

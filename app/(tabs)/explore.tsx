@@ -1,5 +1,4 @@
 import { API_BASE_URL } from '@/config';
-
 import React, { useCallback, useEffect, useState, useRef } from 'react';
 import {
   FlatList,
@@ -12,40 +11,39 @@ import {
   Modal,
   Share,
   Dimensions,
+  Alert,
 } from 'react-native';
-
-const { width } = Dimensions.get('window');
-const COLUMN_GAP = 12;
-const HORIZONTAL_PADDING = 16; // Add this
-const NUM_COLUMNS = 2;
-const ITEM_WIDTH = (width - (HORIZONTAL_PADDING * 2) - COLUMN_GAP) / NUM_COLUMNS; // Update this
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { format } from 'date-fns';
-import { router, } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
 import ParallaxScrollView from '@/components/ParallaxScrollView';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { Collapsible } from '@/components/Collapsible';
 import ItemScreen from '@/app/(tabs)/list-item';
-import UnTappedHeart from '@/assets/unTappedHeart.svg';
-import TappedHeart from '@/assets/TappedHeart.svg';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Animated as RNAnimated } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { Avatar } from 'app/components/Avatar'
-import {formatDateTime, getCountdownLocal, isLowStock} from "@/utils/time";
-import Toast from "react-native-toast-message";
-import {useWishlist} from "@/app/wishlistContext";
-import { useAppDispatch } from 'hooks/reduxHooks';
+import { Avatar } from 'app/components/Avatar';
+import { formatDateTime, getCountdownLocal, isLowStock } from '@/utils/time';
+import Toast from 'react-native-toast-message';
+import { useWishlist } from '@/app/wishlistContext';
+import { useAppDispatch, useAppSelector } from 'hooks/reduxHooks';
 import { addToWishlist } from 'app/wishlistslice';
 import { addItem } from '@/utils/cartSlice';
-import GoatGenieBadge from "@/app/GoatGenieBadge";
-import {ListedItem} from "@/types/items";
-
+import GoatGenieBadge from '@/app/GoatGenieBadge';
+import { ListedItem } from '@/types/items';
 import { GoatFlip } from '@/components/GoatAnimator/goatFlip';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/app/theme/ThemeContext';
+
+// Constants
+const { width } = Dimensions.get('window');
+const COLUMN_GAP = 12;
+const HORIZONTAL_PADDING = 16;
+const NUM_COLUMNS = 2;
+const ITEM_WIDTH = (width - (HORIZONTAL_PADDING * 2) - COLUMN_GAP) / NUM_COLUMNS;
 
 
 type ListedItemWithStatus = ListedItem & {
@@ -103,11 +101,11 @@ const JustListedCard = React.memo(
               style={styles.heartIconOverlay}
               activeOpacity={0.7}
             >
-              {isFavorited ? (
-                <TappedHeart width={24} height={24} />
-              ) : (
-                <UnTappedHeart width={24} height={24} />
-              )}
+              <Ionicons
+                name={isFavorited ? "heart" : "heart-outline"}
+                size={24}
+                color="#6A0DAD"
+              />
             </TouchableOpacity>
 
             {/* GoatGenieBadge - Wishlist Badge */}
@@ -165,9 +163,34 @@ const JustListedCard = React.memo(
             )}
 
             {item.seller && (
-              <Text style={styles.productSeller} numberOfLines={1}>
-                by {item.seller.username}
-              </Text>
+              <View style={styles.sellerRatingRow}>
+                {item.seller?.avatar_url && (
+                  <Image source={{ uri: item.seller.avatar_url }} style={styles.sellerAvatar} />
+                )}
+                <TouchableOpacity
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    router.push(`/seller/${item.seller?.id}` as const);
+                  }}
+                  activeOpacity={0.7}
+                  style={styles.sellerNameContainer}
+                >
+                  <Text style={styles.sellerName} numberOfLines={1}>
+                    {item.seller?.username}
+                  </Text>
+                </TouchableOpacity>
+                {((item.seller?.avg_rating || 0) > 0 || (item.seller?.total_reviews || 0) > 0) && (
+                  <View style={styles.ratingRow}>
+                    <Ionicons name="star" size={14} color="#FFD700" />
+                    <Text style={styles.ratingText}>
+                      {(item.seller?.avg_rating || 0).toFixed(1)}{' '}
+                    </Text>
+                    <Text style={styles.reviewCount}>
+                      ({item.seller?.total_reviews || 0})
+                    </Text>
+                  </View>
+                )}
+              </View>
             )}
           </View>
         </View>
@@ -180,6 +203,7 @@ JustListedCard.displayName = 'JustListedCard';
 
 export default function TabTwoScreen() {
   const { theme, colors } = useTheme();
+  const { search } = useLocalSearchParams<{ search?: string }>();
   const [justListedItems, setJustListedItems] = useState<ListedItem[]>([]);
   const [trendingItems, setTrendingItems] = useState<ListedItem[]>([]);
   const [favoritedItems, setFavoritedItems] = useState<Record<number, boolean>>({});
@@ -204,6 +228,7 @@ export default function TabTwoScreen() {
   const scrollY = useRef(new RNAnimated.Value(0)).current;
   const { wishlistIds, refreshWishlist, addToWishlist: addToWishlistBackend } = useWishlist();
   const dispatch = useAppDispatch();
+  const user = useAppSelector(state => state.user.profile);
 
   // Fade in header title and arrow
   useEffect(() => {
@@ -231,7 +256,7 @@ export default function TabTwoScreen() {
     }, 500);
   }, []);
 
-  const toggleFavorite = async (id: number) => {
+  const toggleFavorite = useCallback(async (id: number) => {
     const updated = {
       ...favoritedItems,
       [id]: !favoritedItems[id],
@@ -249,7 +274,7 @@ export default function TabTwoScreen() {
       if (token) {
         if (updated[id]) {
           // Add to favorites
-          await fetch('http://10.0.0.170:5000/api/favorites', {
+          await fetch(`${API_BASE_URL}/api/favorites`, {
             method: 'POST',
             headers: {
               Authorization: `Bearer ${token}`,
@@ -260,7 +285,7 @@ export default function TabTwoScreen() {
           console.log(`🐐 Item ${id} synced to backend favorites`);
         } else {
           // Remove from favorites
-          await fetch(`http://10.0.0.170:5000/api/favorites/${id}`, {
+          await fetch(`${API_BASE_URL}/api/favorites/${id}`, {
             method: 'DELETE',
             headers: {
               Authorization: `Bearer ${token}`,
@@ -278,7 +303,7 @@ export default function TabTwoScreen() {
       console.log(`TappedHeart activated for item ${id} 🫀 Redirecting to JewelryBoxScreen`);
       router.push('/JewelryBoxScreen');
     }
-  };
+  }, [favoritedItems]);
 
   const loadFavoritesFromStorage = async () => {
     try {
@@ -324,7 +349,7 @@ export default function TabTwoScreen() {
 
       // For now, simulate trending by sorting by bidCount
       // In production; this should call a dedicated /api/trending endpoint
-      const response = await fetch('http://10.0.0.170:5000/api/just-listed', {
+      const response = await fetch(`${API_BASE_URL}/api/just-listed`, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -353,7 +378,7 @@ export default function TabTwoScreen() {
         return;
       }
 
-      const response = await fetch('http://10.0.0.170:5000/api/just-listed', {
+      const response = await fetch(`${API_BASE_URL}/api/just-listed`, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -368,17 +393,16 @@ export default function TabTwoScreen() {
       const data = await response.json();
 
       if (Array.isArray(data.items)) {
+         const normalizeTimestamp = (timestamp: string): string => {
+           if (!timestamp?.trim()) return '';
+           return timestamp.includes('T') ? timestamp : timestamp.replace(' ', 'T') + 'Z';
+         };
+
          const safeItems = data.items
           .filter((item: any) => item.buy_it_now && item.buy_it_now > 0) // Filter for Buy It Now only (has a buy_it_now price)
           .map((item: any) => {
             const rawTimestamp = item.auctionEndsAt ?? item.auction_ends_at ?? '';
-            let safeTimestamp = '';
-
-            if (rawTimestamp && rawTimestamp.trim()) {
-              safeTimestamp = rawTimestamp.includes('T')
-                ? rawTimestamp
-                : rawTimestamp.replace(' ', 'T') + 'Z';
-            }
+            const safeTimestamp = normalizeTimestamp(rawTimestamp);
 
             return {
       ...item,
@@ -406,14 +430,14 @@ export default function TabTwoScreen() {
     }, [])
   );
 
-  const handleWishlistTap = async (item: ListedItem) => {
+  const handleWishlistTap = useCallback(async (item: ListedItem) => {
     console.log('🐐 Explore: Adding item to wishlist:', item.id, item.name);
-    
+
     try {
       // Add to the backend first
       await addToWishlistBackend(item.id);
       console.log('🐐 Explore: Added to backend successfully');
-      
+
       // Then update Redux state
       const listedItem: ListedItem = {
         ...item,
@@ -423,14 +447,14 @@ export default function TabTwoScreen() {
         quantity_available: item.quantity_available ?? 1,
       };
       dispatch(addToWishlist(listedItem));
-      
+
       // Navigate with a small delay
       await new Promise(resolve => setTimeout(resolve, 300));
       router.push('/wishlist');
 
       const token = await AsyncStorage.getItem('jwtToken');
       if (token) {
-        await fetch('http://10.0.0.170:5000/api/wishlist', {
+        await fetch(`${API_BASE_URL}/api/wishlist`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer token`,
@@ -452,7 +476,7 @@ export default function TabTwoScreen() {
       visibilityTime: 2000,
       position: 'top',
     });
-  };
+  }, [addToWishlistBackend, dispatch, refreshWishlist]);
 
   const handleConfirmAdd = async () => {
     if (selectedItem) {
@@ -472,7 +496,38 @@ export default function TabTwoScreen() {
   };
 
   const handleAddToCart = async (item: ListedItem) => {
+    // CHECK: Is this the seller's own item?
+    if (user?.id && item.seller?.id && user.id === Number(item.seller.id)) {
+      Alert.alert('Cannot Add to Cart', 'Sorry, buyers cannot add their own items to the cart');
+      return;
+    }
+
     try {
+      // Check with backend FIRST before updating UI
+      const token = await AsyncStorage.getItem('jwtToken');
+      if (!token) {
+        Alert.alert('Please sign in', 'You need to be signed in to add items to cart');
+        return;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/cart`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ item_id: item.id, quantity: 1 }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        Alert.alert('Cannot Add to Cart', errorData.error || 'Failed to add to cart');
+        return;
+      }
+
+      // Backend approved - NOW update Redux and show success
+      await response.json(); // Consume response body
+
       dispatch(addItem({
         id: item.id,
         name: item.name,
@@ -490,28 +545,9 @@ export default function TabTwoScreen() {
         visibilityTime: 2000,
         position: 'top',
       });
-
-      // Sync with backend
-      const token = await AsyncStorage.getItem('jwtToken');
-      if (token) {
-        await fetch('http://10.0.0.170:5000/api/cart', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ item_id: item.id, quantity: 1 }),
-        });
-      }
     } catch (error) {
-      console.error('🐐 Error adding to cart:', error);
-      Toast.show({
-        type: 'error',
-        text1: 'Failed to add to cart',
-        text2: 'Please try again',
-        visibilityTime: 2000,
-        position: 'top',
-      });
+      console.error('Failed to add to cart:', error);
+      Alert.alert('Error', 'Failed to add to cart. Please try again.');
     }
   };
 
@@ -618,7 +654,7 @@ export default function TabTwoScreen() {
           {/* Page Header with Title and Back Arrow */}
           <RNAnimated.View style={[styles.pageHeader, { opacity: headerOpacity, transform: [{ scale: headerScale }], backgroundColor: colors.background }]}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-              <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+              <Ionicons name="arrow-back" size={28} color='#6A0DAD'  />
             </TouchableOpacity>
             <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Explore</Text>
           </RNAnimated.View>
@@ -630,7 +666,7 @@ export default function TabTwoScreen() {
               <TouchableOpacity
                 style={[
                   styles.filterTab,
-                  { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#FF6B6B' : '#FF6B6B' },
+                  { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: '#FF6B6B' },
                   activeFilterTab === 'sort' && styles.filterTabActive
                 ]}
                 onPress={() => setActiveFilterTab(activeFilterTab === 'sort' ? null : 'sort')}
@@ -642,13 +678,17 @@ export default function TabTwoScreen() {
                 ]}>
                   Sort {sortBy !== 'newest' && '•'}
                 </Text>
-                <Ionicons name="chevron-down" size={16} color={activeFilterTab === 'sort' ? '#FFF' : (theme === 'dark' ? '#ECEDEE' : '#666')} />
+                <Ionicons
+                  name="chevron-down"
+                  size={16}
+                  color={activeFilterTab === 'sort' ? '#FFF' : theme === 'dark' ? '#ECEDEE' : '#666'}
+                />
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[
                   styles.filterTab,
-                  { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#FF6B6B' : '#FF6B6B' },
+                  { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: '#FF6B6B' },
                   activeFilterTab === 'metal' && styles.filterTabActive
                 ]}
                 onPress={() => setActiveFilterTab(activeFilterTab === 'metal' ? null : 'metal')}
@@ -660,13 +700,17 @@ export default function TabTwoScreen() {
                 ]}>
                   Metal {selectedMetal !== 'All' && '•'}
                 </Text>
-                <Ionicons name="chevron-down" size={16} color={activeFilterTab === 'metal' ? '#FFF' : (theme === 'dark' ? '#ECEDEE' : '#666')} />
+                <Ionicons
+                  name="chevron-down"
+                  size={16}
+                  color={activeFilterTab === 'metal' ? '#FFF' : theme === 'dark' ? '#ECEDEE' : '#666'}
+                />
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[
                   styles.filterTab,
-                  { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#FF6B6B' : '#FF6B6B' },
+                  { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: '#FF6B6B' },
                   activeFilterTab === 'gems' && styles.filterTabActive
                 ]}
                 onPress={() => setActiveFilterTab(activeFilterTab === 'gems' ? null : 'gems')}
@@ -678,13 +722,17 @@ export default function TabTwoScreen() {
                 ]}>
                   Gems {selectedStone !== 'All' && '•'}
                 </Text>
-                <Ionicons name="chevron-down" size={16} color={activeFilterTab === 'gems' ? '#FFF' : (theme === 'dark' ? '#ECEDEE' : '#666')} />
+                <Ionicons
+                  name="chevron-down"
+                  size={16}
+                  color={activeFilterTab === 'gems' ? '#FFF' : theme === 'dark' ? '#ECEDEE' : '#666'}
+                />
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[
                   styles.filterTab,
-                  { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#FF6B6B' : '#FF6B6B' },
+                  { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: '#FF6B6B' },
                   activeFilterTab === 'type' && styles.filterTabActive
                 ]}
                 onPress={() => setActiveFilterTab(activeFilterTab === 'type' ? null : 'type')}
@@ -696,13 +744,17 @@ export default function TabTwoScreen() {
                 ]}>
                   Type {selectedType !== 'All' && '•'}
                 </Text>
-                <Ionicons name="chevron-down" size={16} color={activeFilterTab === 'type' ? '#FFF' : (theme === 'dark' ? '#ECEDEE' : '#666')} />
+                <Ionicons
+                  name="chevron-down"
+                  size={16}
+                  color={activeFilterTab === 'type' ? '#FFF' : theme === 'dark' ? '#ECEDEE' : '#666'}
+                />
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[
                   styles.filterTab,
-                  { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#FF6B6B' : '#FF6B6B' },
+                  { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: '#FF6B6B' },
                   activeFilterTab === 'price' && styles.filterTabActive
                 ]}
                 onPress={() => setActiveFilterTab(activeFilterTab === 'price' ? null : 'price')}
@@ -714,7 +766,11 @@ export default function TabTwoScreen() {
                 ]}>
                   Price {priceRange !== 'All' && '•'}
                 </Text>
-                <Ionicons name="chevron-down" size={16} color={activeFilterTab === 'price' ? '#FFF' : (theme === 'dark' ? '#ECEDEE' : '#666')} />
+                <Ionicons
+                  name="chevron-down"
+                  size={16}
+                  color={activeFilterTab === 'price' ? '#FFF' : theme === 'dark' ? '#ECEDEE' : '#666'}
+                />
               </TouchableOpacity>
             </ScrollView>
 
@@ -875,11 +931,11 @@ export default function TabTwoScreen() {
             </View>
           </ThemedView>
 
-          {/* Trending Section - Bigger Cards */}
+          {/* Trending Section - Always Show (Horizontal Scroll) */}
           {trendingItems.length > 0 && (
-            <ThemedView style={{ paddingVertical: 16, marginBottom: 16 }}>
-              <ThemedText type="title" style={{ marginBottom: 8, paddingHorizontal: 16 }}>🔥 Trending Now</ThemedText>
-              <ThemedText style={{ fontSize: 14, color: '#666', marginBottom: 16, paddingHorizontal: 16 }}>
+            <ThemedView style={{ paddingVertical: 8, marginBottom: 12 }}>
+              <ThemedText type="title" style={{ marginBottom: 4, paddingHorizontal: 16 }}>🔥 Trending Now</ThemedText>
+              <ThemedText style={{ fontSize: 14, color: '#666', marginBottom: 12, paddingHorizontal: 16 }}>
                 Most popular items in the last 24 hours
               </ThemedText>
 
@@ -893,7 +949,7 @@ export default function TabTwoScreen() {
                 keyExtractor={(item) => `trending-${item.id}`}
                 renderItem={renderItem}
                 horizontal
-                style={{ height: 380 }}
+                style={{ height: 420 }}
                 contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 4 }}
                 nestedScrollEnabled
                 showsHorizontalScrollIndicator={false}
@@ -902,14 +958,14 @@ export default function TabTwoScreen() {
           )}
 
 
-          {/* Shop Instantly Section */}
+          {/* Shop Instantly Section - Filtered */}
           <ThemedView style={styles.shopInstantlySection}>
             <ThemedText style={styles.sectionTitle}>⚡ Shop Instantly</ThemedText>
             <ThemedText style={styles.sectionSubtitle}>Skip the wait - buy your favorites now! 🛍️</ThemedText>
 
-            {justListedItems.length > 0 ? (
+            {itemsWithWatchStatus.length > 0 ? (
               <FlatList
-                data={justListedItems}
+                data={itemsWithWatchStatus}
                 renderItem={({ item }) => {
                   const displayPrice = (item.highest_bid ?? item.price) ?? 0;
                   const isBid = item.highest_bid && item.highest_bid > item.price;
@@ -938,11 +994,11 @@ export default function TabTwoScreen() {
                           style={styles.heartIconOverlay}
                           activeOpacity={0.7}
                         >
-                          {favoritedItems[item.id] ? (
-                            <TappedHeart width={24} height={24} />
-                          ) : (
-                            <UnTappedHeart width={24} height={24} />
-                          )}
+                          <Ionicons
+                            name={favoritedItems[item.id] ? "heart" : "heart-outline"}
+                            size={24}
+                            color="#6A0DAD"
+                          />
                         </TouchableOpacity>
 
                         {/* Must Sell Badge */}
@@ -981,16 +1037,65 @@ export default function TabTwoScreen() {
                           </Text>
                         </View>
 
-                        {item.auction_ends_at && (
-                          <Text style={styles.buyBeforeText}>
-                            🎁 Buy Before {new Date(item.auction_ends_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </Text>
-                        )}
+                        {item.auction_ends_at && (() => {
+                          const endTime = new Date(item.auction_ends_at).getTime();
+                          const timeLeft = endTime - Date.now();
+                          const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
 
-                        {item.seller_username && (
-                          <Text style={styles.productSeller} numberOfLines={1}>
-                            by {item.seller_username}
-                          </Text>
+                          if (days >= 2) {
+                            // More than 2 days - show date in green
+                            const formattedDate = new Date(item.auction_ends_at).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric'
+                            });
+                            return (
+                              <Text style={[styles.buyBeforeText, { color: '#38a169' }]}>
+                                🎁 Buy Before {formattedDate}
+                              </Text>
+                            );
+                          } else {
+                            // Less than 48 hours - show countdown (red if ≤24h, orange otherwise)
+                            const { timeText, isUrgent } = getCountdownLocal(item.auction_ends_at);
+                            return (
+                              <Text style={[styles.buyBeforeText, { color: isUrgent ? '#e53e3e' : '#F57C00' }]}>
+                                ⏰ {timeText}
+                              </Text>
+                            );
+                          }
+                        })()}
+
+                        {item.seller && (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginTop: 4 }}>
+                            {item.seller?.avatar_url && (
+                              <Image source={{ uri: item.seller.avatar_url }} style={{ width: 22, height: 22, borderRadius: 11, marginRight: 6 }} />
+                            )}
+                            <TouchableOpacity
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                if (item.seller?.id) {
+                                  router.push(`/seller/${item.seller.id}` as const);
+                                }
+                              }}
+                              activeOpacity={0.7}
+                              style={{ flexShrink: 1, flexGrow: 0, marginRight: 6 }}
+                            >
+                              <Text style={{ fontSize: 11, color: '#007AFF', fontWeight: '600', textDecorationLine: 'underline' }} numberOfLines={1}>
+                                {item.seller.username}
+                              </Text>
+                            </TouchableOpacity>
+                            {typeof item.seller.avg_rating === 'number' && (
+                              <View style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 0, marginLeft: 2 }}>
+                                <Ionicons name="star" size={14} color="#FFD700" />
+                                <Text style={{ fontSize: 12, color: '#666', fontWeight: '600', marginLeft: 4 }} numberOfLines={1}>
+                                  {item.seller.avg_rating.toFixed(1)}{' '}
+                                </Text>
+                                <Text style={{ fontSize: 12, color: '#666', fontWeight: '600', textDecorationLine: 'underline' }} numberOfLines={1}>
+                                  ({item.seller.total_reviews || 0})
+                                </Text>
+                              </View>
+                            )}
+                          </View>
                         )}
 
                         {/* Add to Cart Button */}
@@ -1217,6 +1322,10 @@ modalClose: {
   },
   infoContainer: {
     padding: 12,
+    paddingBottom: 14,
+    backgroundColor: '#fff',
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
   },
   subtitle: {
   fontSize: 14,
@@ -1254,25 +1363,34 @@ modalClose: {
   sellerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
+    gap: 4,
+    marginTop: 4,
+  },
+  sellerRatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    width: '100%',
   },
   sellerAvatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#e2e8f0',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    marginRight: 6,
+  },
+  sellerNameContainer: {
+    flexShrink: 1,
+    marginRight: 6,
+  },
+  sellerName: {
+    fontSize: 11,
+    color: '#007AFF',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
   sellerInfo: {
     flex: 1,
     marginLeft: 0,
-  },
-  sellerName: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#6A0DAD',
   },
   memberSince: {
     fontSize: 10,
@@ -1322,13 +1440,13 @@ modalClose: {
     padding: 4,
   },
   pageTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
     color: '#1a1a1a',
   },
   filtersSection: {
-    paddingTop: 8,
-    paddingBottom: 12,
+    paddingTop: 4,
+    paddingBottom: 8,
     paddingHorizontal: 0,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
@@ -1446,6 +1564,7 @@ modalClose: {
   },
   // Category Collections
   shopInstantlySection: {
+    marginTop: 16,
     marginBottom: 24,
   },
   sectionTitle: {
@@ -1495,14 +1614,11 @@ modalClose: {
     position: 'absolute',
     top: 8,
     right: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
+    shadowColor: '#BB86FC',
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
     shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
+    elevation: 8,
   },
   mustSellBadge: {
     position: 'absolute',
@@ -1562,10 +1678,11 @@ modalClose: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 4,
+    marginBottom: 2,
+    marginTop: -2,
   },
   productPrice: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: '700',
     color: '#6A0DAD',
   },
@@ -1583,6 +1700,22 @@ modalClose: {
     fontSize: 12,
     color: '#666',
     fontStyle: 'italic',
+    flex: 1,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 0,
+    marginLeft: 2,
+  },
+  ratingText: {
+    fontSize: 11,
+    color: '#666',
+    fontWeight: '600',
+  },
+  reviewCount: {
+    fontSize: 11,
+    color: '#999',
   },
   buyBeforeText: {
     fontSize: 11,

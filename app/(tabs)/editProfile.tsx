@@ -217,7 +217,7 @@ function EditProfileScreen() {
     !!profile.created_at && !isNaN(Date.parse(profile.created_at));
 
   const isDark = theme === 'dark';
-  const arrowColor = isDark ? '#ECEDEE' : '#333';
+  let arrowColor = isDark ? '#ECEDEE' : '#333';
   const titleColor = isDark ? '#ECEDEE' : '#1A202C';
 
   if (loading) {
@@ -243,7 +243,7 @@ function EditProfileScreen() {
       >
         <Animated.View style={[styles.pageHeader, { backgroundColor: colors.surface, opacity: headerOpacity, transform: [{ scale: headerScale }] }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={arrowColor} />
+            <Ionicons name="arrow-back" size={28} color="#B794F4"  />
           </TouchableOpacity>
           <Text style={[styles.pageTitle, { color: titleColor }]}>Edit Profile</Text>
         </Animated.View>
@@ -441,20 +441,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
   },
   scrollContent: {
-    paddingBottom: 100,
+    paddingBottom: 120,
   },
   pageHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingTop: 40,
+    paddingBottom: 8,
     backgroundColor: '#fff',
-    marginBottom: 20,
   },
   backButton: {
-    padding: 4,
     marginRight: 12,
+    padding: 4,
   },
+
   pageTitle: {
     fontSize: 24,
     fontWeight: '700',

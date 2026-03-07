@@ -151,7 +151,7 @@ export default function AdminDashboard() {
         {/* Header */}
         <View style={styles.pageHeader}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#333" />
+          <Ionicons name="arrow-back" size={28} color="#B794F4"  />
           </TouchableOpacity>
           <Text style={styles.pageTitle}>Admin Dashboard</Text>
         </View>
@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   pageTitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
     color: '#1A202C',
   },

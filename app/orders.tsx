@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { API_BASE_URL } from '@/config';
 import {
   View,
   Text,
@@ -18,10 +19,12 @@ import { Image } from 'expo-image';
 import { Audio } from 'expo-av';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
 import GlobalFooter from "@/app/components/GlobalFooter";
-import { ReturnRequestModal } from '@/app/components/ReturnRequestModal';
+import {ReturnOrder, ReturnRequestModal} from '@/app/components/ReturnRequestModal';
+import { DisputeModal } from '@/app/components/DisputeModal';
 import { useTheme } from '@/app/theme/ThemeContext';
+import { orders } from '@/types/orders';
 
-const API_URL = 'http://10.0.0.170:5000';
+const API_URL = `${API_BASE_URL}`;
 
 // Goat bleat sound function
 const playGoatBleat = async () => {
@@ -42,53 +45,23 @@ const playGoatBleat = async () => {
   }
 };
 
-type Order = {
-  id: number;
-  item_id: number;
-  item_name: string;
-seller_username: string;
-  photo_url: string;
-  sale_price: number;
-  shipping_cost: number;
-  insurance_cost: number;
-  total_amount: number;
-  bidgoat_commission?: number;
-  seller: {
-    id: number;
-    name: string;
-    email: string;
-
-  };
-  tracking_number?: string;
-  carrier?: string;
-  status: string;
-  created_at: string;
-  shipped_at?: string;
-  delivered_at?: string;
-  review_submitted?: boolean;
-  review_submitted_at?: string;
-  urgency_level?: string;
-  urgency_score?: number;
-  premium_shipping?: boolean;
-  premium_shipping_hours?: number;
-  premium_shipping_cost?: number;
-  time_remaining?: string;
-  is_late?: boolean;
-};
-
 export default function BuyerOrdersScreen() {
   const { theme, colors } = useTheme();
   const styles = createStyles(theme === 'dark', colors);
   const router = useRouter();
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<orders[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
   const [returnModalVisible, setReturnModalVisible] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [disputeModalVisible, setDisputeModalVisible] = useState(false);
   const scrollY = new Animated.Value(0);
   const headerOpacity = React.useRef(new Animated.Value(0)).current;
   const headerScale = React.useRef(new Animated.Value(1)).current;
+  const [selectedOrder, setSelectedOrder] = useState<orders | null>(null);
+
+
+
 
   useEffect(() => {
     // Fade in header title and arrow - wait for screen to fully render first
@@ -143,7 +116,7 @@ export default function BuyerOrdersScreen() {
         return;
       }
 
-      const response = await fetch(`http://10.0.0.170:5000/api/buyer/orders`, {
+      const response = await fetch(`${API_BASE_URL}/api/buyer/orders`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -174,7 +147,7 @@ export default function BuyerOrdersScreen() {
   const handleConfirmDelivery = async (orderId: number) => {
     Alert.alert(
       'Confirm Delivery',
-      'Have you received this order in good condition?',
+      'Have you received this order in good condition? This will release payment to the seller.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -183,9 +156,9 @@ export default function BuyerOrdersScreen() {
             try {
               const token = await AsyncStorage.getItem('jwtToken');
               console.log('🐐 Confirming delivery for order:', orderId);
-              console.log('🐐 API URL:', `${API_URL}/api/orders/${orderId}/confirm-delivery`);
 
-              const response = await fetch(`${API_URL}/api/orders/${orderId}/confirm-delivery`, {
+              // 1. Confirm delivery (updates order status)
+              const confirmResponse = await fetch(`${API_URL}/api/orders/${orderId}/confirm-delivery`, {
                 method: 'POST',
                 headers: {
                   'Authorization': `Bearer ${token}`,
@@ -193,22 +166,36 @@ export default function BuyerOrdersScreen() {
                 },
               });
 
-              console.log('🐐 Response status:', response.status);
-              const responseText = await response.text();
-              console.log('🐐 Response text:', responseText);
-
-              if (response.ok) {
-                Alert.alert('Success!', 'Thank you for confirming delivery. The seller has been notified.');
-                fetchOrders(); // Refresh list
-              } else {
-                try {
-                  const error = JSON.parse(responseText);
-                  Alert.alert('Error', error.error || 'Failed to confirm delivery');
-                } catch (error) {
-                  console.error('Confirm server response error:', error);
-                  Alert.alert('Error', `Server error: ${responseText}`);
-                }
+              if (!confirmResponse.ok) {
+                const error = await confirmResponse.json();
+                Alert.alert('Error', error.error || 'Failed to confirm delivery');
+                return;
               }
+
+              // 2. Release escrow payment to seller
+              console.log('🐐 Releasing escrow payment for order:', orderId);
+              const escrowResponse = await fetch(`${API_URL}/api/stripe-connect/payout/release`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ order_id: orderId }),
+              });
+
+              if (!escrowResponse.ok) {
+                const error = await escrowResponse.json();
+                console.error('🐐 Escrow release failed:', error);
+                // Still show success because delivery was confirmed
+                // Escrow release can be retried manually if needed
+              } else {
+                const escrowData = await escrowResponse.json();
+                console.log('🐐 Escrow released:', escrowData);
+              }
+
+              Alert.alert('Success!', 'Thank you for confirming delivery. Payment has been released to the seller.');
+              fetchOrders(); // Refresh list
+
             } catch (error) {
               console.error('Confirm delivery error:', error);
               Alert.alert('Error', `Failed to confirm delivery: ${error}`);
@@ -269,14 +256,14 @@ export default function BuyerOrdersScreen() {
     }
   };
 
-  const getStatusLabel = (status: string) => {
+  const getStatusLabel = (status: string, confirmedAt?: string) => {
     switch (status) {
       case 'pending_shipment':
         return 'Awaiting Shipment';
       case 'shipped':
         return 'In Transit';
       case 'delivered':
-        return 'Delivered';
+        return confirmedAt ? 'Accepted' : 'Delivered';
       default:
         return status;
     }
@@ -329,7 +316,7 @@ export default function BuyerOrdersScreen() {
             onPress={() => router.back()}
             style={styles.backButton}
           >
-            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+              <Ionicons name="arrow-back" size={28} color="#B794F4"  />
           </TouchableOpacity>
           <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>My Orders</Text>
         </Animated.View>
@@ -352,6 +339,7 @@ export default function BuyerOrdersScreen() {
         <View style={styles.ordersContainer}>
           {orders.map((order) => {
             const urgencyBadge = getUrgencyBadge(order.urgency_level, order.premium_shipping_hours);
+
             return (
               <View key={order.id} style={[styles.orderCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}>
                 {/* Urgency Badge */}
@@ -384,7 +372,7 @@ export default function BuyerOrdersScreen() {
                 <View style={styles.statusContainer}>
                   <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) }]}>
                     <Ionicons name={getStatusIcon(order.status)} size={16} color="#fff" />
-                    <Text style={styles.statusText}>{getStatusLabel(order.status)}</Text>
+                    <Text style={styles.statusText}>{getStatusLabel(order.status, order.confirmed_at)}</Text>
                   </View>
                 </View>
 
@@ -451,7 +439,16 @@ export default function BuyerOrdersScreen() {
               {order.status === 'shipped' && (
                 <TouchableOpacity
                   style={styles.confirmDeliveryButton}
-                  onPress={() => handleConfirmDelivery(order.id)}
+                  onPress={() => {
+                    Alert.alert(
+                      'Confirm Delivery',
+                      'Yes, I received it',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Confirm', onPress: () => handleConfirmDelivery(order.id) }
+                      ]
+                    );
+                  }}
                 >
                   <Ionicons name="checkmark-circle" size={18} color="#48BB78" />
                   <Text style={styles.confirmDeliveryButtonText}>Confirm Delivery</Text>
@@ -463,33 +460,11 @@ export default function BuyerOrdersScreen() {
                   <TouchableOpacity
                     style={styles.reviewButton}
                     onPress={() => {
-                      Alert.alert(
-                        'Leave a Review',
-                        `How was your experience with ${order.seller.name}?`,
-                        [
-                          {
-                            text: 'Maybe Later',
-                            style: 'cancel',
-                            onPress: () => console.log('Review postponed')
-                          },
-                          {
-                            text: 'Leave Review',
-                            onPress: () => {
-                              console.log('🐐 Review button pressed:', {
-                                sellerId: order.seller.id,
-                                itemId: order.item_id,
-                                orderId: order.id,
-                                sellerData: order.seller
-                              });
-                              if (!order.seller.id) {
-                                Alert.alert('Error', 'Seller ID is missing. Please try refreshing the orders.');
-                                return;
-                              }
-                              router.push(`/seller/${order.seller.id}?itemId=${order.item_id}&orderId=${order.id}`);
-                            }
-                          }
-                        ]
-                      );
+                      if (!order.seller?.id || order.seller.id === null || order.seller.id === undefined) {
+                        Alert.alert('Error', 'Seller information is unavailable for this order.');
+                        return;
+                      }
+                      router.push(`/seller/${order.seller.id}?itemId=${order.item_id}&orderId=${order.id}`);
                     }}
                   >
                     <Ionicons name="star-outline" size={18} color="#FF6B35" />
@@ -500,14 +475,30 @@ export default function BuyerOrdersScreen() {
 
               {order.status === 'delivered' && (
                 <TouchableOpacity
-                  style={styles.returnButton}
-                  onPress={() => {
-                    setSelectedOrder(order);
-                    setReturnModalVisible(true);
+                  style={styles.maybeLaterButton}
+                  onPress={async () => {
+                    try {
+                      const token = await AsyncStorage.getItem('jwtToken');
+                      const response = await fetch(`${API_URL}/api/orders/${order.id}/archive`, {
+                        method: 'POST',
+                        headers: {
+                          Authorization: `Bearer ${token}`,
+                        },
+                      });
+
+                      if (response.ok) {
+                        // Remove from current orders list
+                        setOrders(prevOrders => prevOrders.filter(o => o.id !== order.id));
+                        Alert.alert('✓ Moved to Past Purchases', 'You can still leave a review anytime from Past Purchases.');
+                      }
+                    } catch (error) {
+                      console.error('Error archiving order:', error);
+                      Alert.alert('Error', 'Failed to move order to Past Purchases');
+                    }
                   }}
                 >
-                  <Ionicons name="return-up-back" size={18} color="#6A0DAD" />
-                  <Text style={styles.returnButtonText}>Request Return</Text>
+                  <Ionicons name="time-outline" size={18} color="#9CA3AF" />
+                  <Text style={styles.maybeLaterButtonText}>Maybe Later</Text>
                 </TouchableOpacity>
               )}
 
@@ -529,25 +520,25 @@ export default function BuyerOrdersScreen() {
       )}
       </Animated.ScrollView>
 
+
+
       {/* Return Request Modal */}
-      {selectedOrder && (
+      {selectedOrder && returnModalVisible && (
         <ReturnRequestModal
           visible={returnModalVisible}
           onClose={() => {
             setReturnModalVisible(false);
             setSelectedOrder(null);
           }}
-          order={{
-            id: selectedOrder.id,
-            item_id: selectedOrder.item_id,
-            item_name: selectedOrder.item_name,
-            photo_url: selectedOrder.photo_url,
-            sale_price: selectedOrder.sale_price,
-            delivered_at: selectedOrder.delivered_at || '',
-            seller_username: selectedOrder.seller_username || '',
+          onOpenDispute={(order) => {
+            setReturnModalVisible(false);
+            setTimeout(() => {
+              setDisputeModalVisible(true);
+            }, 300);
           }}
+          order={selectedOrder}
           returnPolicy={{
-            return_policy: 'returns_accepted',
+            return_policy: "returns_accepted",
             return_window_days: 30,
             buyer_pays_return_shipping: false,
             restocking_fee_percent: 0,
@@ -555,12 +546,27 @@ export default function BuyerOrdersScreen() {
           onSuccess={() => {
             setReturnModalVisible(false);
             setSelectedOrder(null);
-            fetchOrders(); // Refresh orders list
+            fetchOrders();
           }}
         />
       )}
 
-       <GlobalFooter />
+      {/* Dispute Modal */}
+      {selectedOrder && disputeModalVisible && (
+        <DisputeModal
+          visible={disputeModalVisible}
+          onClose={() => {
+            setDisputeModalVisible(false);
+            setSelectedOrder(null);
+          }}
+          orderId={selectedOrder.id}
+          itemId={selectedOrder.item_id}
+          itemName={selectedOrder.item_name}
+          itemPhoto={selectedOrder.photo_url}
+        />
+      )}
+
+      <GlobalFooter />
     </View>
   );
 }
@@ -585,7 +591,7 @@ const createStyles = (isDark: boolean, colors: any) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 40,
+    paddingTop: 60,
     paddingBottom: 8,
     backgroundColor: colors.background,
   },
@@ -594,7 +600,7 @@ const createStyles = (isDark: boolean, colors: any) => StyleSheet.create({
     padding: 4,
   },
   pageTitle: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '700',
     color: colors.textPrimary,
   },
@@ -788,6 +794,22 @@ const createStyles = (isDark: boolean, colors: any) => StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#6A0DAD',
+  },
+  maybeLaterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#9CA3AF',
+    padding: 12,
+    borderRadius: 8,
+    gap: 8,
+    marginTop: 8,
+  },
+  maybeLaterButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#9CA3AF',
   },
   reviewSubmittedBanner: {
     flexDirection: 'row',

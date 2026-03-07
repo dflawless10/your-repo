@@ -84,10 +84,11 @@ export default function MyAuctionsScreen() {
   const [relistPrice, setRelistPrice] = useState('');
   const [showMustSellModal, setShowMustSellModal] = useState(false);
   const [mustSellDuration, setMustSellDuration] = useState<number>(24);
+  const [selectedRelistDuration, setSelectedRelistDuration] = useState<number | null>(null);
 
   const fetchAuctions = React.useCallback(async () => {
     try {
-      const response = await fetch('http://10.0.0.170:5000/api/myauctionscreen', {
+      const response = await fetch(`${API_BASE_URL}/api/myauctionscreen`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -184,9 +185,9 @@ export default function MyAuctionsScreen() {
 
     if (strategy === 'must_sell') {
       return [
-        { label: '24 Hours (Fast Sale)', hours: 24 },
-        { label: '48 Hours', hours: 48 },
-        { label: '72 Hours (3 Days)', hours: 72 },
+        { label: '1 Day (24 Hours)', hours: 24 },
+        { label: '2 Days (48 Hours)', hours: 48 },
+        { label: '3 Days (72 Hours)', hours: 72 },
       ];
     }
 
@@ -213,6 +214,7 @@ export default function MyAuctionsScreen() {
     setSelectedAuction(item);
     setShowCustomDuration(false);
     setCustomDurationHours('');
+    setSelectedRelistDuration(null); // Reset selected duration
     // Pre-fill the relist price with current price for Buy It Now items
     if (item.buy_it_now) {
       setRelistPrice(item.buy_it_now.toString());
@@ -240,7 +242,7 @@ export default function MyAuctionsScreen() {
         body.price = priceNum;
       }
 
-      const response = await fetch(`http://10.0.0.170:5000/api/items/${itemId}/relist`, {
+      const response = await fetch(`${API_BASE_URL}/api/items/${itemId}/relist`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -321,7 +323,7 @@ export default function MyAuctionsScreen() {
 
   const removeItem = async (itemId: string) => {
     try {
-      const response = await fetch(`http://10.0.0.170:5000/item/${itemId}`, {
+      const response = await fetch(`${API_BASE_URL}/item/${itemId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -382,7 +384,7 @@ export default function MyAuctionsScreen() {
     if (!selectedAuction) return;
 
     try {
-      const response = await fetch(`http://10.0.0.170:5000/api/items/${selectedAuction.id}/convert-must-sell`, {
+      const response = await fetch(`${API_BASE_URL}/api/items/${selectedAuction.id}/convert-must-sell`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -582,47 +584,47 @@ export default function MyAuctionsScreen() {
 
           {hasEnded && !hasBids && !isSold && (
             <View style={styles.actionButtons}>
-              <TouchableOpacity
-                style={styles.relistButton}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  handleRelist(item);
-                }}
-              >
-                <Ionicons name="refresh" size={16} color="#fff" />
-              </TouchableOpacity>
-              {/* Show "Convert to Must Sell" for Buy It Now items, "Convert to Buy It Now" for Auctions */}
-              {item.buy_it_now || item.selling_strategy === 'buy_it_now' ? (
-                <TouchableOpacity
-                  style={styles.mustSellButton}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    handleConvertToMustSell(item);
-                  }}
-                >
-                  <Ionicons name="flame" size={16} color="#fff" />
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity
-                  style={styles.convertButton}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    handleConvertToBuyNow(item);
-                  }}
-                >
-                  <Ionicons name="cart" size={16} color="#fff" />
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={styles.removeButton}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  handleRemove(item);
-                }}
-              >
-                <Ionicons name="trash-outline" size={16} color="#fff" />
-              </TouchableOpacity>
-            </View>
+                  <TouchableOpacity
+                    style={styles.relistButton}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleRelist(item);
+                    }}
+                  >
+                    <Ionicons name="refresh" size={16} color="#fff" />
+                  </TouchableOpacity>
+                  {/* Show "Convert to Must Sell" for Buy It Now items, "Convert to Buy It Now" for Auctions */}
+                  {item.buy_it_now || item.selling_strategy === 'buy_it_now' ? (
+                    <TouchableOpacity
+                      style={styles.mustSellButton}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleConvertToMustSell(item);
+                      }}
+                    >
+                      <Ionicons name="flame" size={16} color="#fff" />
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.convertButton}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleConvertToBuyNow(item);
+                      }}
+                    >
+                      <Ionicons name="cart" size={16} color="#fff" />
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    style={styles.removeButton}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleRemove(item);
+                    }}
+                  >
+                    <Ionicons name="trash-outline" size={16} color="#fff" />
+                  </TouchableOpacity>
+                </View>
           )}
         </View>
       </TouchableOpacity>
@@ -648,14 +650,15 @@ export default function MyAuctionsScreen() {
 
       {/* Title with Back Arrow */}
       <Animated.View style={[styles.headerTitleContainer, { opacity: headerOpacity, transform: [{ scale: headerScale }], backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E5E5E5' }]}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backButton}
-        >
-          <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backButton}
+          >
+            <Ionicons name="arrow-back" size={28} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>My Auctions</Text>
-      </Animated.View>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>My Listings</Text>
+        </Animated.View>
+
 
 
       <Animated.FlatList
@@ -712,7 +715,10 @@ export default function MyAuctionsScreen() {
               {selectedAuction && (selectedAuction.selling_strategy === 'buy_it_now' || selectedAuction.buy_it_now) && (
                 <View style={styles.priceInputContainer}>
                   <Text style={[styles.priceInputLabel, { color: colors.textPrimary }]}>Buy It Now Price</Text>
-                  <View style={styles.priceInputWrapper}>
+                  <View style={[styles.priceInputWrapper, {
+                    backgroundColor: theme === 'dark' ? '#2C2C2E' : '#f7fafc',
+                    borderColor: theme === 'dark' ? '#3C3C3E' : '#e2e8f0'
+                  }]}>
                     <Text style={[styles.dollarSign, { color: colors.textPrimary }]}>$</Text>
                     <TextInput
                       style={[styles.priceInput, {
@@ -733,21 +739,37 @@ export default function MyAuctionsScreen() {
                 </View>
               )}
 
-              {selectedAuction && getDurationOptions(selectedAuction).map((option) => (
-              <TouchableOpacity
-                key={option.hours}
-                style={[styles.modalButton, { backgroundColor: theme === 'dark' ? '#B794F4' : '#FF6B35' }]}
-                onPress={() => {
-                  if (selectedAuction) {
-                    setShowCustomDuration(false);
-                    const priceToUse = (selectedAuction.buy_it_now || selectedAuction.selling_strategy === 'buy_it_now') ? relistPrice : undefined;
-                    relistItem(selectedAuction.id, option.hours, option.label, priceToUse);
-                  }
-                }}
-              >
-                <Text style={styles.modalButtonText}>{option.label}</Text>
-              </TouchableOpacity>
-            ))}
+              {selectedAuction && getDurationOptions(selectedAuction).map((option) => {
+                const isMustSell = selectedAuction.selling_strategy === 'must_sell';
+                const isSelected = isMustSell && selectedRelistDuration === option.hours;
+
+                return (
+                  <TouchableOpacity
+                    key={option.hours}
+                    style={[
+                      styles.modalButton,
+                      {
+                        backgroundColor: isMustSell
+                          ? (isSelected ? (theme === 'dark' ? '#8B5CF6' : '#FF6B35') : (theme === 'dark' ? '#B794F4' : '#FFA500'))
+                          : (theme === 'dark' ? '#B794F4' : '#FF6B35')
+                      }
+                    ]}
+                    onPress={() => {
+                      if (selectedAuction) {
+                        if (isMustSell) {
+                          setSelectedRelistDuration(option.hours);
+                        } else {
+                          setShowCustomDuration(false);
+                          const priceToUse = (selectedAuction.buy_it_now || selectedAuction.selling_strategy === 'buy_it_now') ? relistPrice : undefined;
+                          relistItem(selectedAuction.id, option.hours, option.label, priceToUse);
+                        }
+                      }
+                    }}
+                  >
+                    <Text style={styles.modalButtonText}>{option.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
 
             {selectedAuction && selectedAuction.selling_strategy === 'auction' && !selectedAuction.buy_it_now && (
               <>
@@ -791,12 +813,30 @@ export default function MyAuctionsScreen() {
               </>
             )}
 
+            {/* Confirm Relist button for Must Sell items */}
+            {selectedAuction && selectedAuction.selling_strategy === 'must_sell' && selectedRelistDuration && (
+              <TouchableOpacity
+                style={[styles.modalButton, { backgroundColor: theme === 'dark' ? '#FF6B35' : '#FF4500' }]}
+                onPress={() => {
+                  if (selectedAuction && selectedRelistDuration) {
+                    const option = getDurationOptions(selectedAuction).find(opt => opt.hours === selectedRelistDuration);
+                    if (option) {
+                      relistItem(selectedAuction.id, option.hours, option.label);
+                    }
+                  }
+                }}
+              >
+                <Text style={styles.modalButtonText}>🔥 Confirm Relist</Text>
+              </TouchableOpacity>
+            )}
+
               <TouchableOpacity
                 style={[styles.modalButton, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#f0f0f0' }]}
                 onPress={() => {
                   setShowRelistModal(false);
                   setShowCustomDuration(false);
                   setCustomDurationHours('');
+                  setSelectedRelistDuration(null);
                 }}
               >
                 <Text style={[styles.modalCancelButtonText, { color: theme === 'dark' ? '#999' : '#666' }]}>Cancel</Text>
@@ -922,7 +962,7 @@ const styles = StyleSheet.create({
   listContent: {
     paddingTop: HEADER_MAX_HEIGHT + 110,
     paddingHorizontal: 16,
-    paddingBottom: 100,
+    paddingBottom: 120,
   },
   columnWrapper: {
     justifyContent: 'space-between',
@@ -1199,15 +1239,12 @@ const styles = StyleSheet.create({
   priceInputLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1a202c',
     marginBottom: 8,
   },
   priceInputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f7fafc',
     borderWidth: 2,
-    borderColor: '#e2e8f0',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
@@ -1215,14 +1252,12 @@ const styles = StyleSheet.create({
   dollarSign: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#2d3748',
     marginRight: 4,
   },
   priceInput: {
     flex: 1,
     fontSize: 18,
     fontWeight: '600',
-    color: '#2d3748',
   },
   priceHint: {
     fontSize: 12,

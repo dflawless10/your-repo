@@ -31,7 +31,7 @@ export function useCartBackend() {
     setLoading(true);
     try {
       const token = await AsyncStorage.getItem('jwtToken');
-      const res = await fetch('http://10.0.0.170:5000/api/cart', {
+      const res = await fetch(`${API_BASE_URL}/api/cart`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -46,7 +46,7 @@ export function useCartBackend() {
   const addToCart = async (productId: string, quantity: number) => {
     try {
       const token = await AsyncStorage.getItem('jwtToken');
-      const response = await fetch('http://10.0.0.170:5000/api/cart', {
+      const response = await fetch(`${API_BASE_URL}/api/cart`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -72,7 +72,7 @@ export function useCartBackend() {
   const removeFromCart = async (productId: string) => {
     try {
       const token = await AsyncStorage.getItem('jwtToken');
-      await fetch('http://10.0.0.170:5000/remove-from-cart', {
+      await fetch(`${API_BASE_URL}/remove-from-cart`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,

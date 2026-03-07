@@ -15,6 +15,8 @@ import { cleanupExpiredItems, CleanupResult } from '@/api/admin';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
 import GlobalFooter from "@/app/components/GlobalFooter";
 import { useTheme } from '@/app/theme/ThemeContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE_URL } from '@/config';
 
 export default function CleanupExpiredScreen() {
   const router = useRouter();
@@ -25,6 +27,8 @@ export default function CleanupExpiredScreen() {
   const headerScale = useRef(new Animated.Value(1)).current;
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CleanupResult | null>(null);
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
 
   useEffect(() => {
     // Fade in header title and arrow
@@ -95,6 +99,56 @@ export default function CleanupExpiredScreen() {
     );
   };
 
+  const handleResyncElasticsearch = async () => {
+    Alert.alert(
+      'Resync Elasticsearch',
+      'This will rebuild the search index from the database. Use this to fix "undefined" items in search results. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Resync',
+          onPress: async () => {
+            try {
+              setSyncLoading(true);
+              setSyncResult(null);
+
+              const token = await AsyncStorage.getItem('jwtToken');
+              const response = await fetch(`${API_BASE_URL}/sync-all-items-to-es`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                },
+              });
+
+              if (response.ok) {
+                const data = await response.json();
+                setSyncResult(`Successfully synced ${data.synced} items to search index`);
+                Alert.alert(
+                  '✅ Sync Complete',
+                  `Rebuilt search index with ${data.synced} items`
+                );
+              } else {
+                const errorData = await response.text();
+                console.error('Sync response error:', response.status, errorData);
+                throw new Error(`Sync failed: ${response.status}`);
+              }
+            } catch (error) {
+              console.error('Sync error:', error);
+              const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+              Alert.alert(
+                'Sync Failed',
+                `Could not resync search index: ${errorMessage}`
+              );
+            } finally {
+              setSyncLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
@@ -113,7 +167,7 @@ export default function CleanupExpiredScreen() {
           {/* Page Header */}
           <Animated.View style={[styles.pageHeader, { backgroundColor: colors.surface, opacity: headerOpacity, transform: [{ scale: headerScale }] }]}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-              <Ionicons name="arrow-back" size={24} color={isDark ? '#B794F4' : '#6A0DAD'} />
+              <Ionicons name="arrow-back" size={28} color={isDark ? '#B794F4' : '#6A0DAD'} />
             </TouchableOpacity>
             <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Cleanup Expired</Text>
           </Animated.View>
@@ -152,7 +206,7 @@ export default function CleanupExpiredScreen() {
           </View>
         </View>
 
-        {/* Action Button */}
+        {/* Action Buttons */}
         <TouchableOpacity
           style={[styles.cleanupButton, loading && styles.cleanupButtonDisabled]}
           onPress={handleCleanup}
@@ -167,6 +221,30 @@ export default function CleanupExpiredScreen() {
             </>
           )}
         </TouchableOpacity>
+
+        {/* Resync Elasticsearch Button */}
+        <TouchableOpacity
+          style={[styles.syncButton, syncLoading && styles.syncButtonDisabled]}
+          onPress={handleResyncElasticsearch}
+          disabled={syncLoading}
+        >
+          {syncLoading ? (
+            <ActivityIndicator color="#FFF" />
+          ) : (
+            <>
+              <Ionicons name="sync" size={20} color="#FFF" />
+              <Text style={styles.syncButtonText}>Resync Search Index</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
+        {/* Sync Info */}
+        <View style={[styles.infoBox, { backgroundColor: isDark ? '#1a2332' : '#E3F2FD' }]}>
+          <Ionicons name="information-circle" size={20} color="#2196F3" />
+          <Text style={[styles.infoBoxText, { color: isDark ? '#90CAF9' : '#1565C0' }]}>
+            Use "Resync Search Index" to fix items showing as "undefined" in search results
+          </Text>
+        </View>
 
         {/* Results Display */}
         {result && (
@@ -201,6 +279,24 @@ export default function CleanupExpiredScreen() {
 
             <Text style={[styles.resultTimestamp, { color: colors.textSecondary }]}>
               Last cleanup: {new Date().toLocaleString()}
+            </Text>
+          </View>
+        )}
+
+        {/* Sync Results Display */}
+        {syncResult && (
+          <View style={[styles.resultCard, { backgroundColor: colors.surface, borderColor: isDark ? '#333' : '#E2E8F0' }]}>
+            <View style={[styles.resultHeader, { borderBottomColor: isDark ? '#333' : '#E2E8F0' }]}>
+              <Ionicons
+                name="checkmark-circle"
+                size={28}
+                color="#2196F3"
+              />
+              <Text style={[styles.resultTitle, { color: colors.textPrimary }]}>Sync Results</Text>
+            </View>
+            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{syncResult}</Text>
+            <Text style={[styles.resultTimestamp, { color: colors.textSecondary }]}>
+              Last sync: {new Date().toLocaleString()}
             </Text>
           </View>
         )}
@@ -349,6 +445,46 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,
+  },
+  syncButton: {
+    flexDirection: 'row',
+    backgroundColor: '#2196F3',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    shadowColor: '#2196F3',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  syncButtonDisabled: {
+    backgroundColor: '#BDBDBD',
+    shadowOpacity: 0,
+  },
+  syncButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
+    marginLeft: 8,
+  },
+  infoBox: {
+    flexDirection: 'row',
+    backgroundColor: '#E3F2FD',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+    alignItems: 'flex-start',
+  },
+  infoBoxText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1565C0',
+    marginLeft: 12,
+    lineHeight: 20,
   },
   resultCard: {
     backgroundColor: '#FFF',

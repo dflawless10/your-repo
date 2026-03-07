@@ -301,7 +301,7 @@ export default function RelistedDiscountsScreen({ items }: Props) {
             onPress={() => router.back()}
             style={styles.backButton}
           >
-            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+             <Ionicons name="arrow-back" size={24} color="#B794F4"  />
           </TouchableOpacity>
           <View style={styles.titleTextContainer}>
             <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>🔄 Relisted & Reduced</Text>
@@ -746,11 +746,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   heroTitle: {
-    fontSize: 24,
+    fontSize: 16,
     fontWeight: "bold",
   },
   headerSubtitle: {
-    fontSize: 14,
+    fontSize: 9,
     marginTop: 4,
   },
   pageHeader: {

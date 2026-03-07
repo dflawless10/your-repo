@@ -227,31 +227,29 @@ export default function ReviewItemScreen() {
       <Stack.Screen options={{ headerShown: false, title: '' }} />
       <EnhancedHeader scrollY={scrollY} />
 
-      {/* Page Header with Back Arrow */}
-      <Animated.View style={[styles.pageHeader, {
-        opacity: headerOpacity,
-        transform: [{ scale: headerScale }],
-        backgroundColor: colors.background,
-        borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0'
-      }]}>
-        <TouchableOpacity
-          onPress={() => router.replace('/(tabs)/MyAuctionScreen')}
-          style={styles.backButton}
-        >
-          <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
-        </TouchableOpacity>
-        <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Review Your Item</Text>
-      </Animated.View>
-
       <ScrollView
         style={[styles.container, { backgroundColor: colors.background }]}
-        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 110, backgroundColor: colors.background }}
+        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT, backgroundColor: colors.background }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
         )}
         scrollEventThrottle={16}
       >
+        {/* Page Header with Back Arrow */}
+        <Animated.View style={[styles.pageHeader, {
+          opacity: headerOpacity,
+          transform: [{ scale: headerScale }],
+          backgroundColor: colors.background
+        }]}>
+          <TouchableOpacity
+            onPress={() => router.replace('/(tabs)/MyAuctionScreen')}
+            style={styles.backButton}
+          >
+            <Ionicons name="arrow-back" size={28} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Review Your Item</Text>
+        </Animated.View>
 
       {/* Review Status Badge */}
       <View style={[styles.reviewBanner, {
@@ -320,6 +318,35 @@ export default function ReviewItemScreen() {
               {item.auction_ends_at ? new Date(item.auction_ends_at).toLocaleDateString() : 'N/A'}
             </Text>
           </View>
+
+          {item.weight_lbs && (
+            <View style={styles.metaRow}>
+              <Text style={[styles.metaLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Shipping Weight:</Text>
+              <Text style={[styles.metaValue, { color: colors.textPrimary }]}>{item.weight_lbs} lbs</Text>
+            </View>
+          )}
+
+          {item.gender && item.gender !== 'unisex' && (
+            <View style={styles.metaRow}>
+              <Text style={[styles.metaLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Gender:</Text>
+              <Text style={[styles.metaValue, { color: colors.textPrimary }]}>
+                {item.gender === 'men' ? "Men's" : item.gender === 'women' ? "Women's" : 'Unisex'}
+              </Text>
+            </View>
+          )}
+
+          {item.return_policy_override && item.return_policy_override !== 'use_default' && (
+            <View style={styles.metaRow}>
+              <Text style={[styles.metaLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Return Policy:</Text>
+              <Text style={[styles.metaValue, { color: colors.textPrimary }]}>
+                {item.return_policy_override === 'no_returns' ? 'No Returns (Final Sale)' :
+                 item.return_policy_override === '30_days' ? '30-day Returns' :
+                 item.return_policy_override === '14_days' ? '14-day Returns' :
+                 item.return_policy_override === '7_days' ? '7-day Returns' :
+                 'Default Policy'}
+              </Text>
+            </View>
+          )}
         </View>
       </View>
 
@@ -380,18 +407,11 @@ const styles = StyleSheet.create({
     color: '#999',
   },
   pageHeader: {
-    position: 'absolute',
-    top: HEADER_MAX_HEIGHT + 34,
-    left: 0,
-    right: 0,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    zIndex: 100,
+    paddingTop: 60,
+    paddingBottom: 8,
   },
   backButton: {
     marginRight: 12,
@@ -400,7 +420,6 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1A202C',
   },
   reviewBanner: {
     flexDirection: 'row',

@@ -33,7 +33,7 @@ export const useAuth = (): AuthContextProps => {
 function getTokenExpiry(token: string): number | null {
   try {
     const { exp } = jwtDecode<{ exp: number }>(token);
-    return exp * 1000; // Convert to milliseconds
+    return exp * 1000;
   } catch {
     return null;
   }
@@ -43,7 +43,27 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
   const [token, setToken] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const isAuthenticated = !!token;
-  const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ✅ correct for React Native (number) + web/Node (object)
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const logout = async () => {
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    }
+    await AsyncStorage.multiRemove([
+      'jwtToken',
+      'username',
+      'authToken',
+      'userEmail',
+      'isSeller',
+      'userId',
+      'pushToken',
+    ]);
+    setToken(null);
+    setUsername(null);
+  };
 
   // Auto-refresh token before it expires
   const scheduleTokenRefresh = (currentToken: string) => {
@@ -58,9 +78,9 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
 
     console.log(`🐐 Token refresh scheduled in ${Math.round(refreshIn / 1000)}s`);
 
-    // Clear any existing timer
     if (refreshTimerRef.current) {
       clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = null;
     }
 
     refreshTimerRef.current = setTimeout(async () => {
@@ -80,12 +100,13 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
             await AsyncStorage.setItem('jwtToken', data.token);
             setToken(data.token);
             console.log('🐐 Token refreshed successfully');
-            scheduleTokenRefresh(data.token); // Schedule next refresh
+            scheduleTokenRefresh(data.token);
+            return;
           }
-        } else {
-          console.warn('🐐 Token refresh failed, logging out');
-          await logout();
         }
+
+        console.warn('🐐 Token refresh failed, logging out');
+        await logout();
       } catch (error) {
         console.error('🐐 Token refresh error:', error);
         await logout();
@@ -99,17 +120,16 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
       AsyncStorage.getItem('username'),
     ]);
 
-    if (storedToken) {
-      const expiry = getTokenExpiry(storedToken);
-      if (expiry && Date.now() < expiry) {
-        setToken(storedToken);
-        setUsername(storedUsername);
-        scheduleTokenRefresh(storedToken);
-      } else {
-        // Token expired, clear it
-        console.warn('🐐 Stored token expired, clearing auth');
-        await logout();
-      }
+    if (!storedToken) return;
+
+    const expiry = getTokenExpiry(storedToken);
+    if (expiry && Date.now() < expiry) {
+      setToken(storedToken);
+      setUsername(storedUsername);
+      scheduleTokenRefresh(storedToken);
+    } else {
+      console.warn('🐐 Stored token expired, clearing auth');
+      await logout();
     }
   };
 
@@ -123,33 +143,28 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
     scheduleTokenRefresh(newToken);
   };
 
-  const logout = async () => {
-    if (refreshTimerRef.current) {
-      clearTimeout(refreshTimerRef.current);
-    }
-    await AsyncStorage.multiRemove(['jwtToken', 'username', 'authToken', 'userEmail', 'isSeller', 'userId', 'pushToken']);
-    setToken(null);
-    setUsername(null);
-  };
-
   useEffect(() => {
     void refreshAuth();
 
     return () => {
       if (refreshTimerRef.current) {
         clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
       }
     };
   }, []);
 
-  const value = useMemo(() => ({
-    isAuthenticated,
-    token,
-    username,
-    login,
-    logout,
-    refreshAuth,
-  }), [token, username]);
+  const value = useMemo(
+    () => ({
+      isAuthenticated,
+      token,
+      username,
+      login,
+      logout,
+      refreshAuth,
+    }),
+    [token, username]
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { API_BASE_URL } from '@/config';
 import {
   View,
   Text,
@@ -52,7 +53,7 @@ export default function JewelryBoxScreen() {
       return;
     }
     try {
-      const response = await fetch('http://10.0.0.170:5000/api/favorites', {
+      const response = await fetch(`${API_BASE_URL}/api/favorites`, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -198,7 +199,7 @@ export default function JewelryBoxScreen() {
 
       if (!isFavorited) {
         // Add to favorites
-        await fetch('http://10.0.0.170:5000/api/favorites', {
+        await fetch(`${API_BASE_URL}/api/favorites`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -212,7 +213,7 @@ export default function JewelryBoxScreen() {
         await AsyncStorage.setItem('favoritedItems', JSON.stringify(updated));
       } else {
         // Remove from favorites
-        await fetch(`http://10.0.0.170:5000/api/favorites/${itemId}`, {
+        await fetch(`${API_BASE_URL}/api/favorites/${itemId}`, {
           method: 'DELETE',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -331,7 +332,7 @@ export default function JewelryBoxScreen() {
         end={{ x: 1, y: 1 }}
         style={styles.emptyIconContainer}
       >
-        <Ionicons name="heart-outline" size={60} color="#FFF" />
+        <Ionicons name="heart-outline" size={60} color="#6A0DAD" />
       </LinearGradient>
       <Text style={styles.emptyTitle}>Your Collection Awaits</Text>
       <Text style={styles.emptySubtext}>
@@ -351,6 +352,10 @@ export default function JewelryBoxScreen() {
     const category = getCategoryBadge(item);
     const price = item.highest_bid || item.price || 0;
 
+    // Check if auction ended or item sold
+    const auctionEnded = item.auction_ends_at && new Date(item.auction_ends_at).getTime() < Date.now();
+    const isHeartBroken = auctionEnded || item.status === 'sold';
+
     return (
       <TouchableOpacity
         key={item.id}
@@ -369,12 +374,7 @@ export default function JewelryBoxScreen() {
               style={styles.imageGradient}
             />
 
-            {/* Category Badge */}
-            <View style={[styles.categoryBadge, { backgroundColor: category.color }]}>
-              <Text style={styles.categoryText}>{category.icon} {category.label}</Text>
-            </View>
-
-            {/* Ending Soon Badge */}
+            {/* Ending Soon Badge - Bottom Left */}
             {isEndingSoon(item.auction_ends_at) && (
               <View style={styles.urgencyBadge}>
                 <Ionicons name="flame" size={12} color="#FFF" />
@@ -382,28 +382,32 @@ export default function JewelryBoxScreen() {
               </View>
             )}
 
-            {/* Action Buttons */}
-            <View style={styles.actionButtons}>
+            {/* Heart Button - Top Right - Only broken hearts can be deleted */}
+            {isHeartBroken && (
               <TouchableOpacity
-                style={styles.actionButton}
+                style={styles.deleteButton}
                 onPress={(e) => {
                   e.stopPropagation();
                   handleToggleFavorite(item.id);
                 }}
+                activeOpacity={0.7}
               >
-                <Ionicons name="heart" size={20} color="#FF1744" />
+                <Ionicons
+                  name="heart-dislike"
+                  size={22}
+                  color="#6A0DAD"
+                />
               </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  handleShare(item);
-                }}
-              >
-                <Ionicons name="share-social" size={18} color="#6A0DAD" />
-              </TouchableOpacity>
-            </View>
+            )}
+            {!isHeartBroken && (
+              <View style={styles.deleteButton}>
+                <Ionicons
+                  name="heart"
+                  size={22}
+                  color="#6A0DAD"
+                />
+              </View>
+            )}
           </View>
 
           {/* Content */}
@@ -429,6 +433,38 @@ export default function JewelryBoxScreen() {
                 <Text style={[styles.countdownText, { color: getCountdownColor(item.auction_ends_at) }]}>
                   {formatTimeWithSeconds(item.auction_ends_at, Date.now())}
                 </Text>
+              </View>
+            )}
+
+            {/* Seller Info */}
+            {item.seller && (
+              <View style={styles.sellerRatingRow}>
+                {item.seller?.avatar_url && (
+                  <Image source={{ uri: item.seller.avatar_url }} style={styles.sellerAvatar} />
+                )}
+                <TouchableOpacity
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    router.push(`/seller/${item.seller?.id}` as const);
+                  }}
+                  activeOpacity={0.7}
+                  style={styles.sellerNameContainer}
+                >
+                  <Text style={styles.sellerName} numberOfLines={1}>
+                    {item.seller?.username}
+                  </Text>
+                </TouchableOpacity>
+                {(item.seller?.avg_rating || 0) > 0 || (item.seller?.total_reviews || 0) > 0 ? (
+                  <View style={styles.ratingRow}>
+                    <Ionicons name="star" size={12} color="#FFD700" />
+                    <Text style={styles.ratingText}>
+                      {(item.seller?.avg_rating || 0).toFixed(1)}{' '}
+                    </Text>
+                    <Text style={styles.reviewCount}>
+                      ({item.seller?.total_reviews || 0})
+                    </Text>
+                  </View>
+                ) : null}
               </View>
             )}
           </View>
@@ -726,7 +762,7 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     width: '100%',
-    height: CARD_WIDTH * 1.25,
+    height: CARD_WIDTH * 1.1,
     position: 'relative',
     backgroundColor: '#F0F0F0',
   },
@@ -758,8 +794,8 @@ const styles = StyleSheet.create({
   },
   urgencyBadge: {
     position: 'absolute',
-    top: 10,
-    right: 10,
+    bottom: 8,
+    left: 8,
     backgroundColor: '#e53e3e',
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -774,34 +810,38 @@ const styles = StyleSheet.create({
     color: '#FFF',
     letterSpacing: 0.5,
   },
-  actionButtons: {
+  heartIconOverlay: {
     position: 'absolute',
-    bottom: 10,
-    right: 10,
-    flexDirection: 'row',
-    gap: 8,
+    top: 8,
+    right: 8,
+    shadowColor: '#BB86FC',
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 8,
   },
-  actionButton: {
+  deleteButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    padding: 8,
+  },
+  shareButton: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
+    borderRadius: 20,
+    padding: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
   cardContent: {
     padding: 12,
+    paddingBottom: 14,
   },
   itemName: {
     fontSize: 15,
@@ -952,5 +992,42 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#4a5568',
     lineHeight: 20,
+  },
+  sellerRatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    width: '100%',
+  },
+  sellerAvatar: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    marginRight: 6,
+  },
+  sellerNameContainer: {
+    flexShrink: 1,
+    marginRight: 6,
+  },
+  sellerName: {
+    fontSize: 10,
+    color: '#007AFF',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 0,
+    marginLeft: 2,
+  },
+  ratingText: {
+    fontSize: 10,
+    color: '#666',
+    fontWeight: '600',
+  },
+  reviewCount: {
+    fontSize: 10,
+    color: '#999',
   },
 });

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Image,
@@ -30,9 +30,9 @@ import { useWishlist } from '@/app/wishlistContext';
 
 
 const { width } = Dimensions.get('window');
-const COLUMN_GAP = 12;
+const COLUMN_GAP = 8;
 const NUM_COLUMNS = 2;
-const ITEM_WIDTH = (width - 32 - COLUMN_GAP) / NUM_COLUMNS;
+const ITEM_WIDTH = (width - 16 - COLUMN_GAP) / NUM_COLUMNS;
 
 
 
@@ -66,6 +66,38 @@ export default function SparkleItemCard({
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scaleAnim.value }],
   }));
+
+  // Live countdown state for Just Listed cards
+  const [liveCountdown, setLiveCountdown] = useState<string>(
+    item.auction_ends_at ? formatTimeWithSeconds(item.auction_ends_at, Date.now()) : ''
+  );
+
+  // Check if this is a Just Listed item (listed within last 24 hours)
+  const isJustListed = React.useMemo(() => {
+    if (!item.registration_time && !item.listed_at) return false;
+    const listedTime = new Date(item.registration_time || item.listed_at).getTime();
+    const now = Date.now();
+    const hoursSinceListed = (now - listedTime) / (1000 * 60 * 60);
+    return hoursSinceListed <= 24;
+  }, [item.registration_time, item.listed_at]);
+
+  // Live countdown effect - ONLY for Just Listed items
+  useEffect(() => {
+    if (!isJustListed || !item.auction_ends_at || hasEnded) return;
+
+    const interval = setInterval(() => {
+      // @ts-ignore
+      const newCountdown = formatTimeWithSeconds(item.auction_ends_at, Date.now());
+      setLiveCountdown(newCountdown);
+
+      // Stop if auction ended
+      if (newCountdown === 'Ended') {
+        clearInterval(interval);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isJustListed, item.auction_ends_at, hasEnded]);
 
   const animateHeart = () => {
     scaleAnim.value = withSequence(withSpring(1.3), withSpring(1));
@@ -101,7 +133,7 @@ export default function SparkleItemCard({
     username?: string;
     avg_rating?: number;
     total_reviews?: number;
-    avatar: string;
+    avatar_url: string;
   };
 };
 
@@ -114,13 +146,7 @@ const handleSellerTap = (item: SellerInfo) => {
   });
 };
 
-const isJustListed = (() => {
-  if (!item.listedAt) return false;
-  const listed = new Date(item.listedAt).getTime();
-  const now = Date.now();
-  const diffHours = (now - listed) / (1000 * 60 * 60);
-  return diffHours <= 24; // show badge for 24 hours
-})();
+// isJustListed moved to top with useMemo for live countdown logic
 
 
 const isMustSell =
@@ -188,11 +214,11 @@ console.log("🐐 MUST SELL DEBUG:", {
             style={styles.heartIconOverlay}
             activeOpacity={0.7}
           >
-            {isFavorited ? (
-              <TappedHeart width={24} height={24} />
-            ) : (
-              <UnTappedHeart width={24} height={24} />
-            )}
+            <Ionicons
+              name={isFavorited ? "heart" : "heart-outline"}
+              size={24}
+              color="#6A0DAD"
+            />
           </TouchableOpacity>
         )}
 
@@ -218,35 +244,15 @@ console.log("🐐 MUST SELL DEBUG:", {
           </View>
         )}
 
-        {/* Must Sell Badge - bottom Left */}
-        {(Number(item.is_must_sell) === 1 || item.selling_strategy === 'must_sell') && (
-  <View style={styles.mustSellBadge}>
-    <Text style={styles.mustSellText}>⚡ MUST SELL</Text>
-  </View>
-)}
-
-{isJustListed && (
-  <View style={styles.justListedBadge}>
-    <MaterialCommunityIcons name="new-box" size={12} color="#fff" />
-    <Text style={styles.justListedText}>JUST LISTED</Text>
-  </View>
-)}
-
-
-
-        {/* Wishlist Coin - Bottom Right */}
-        {!isWishlistScreen && (
-          <TouchableOpacity
-            onPress={(e) => {
-              e.stopPropagation();
-              handleAddToWishlist();
-            }}
-            style={styles.wishlistCoinOverlay}
-            activeOpacity={0.7}
-          >
-            <GoatGenieBadge onWish={handleAddToWishlist} />
-          </TouchableOpacity>
+        {/* Just Listed Badge - Bottom Left */}
+        {isJustListed && (
+          <View style={styles.justListedBadge}>
+            <MaterialCommunityIcons name="new-box" size={12} color="#fff" />
+            <Text style={styles.justListedText}>JUST LISTED</Text>
+          </View>
         )}
+
+
 
         {/* Share Button - Bottom Right (Wishlist Screen) */}
         {isWishlistScreen && (
@@ -280,6 +286,27 @@ console.log("🐐 MUST SELL DEBUG:", {
         )}
       </View>
 
+      {/* Countdown Timer - Centered Below Image (LIVE for Just Listed!) */}
+      {item.auction_ends_at && (
+        <View style={[
+          styles.countdownContainer,
+          isJustListed && styles.liveCountdownContainer
+        ]}>
+          <Text
+            style={[
+              styles.countdownTime,
+              item.auction_ends_at ? getCountdownColor(item.auction_ends_at) : {},
+            ]}
+            numberOfLines={1}
+          >
+            {isJustListed ? liveCountdown : formatTimeWithSeconds(item.auction_ends_at, Date.now())}
+          </Text>
+          {isJustListed && (
+            <View style={styles.liveDot} />
+          )}
+        </View>
+      )}
+
       {/* Info Container */}
       <View style={styles.infoContainer}>
         <Text style={styles.cardTitle} numberOfLines={2}>
@@ -297,67 +324,48 @@ console.log("🐐 MUST SELL DEBUG:", {
           )}
         </View>
 
-        {isJustListed && (
-  <View style={styles.justListedBadge}>
-    <MaterialCommunityIcons name="new-box" size={12} color="#fff" />
-    <Text style={styles.justListedText}>JUST LISTED</Text>
-  </View>
-)}
+        {/* Watchers and Strategy Badge Row */}
+        <View style={styles.watchersStrategyRow}>
+          <Text style={styles.watchersText}>👀 {Math.floor(Math.random() * 20) + 5}</Text>
 
+          {(Number(item.is_must_sell) === 1 || item.selling_strategy === 'must_sell') && (
+            <View style={styles.strategyBadge}>
+              <Text style={styles.strategyBadgeText}>⚡ MUST SELL</Text>
+            </View>
+          )}
+        </View>
 
-
-
-        {/* Selling Strategy Badge */}
-       {(Number(item.is_must_sell) === 1 || item.selling_strategy === 'must_sell') && (
-  <View style={styles.strategyBadge}>
-    <Text style={styles.strategyBadgeText}>⚡ MUST SELL</Text>
-  </View>
-)}
-
-        <View style={styles.statsContainer}>
-
-                     <Text style={styles.statsText}>👀 {Math.floor(Math.random() * 20) + 5} watching</Text>
-                  <MaterialCommunityIcons name="clock-outline" size={14} color="#666" />
-                  <Text
-                    style={[
-                      styles.statsText,
-                      item.auction_ends_at ? getCountdownColor(item.auction_ends_at) : {},
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {item.auction_ends_at
-                      ? formatTimeWithSeconds(item.auction_ends_at, Date.now())
-                      : 'Not auctioned'}
-                  </Text>
-                </View>
-
+        {/* Seller Info */}
         {item.seller && (
-  <View style={styles.sellerRatingRow}>
-    {item.seller.avatar && (
-      <Image source={{ uri: item.seller.avatar }} style={styles.sellerAvatar} />
-    )}
-    <TouchableOpacity
-      onPress={(e) => {
-        e.stopPropagation();
-        handleSellerTap(item);
-      }}
-      style={styles.sellerNameContainer}
-    >
-      <Text style={styles.sellerName} numberOfLines={1}>
-         {item.seller.username}
-      </Text>
-    </TouchableOpacity>
+          <View style={styles.sellerRatingRow}>
+            {item.seller.avatar_url && (
+              <Image source={{ uri: item.seller.avatar_url }} style={styles.sellerAvatar} />
+            )}
+            <TouchableOpacity
+              onPress={(e) => {
+                e.stopPropagation();
+                handleSellerTap(item);
+              }}
+              style={styles.sellerNameContainer}
+            >
+              <Text style={styles.sellerName} numberOfLines={1}>
+                {item.seller.username}
+              </Text>
+            </TouchableOpacity>
 
-    {typeof item.seller.avg_rating === 'number' && (
-      <View style={styles.ratingRow}>
-        <Ionicons name="star" size={14} color="#FFD700" />
-        <Text style={styles.ratingText} numberOfLines={1}>
-          {item.seller.avg_rating.toFixed(1)} ({item.seller.total_reviews || 0})
-        </Text>
-      </View>
-    )}
-  </View>
-)}
+            {typeof item.seller.avg_rating === 'number' && (
+              <View style={styles.ratingRow}>
+                <Ionicons name="star" size={14} color="#FFD700" />
+                <Text style={styles.ratingText} numberOfLines={1}>
+                  {item.seller.avg_rating.toFixed(1)}{' '}
+                </Text>
+                <Text style={styles.reviewCount} numberOfLines={1}>
+                  ({item.seller.total_reviews || 0})
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
       </View>
 
     </TouchableOpacity>
@@ -383,6 +391,12 @@ const styles = StyleSheet.create({
     color: '#666',
     fontWeight: '600',
     marginLeft: 4,
+  },
+  reviewCount: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
   bottomRow: {
   flexDirection: 'row',
@@ -474,19 +488,16 @@ justListedText: {
     position: 'absolute',
     top: 8,
     right: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
+    shadowColor: '#BB86FC',
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
     shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
+    elevation: 8,
   },
   urgentBadge: {
     position: 'absolute',
     top: 10,
-    right: 10,
+    left: 10,
     backgroundColor: '#e53e3e',
     paddingHorizontal: 8,
     paddingVertical: 6,
@@ -536,7 +547,7 @@ justListedText: {
     position: 'absolute',
     bottom: 8,
     left: 8,
-    backgroundColor: '#FF6B35',
+    backgroundColor: '#E53E3E',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 6,
@@ -616,18 +627,59 @@ justListedText: {
     fontWeight: '700',
     color: '#F44336',
   },
+  countdownContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    backgroundColor: 'rgba(0,0,0,0.03)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
+    gap: 8,
+  },
+  liveCountdownContainer: {
+    backgroundColor: 'rgba(229, 62, 62, 0.05)',
+    borderBottomColor: 'rgba(229, 62, 62, 0.15)',
+  },
+  countdownTime: {
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#E53E3E',
+    shadowColor: '#E53E3E',
+    shadowOpacity: 0.6,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  watchersStrategyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  watchersText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#666',
+  },
   sellerRatingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    marginLeft: 16,
-    marginRight: 8,
+    marginTop: 4,
   },
   sellerAvatar: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    marginRight: 4,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    marginRight: 6,
   },
   sellerNameContainer: {
     flexShrink: 1,
@@ -639,7 +691,6 @@ justListedText: {
     color: '#007AFF',
     fontWeight: '600',
     textDecorationLine: 'underline',
-    marginLeft: 4,
   },
   ratingRow: {
     flexDirection: 'row',

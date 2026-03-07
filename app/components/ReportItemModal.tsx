@@ -65,7 +65,7 @@ export default function ReportItemModal({
 
     try {
       const response = await fetch(
-        `http://10.0.0.170:5000/api/report/item/${itemId}`,
+        `${API_BASE_URL}/api/report/item/${itemId}`,
         {
           method: 'POST',
           headers: {

@@ -80,7 +80,7 @@ export default function VerifyCodeScreen() {
 
   const handleResend = async () => {
     try {
-      const res = await fetch('http://10.0.0.170:5000/api/register/resend-code', {
+      const res = await fetch(`${API_BASE_URL}/api/register/resend-code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })

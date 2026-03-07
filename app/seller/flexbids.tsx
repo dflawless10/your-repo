@@ -158,7 +158,7 @@ export default function SellerFlexBidsScreen() {
       <EnhancedHeader />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
+          <Ionicons name="arrow-back" size={28} color="#333" />
         </TouchableOpacity>
         <Text style={styles.title}>My FlexBid Auctions</Text>
         <TouchableOpacity

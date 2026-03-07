@@ -24,11 +24,16 @@ import { setCartItems, removeItem } from '@/utils/cartSlice';
 import { calculateBuyerTotal, type BuyerTotalBreakdown } from '@/api/revenue';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '../components/EnhancedHeader';
 import { useTheme } from '@/app/theme/ThemeContext';
+import { formatTimeWithSeconds } from '@/utils/time';
 
-function getUrgencyColor(hoursLeft: number): string {
-  if (hoursLeft > 48) return 'green';
-  if (hoursLeft > 12) return 'orange';
-  return 'red';
+function getCountdownColor(endTime: string): string {
+  const now = Date.now();
+  const end = new Date(endTime).getTime();
+  const diffHours = (end - now) / (1000 * 60 * 60);
+
+  if (diffHours <= 2) return '#e53e3e';
+  if (diffHours <= 24) return '#FF6B35';
+  return '#38a169';
 }
 
 export default function CartScreen() {
@@ -38,8 +43,13 @@ export default function CartScreen() {
   const [includeInsurance, setIncludeInsurance] = useState(false);
   const [costBreakdowns, setCostBreakdowns] = useState<Record<number, BuyerTotalBreakdown>>({});
   const [calculatingCosts, setCalculatingCosts] = useState(false);
-  const scrollY = new Animated.Value(0);
   const { theme, colors } = useTheme();
+
+  // Animation values
+  const scrollY = React.useRef(new Animated.Value(0)).current;
+  const fadeAnim = React.useRef(new Animated.Value(0)).current;
+  const pulseAnim = React.useRef(new Animated.Value(1)).current;
+  const summaryTranslateY = React.useRef(new Animated.Value(0)).current;
 
   // Fetch cart from backend API
   const fetchCart = useCallback(async () => {
@@ -66,38 +76,100 @@ export default function CartScreen() {
     }, [fetchCart])
   );
 
+  // Fade in and pulsate animation for header
+  useEffect(() => {
+    // Fade in
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
+
+    // Pulsate loop for back arrow
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, []);
+
+  // Hide/show summary on scroll
+  useEffect(() => {
+    const listenerId = scrollY.addListener(({ value }) => {
+      // Hide summary when scrolling down (value > 50), show when at top or scrolling up
+      if (value > 50) {
+        Animated.timing(summaryTranslateY, {
+          toValue: 300, // Move it off-screen
+          duration: 300,
+          useNativeDriver: true,
+        }).start();
+      } else {
+        Animated.timing(summaryTranslateY, {
+          toValue: 0, // Bring it back
+          duration: 300,
+          useNativeDriver: true,
+        }).start();
+      }
+    });
+
+    return () => scrollY.removeListener(listenerId);
+  }, [scrollY, summaryTranslateY]);
+
   // Remove item from backend and refresh
   const handleRemoveItem = async (itemId: string | number) => {
-    try {
-      setLoading(true);
-      const token = await AsyncStorage.getItem('jwtToken');
-      if (!token) return;
+    // Show confirmation dialog before removing
+    Alert.alert(
+      'Remove Item',
+      'Are you sure you want to remove this item from your cart?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const token = await AsyncStorage.getItem('jwtToken');
+              if (!token) return;
 
-      const response = await fetch(`${API_BASE_URL}/remove-from-cart`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
+              const response = await fetch(`${API_BASE_URL}/remove-from-cart`, {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ item_id: itemId }),
+              });
+
+              if (response.ok) {
+                console.log('🐐 Item removed from cart:', itemId);
+                // Remove from Redux state immediately for instant UI update
+                dispatch(removeItem(itemId));
+                // Fetch fresh cart from backend to stay in sync
+                await fetchCart();
+              } else {
+                const error = await response.json();
+                Alert.alert('Error', error.error || 'Failed to remove item');
+              }
+            } catch (error) {
+              console.error('🐐 Remove cart item error:', error);
+              Alert.alert('Error', 'Failed to remove item from cart');
+            } finally {
+              setLoading(false);
+            }
+          },
         },
-        body: JSON.stringify({ item_id: itemId }),
-      });
-
-      if (response.ok) {
-        console.log('🐐 Item removed from cart:', itemId);
-        // Remove from Redux state immediately for instant UI update
-        dispatch(removeItem(itemId));
-        // Fetch fresh cart from backend to stay in sync
-        await fetchCart();
-      } else {
-        const error = await response.json();
-        Alert.alert('Error', error.error || 'Failed to remove item');
-      }
-    } catch (error) {
-      console.error('🐐 Remove cart item error:', error);
-      Alert.alert('Error', 'Failed to remove item from cart');
-    } finally {
-      setLoading(false);
-    }
+      ]
+    );
   };
 
   // Calculate costs for all items when cart changes
@@ -197,9 +269,6 @@ export default function CartScreen() {
   );
 
   const renderItem = ({ item }: { item: any }) => {
-    const hoursLeft = Number.parseInt(item.timeLeft?.split('h')[0] ?? '0', 10);
-    const urgencyColor = getUrgencyColor(hoursLeft);
-
     return (
       <View style={[styles.card, { marginHorizontal: 16, backgroundColor: colors.surface }]}>
         <TouchableOpacity
@@ -208,7 +277,15 @@ export default function CartScreen() {
         >
           <Image source={{ uri: item.photo_url }} style={styles.image} />
           <View style={styles.details}>
-            <Text style={{ color: urgencyColor }}>⏳ Ends in: {item.timeLeft}</Text>
+            {/* Countdown Timer */}
+            {item.auction_ends_at && (
+              <View style={styles.countdownRow}>
+                <Ionicons name="time-outline" size={14} color={getCountdownColor(item.auction_ends_at)} />
+                <Text style={[styles.countdownText, { color: getCountdownColor(item.auction_ends_at) }]}>
+                  {formatTimeWithSeconds(item.auction_ends_at, Date.now())}
+                </Text>
+              </View>
+            )}
             <Text style={[styles.name, { color: colors.textPrimary }]}>{item.name}</Text>
             <Text style={[styles.price, { color: colors.textPrimary }]}>${item.price}</Text>
             {item.startingPrice && (
@@ -241,21 +318,29 @@ export default function CartScreen() {
       <EnhancedHeader scrollY={scrollY} />
 
       <Animated.ScrollView
-        style={{ flex: 1, padding: 20 }}
-        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20, paddingBottom: 40 }}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20, paddingBottom: 300 }}
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
         scrollEventThrottle={16}
+        showsVerticalScrollIndicator={true}
       >
         {cartItems.length > 0 ? (
           <>
-            <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10 }}>
+            <Animated.View style={{
+              paddingHorizontal: 16,
+              paddingTop: 30,
+              paddingBottom: 10,
+              opacity: fadeAnim
+            }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-                <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 12 }}>
-                  <Ionicons name="arrow-back" size={28} color={colors.textPrimary} />
-                </TouchableOpacity>
+                <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                  <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 12 }}>
+                    <Ionicons name="arrow-back" size={28} color='#6A0DAD' />
+                  </TouchableOpacity>
+                </Animated.View>
                 <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Your Cart</Text>
               </View>
-            </View>
+            </Animated.View>
 
             {cartItems.map((item) => (
               <React.Fragment key={String(item.id)}>
@@ -289,9 +374,18 @@ export default function CartScreen() {
         )}
       </Animated.ScrollView>
 
-      {/* Fixed summary at bottom */}
+      {/* Fixed summary at bottom - hides on scroll */}
       {cartItems.length > 0 && (
-        <View style={[styles.summary, { backgroundColor: colors.surface, borderColor: theme === 'dark' ? '#333' : '#ccc' }]}>
+        <Animated.View
+          style={[
+            styles.summary,
+            {
+              backgroundColor: colors.surface,
+              borderColor: theme === 'dark' ? '#333' : '#ccc',
+              transform: [{ translateY: summaryTranslateY }]
+            }
+          ]}
+        >
           <View style={styles.costBreakdown}>
             <View style={styles.costRow}>
               <Text style={[styles.costLabel, { color: colors.textPrimary }]}>Subtotal:</Text>
@@ -309,7 +403,7 @@ export default function CartScreen() {
 
                 <View style={styles.insuranceRow}>
                   <View style={styles.insuranceToggle}>
-                    <Text style={[styles.costLabel, { color: colors.textPrimary }]}>Insurance:</Text>
+                    <Text style={[styles.costLabel, { color: colors.textPrimary }]}>Buyer Protection:</Text>
                     <Switch
                       value={includeInsurance}
                       onValueChange={setIncludeInsurance}
@@ -335,14 +429,27 @@ export default function CartScreen() {
               styles.checkoutButton,
               { backgroundColor: calculatingCosts ? (theme === 'dark' ? '#444' : '#ccc') : (theme === 'dark' ? '#8B5CF6' : '#6A0DAD') }
             ]}
-            onPress={() => router.push('/checkout')}
+            onPress={() => {
+              console.log('🛒 Cart: Navigating to checkout');
+              console.log('🛒 Cart items:', cartItems.length);
+              console.log('🛒 Insurance enabled:', includeInsurance);
+              try {
+                router.push({
+                  pathname: '/checkout',
+                  params: { includeInsurance: includeInsurance ? '1' : '0' }
+                });
+                console.log('✅ Navigation successful');
+              } catch (error) {
+                console.error('❌ Navigation failed:', error);
+              }
+            }}
             disabled={calculatingCosts}
           >
             <Text style={styles.checkoutButtonText}>
               {calculatingCosts ? 'Calculating...' : 'Proceed to Checkout'}
             </Text>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
       )}
     </View>
   );
@@ -351,7 +458,7 @@ export default function CartScreen() {
 const styles = StyleSheet.create({
   wrapper: { flex: 1 },
   container: { flex: 1, padding: 16 },
-  pageTitle: { fontSize: 28, fontWeight: '700' },
+  pageTitle: { fontSize: 22, fontWeight: '700' },
   header: { fontSize: 24, fontWeight: 'bold', marginBottom: 16 },
   emptyWrap: { alignItems: 'center', marginTop: 60, paddingHorizontal: 20 },
   retroGoatContainer: {
@@ -485,5 +592,15 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     fontWeight: '700',
+  },
+  countdownRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 4,
+  },
+  countdownText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

@@ -1,17 +1,17 @@
 {
   "expo": {
-    "name": "BidGoatMobile",
+    "name": "BidGoat",
     "slug": "BidGoatMobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "bidgoatmobile",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "owner": "dflawless",
     "extra": {
-      "API_URL": "https://unwicked-unanachronously-lorenzo.ngrok-free.dev",
-      "EXPO_DEV_SERVER": "http://10.0.0.170:8081",
+      "API_URL": "http://10.0.0.171:5000",
+      "EXPO_DEV_SERVER": "http://10.0.0.171:8081",
       "router": {},
       "eas": {
         "projectId": "7dd6cddd-4332-43aa-a42b-d3ed26434f39"
@@ -19,7 +19,10 @@
     },
     "ios": {
       "icon": "./assets/images/icon.png",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "runtimeVersion": {
+        "policy": "appVersion"
+      }
     },
     "android": {
       "icon": "./assets/images/icon.png",
@@ -30,9 +33,15 @@
       "edgeToEdgeEnabled": true,
       "permissions": [
         "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ],
-      "package": "com.dflawless.BidGoatMobile"
+      "package": "com.dflawless.BidGoatMobile",
+      "versionCode": 1,
+      "runtimeVersion": "1.0.0",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "bundler": "metro",
@@ -67,10 +76,33 @@
           "merchantIdentifier": "merchant.com.bidgoat",
           "enableGooglePay": true
         }
-      ]
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#ffffff",
+          "sounds": []
+        }
+      ],
+      [
+        "@react-native-firebase/app",
+        {
+          "android": {
+            "googleServicesFile": "./google-services.json"
+          },
+          "ios": {
+            "googleServicesFile": "./GoogleService-Info.plist"
+          }
+        }
+      ],
+      "@react-native-firebase/messaging"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "updates": {
+      "url": "https://u.expo.dev/7dd6cddd-4332-43aa-a42b-d3ed26434f39"
     }
   }
 }

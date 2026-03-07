@@ -149,8 +149,8 @@ const getActiveOccasions = (): GiftOccasion[] => {
       icon: 'school',
       description: 'Celebrate their achievement',
       gradient: ['#4169E1', '#87CEEB'],
-      seasonal: true,
-      dateRange: { start: '05-15', end: '06-30' },
+      seasonal: false,
+      // dateRange: { start: '05-15', end: '06-30' },
     },
     {
       id: 'thank-you',
@@ -165,6 +165,13 @@ const getActiveOccasions = (): GiftOccasion[] => {
       icon: 'sparkles',
       description: 'Surprise someone special',
       gradient: ['#9D50BB', '#6E48AA'],
+    },
+    {
+      id: 'promotions',
+      label: 'Promotions',
+      icon: 'pricetag',
+      description: 'Deals so good you’ll feel promoted.',
+      gradient: ['#10B981', '#34D399'],
     },
   ];
 
@@ -198,10 +205,30 @@ const BUDGET_RANGES = [
 
 const STYLE_PREFERENCES = [
   { id: 'classic', label: 'Classic', icon: 'diamond-outline' },
-  { id: 'modern', label: 'Modern', icon: 'flash-outline' },
-  { id: 'vintage', label: 'Vintage', icon: 'time-outline' },
-  { id: 'bohemian', label: 'Bohemian', icon: 'leaf-outline' },
+  { id: 'rings', label: 'Rings', icon: 'ellipse-outline' },
+  { id: 'necklaces', label: 'Necklaces', icon: 'remove-outline' },
+  { id: 'watches', label: 'Watches', icon: 'time-outline' },
 ];
+
+let OCCASION_KEYWORDS;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+OCCASION_KEYWORDS = {
+    'birthday': ['birthday', 'birthstone', 'celebration'],
+    'anniversary': ['anniversary', 'love', 'romantic', 'heart', 'wedding', 'forever'],
+    'christmas': ['christmas', 'holiday', 'festive', 'winter', 'xmas'],
+    'valentines': ['valentine', 'love', 'heart', 'romantic'],
+    'mothers-day': ['mother', 'mom', 'elegant', 'classic'],
+    'fathers-day': ['father', 'dad', 'masculine', 'watch', 'cufflinks'],
+    'halloween': ['halloween', 'spooky', 'dark', 'gothic', 'vintage'],
+    'wedding': ['wedding', 'bridal', 'engagement', 'forever', 'diamond'],
+    'graduation': ['graduation', 'achievement', 'success', 'milestone'],
+    'thank-you': ['thank you', 'appreciation', 'gratitude', 'gift'],
+    'just-because': ['surprise', 'special', 'unique', 'treasure'],
+    'promotions': [
+        'promotion', 'promotions', 'deal', 'deals', 'sale', 'discount',
+        'clearance', 'price drop', 'marked down', 'special offer', 'bargain'
+    ],
+}
 
 export default function GiftDiscoveryModal({ visible, onClose }: GiftDiscoveryModalProps) {
   const router = useRouter();
@@ -284,7 +311,7 @@ export default function GiftDiscoveryModal({ visible, onClose }: GiftDiscoveryMo
       }
 
       const queryString = new URLSearchParams(params).toString();
-      const response = await fetch(`http://10.0.0.170:5000/api/gift-recommendations?${queryString}`, {
+      const response = await fetch(`${API_BASE_URL}/api/gift-recommendations?${queryString}`, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -456,47 +483,70 @@ export default function GiftDiscoveryModal({ visible, onClose }: GiftDiscoveryMo
     </ScrollView>
   );
 
-  const renderGiftItem = ({ item }: { item: GiftItem }) => (
-    <TouchableOpacity
-      style={styles.giftCard}
-      onPress={() => handleItemPress(item.id)}
-      activeOpacity={0.9}
-    >
-      <Image source={{ uri: item.photo_url }} style={styles.giftImage} />
-      <LinearGradient
-        colors={['transparent', 'rgba(0,0,0,0.8)']}
-        style={styles.giftOverlay}
+  const renderGiftItem = ({ item }: { item: GiftItem }) => {
+    // Get timer color based on urgency - celebration colors!
+    const getTimerColor = (timeLeft: string) => {
+      const lowerTime = timeLeft.toLowerCase();
+
+      // Red for urgent (less than 2 hours)
+      if (lowerTime.includes('min') || lowerTime.includes('sec')) {
+        return '#e53e3e';
+      }
+
+      // Red for < 2 hours
+      if (lowerTime.includes('h') && !lowerTime.includes('d')) {
+        const hours = parseInt(lowerTime);
+        if (hours < 2) return '#e53e3e';
+        if (hours < 24) return '#FF6B35';
+      }
+
+      // Yellow for 1-3 days
+      if (lowerTime.includes('d')) {
+        const days = parseInt(lowerTime);
+        if (days <= 3) return '#FFA500';
+      }
+
+      // Green for 4+ days
+      return '#38a169';
+    };
+
+    return (
+      <TouchableOpacity
+        style={[styles.giftCard, {
+          borderWidth: 2,
+          borderColor: theme === 'dark' ? '#FFD700' : '#FF6B9D',
+          backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF',
+        }]}
+        onPress={() => handleItemPress(item.id)}
+        activeOpacity={0.9}
       >
-        <Text style={styles.giftName} numberOfLines={2}>{item.name}</Text>
-        <View style={styles.giftFooter}>
-          <Text style={styles.giftPrice}>${item.price.toFixed(2)}</Text>
-          {item.timeLeft && (
-            <View style={styles.timeContainer}>
-              <Ionicons name="time-outline" size={14} color="#FFF" />
-              <Text style={styles.giftTime}>{item.timeLeft}</Text>
-            </View>
-          )}
+        <Image source={{ uri: item.photo_url }} style={styles.giftImage} />
+        <View style={[styles.giftInfoSection, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#FFF' }]}>
+          <Text style={[styles.giftName, { color: colors.textPrimary }]} numberOfLines={2}>{item.name}</Text>
+          <View style={styles.giftFooter}>
+            <Text style={[styles.giftPrice, { color: theme === 'dark' ? '#B794F4' : '#FF6B35' }]}>${item.price.toFixed(2)}</Text>
+            {item.timeLeft && (
+              <View style={[styles.timeContainer, {
+                backgroundColor: theme === 'dark' ? '#3C3C3E' : '#FFF5F5',
+                borderWidth: 1,
+                borderColor: getTimerColor(item.timeLeft),
+              }]}>
+                <Ionicons name="time-outline" size={14} color={getTimerColor(item.timeLeft)} />
+                <Text style={[styles.giftTime, { color: getTimerColor(item.timeLeft) }]}>{item.timeLeft}</Text>
+              </View>
+            )}
+          </View>
         </View>
-      </LinearGradient>
-    </TouchableOpacity>
-  );
+        {/* Celebration confetti accent */}
+        <View style={[styles.celebrationBadge, { backgroundColor: theme === 'dark' ? '#FFD700' : '#FF6B9D' }]}>
+          <Text style={styles.celebrationEmoji}>🎁</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   const renderResults = () => (
     <View style={[styles.resultsContainer, { backgroundColor: colors.background }]}>
-      <View style={[styles.resultsHeader, { borderBottomColor: theme === 'dark' ? '#333' : '#F0F0F0' }]}>
-        <TouchableOpacity onPress={() => setStep('occasions')} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <View style={styles.resultsHeaderText}>
-          <Text style={[styles.resultsTitle, { color: colors.textPrimary }]}>
-            {selectedOccasion?.label} Gift Ideas
-          </Text>
-          <Text style={[styles.resultsSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]}>
-            {giftItems.length} perfect matches found
-          </Text>
-        </View>
-      </View>
-
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#6A0DAD" />
@@ -523,6 +573,21 @@ export default function GiftDiscoveryModal({ visible, onClose }: GiftDiscoveryMo
           columnWrapperStyle={styles.giftRow}
           contentContainerStyle={styles.giftList}
           showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            <View style={[styles.resultsHeader, { borderBottomColor: theme === 'dark' ? '#333' : '#F0F0F0' }]}>
+              <TouchableOpacity onPress={() => setStep('occasions')} style={styles.backButton}>
+                <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+              </TouchableOpacity>
+              <View style={styles.resultsHeaderText}>
+                <Text style={[styles.resultsTitle, { color: colors.textPrimary }]}>
+                  {selectedOccasion?.label} Gift Ideas
+                </Text>
+                <Text style={[styles.resultsSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]}>
+                  {giftItems.length} perfect matches found
+                </Text>
+              </View>
+            </View>
+          }
         />
       )}
     </View>
@@ -735,12 +800,12 @@ const styles = StyleSheet.create({
   },
   monthButtonSelected: {
     backgroundColor: '#F0F4FF',
-    borderColor: '#6A0DAD',
+    borderColor: '#4CAF50',
   },
   monthButtonText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#666',
+    color: '#4CAF50',
   },
   monthButtonTextSelected: {
     color: '#6A0DAD',
@@ -905,7 +970,7 @@ const styles = StyleSheet.create({
   },
   giftCard: {
     width: (width - 48) / 2,
-    height: 240,
+    height: 280,
     borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: '#F0F0F0',
@@ -917,41 +982,59 @@ const styles = StyleSheet.create({
   },
   giftImage: {
     width: '100%',
-    height: '100%',
+    height: 160,
+    resizeMode: 'cover',
   },
-  giftOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+  giftInfoSection: {
     padding: 12,
-    height: 100,
-    justifyContent: 'flex-end',
+    flex: 1,
+    justifyContent: 'space-between',
   },
   giftName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#FFF',
     marginBottom: 8,
+    lineHeight: 18,
   },
   giftFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: 4,
   },
   giftPrice: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '800',
   },
   timeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   giftTime: {
     fontSize: 12,
-    color: '#FFF',
+    fontWeight: '600',
+  },
+  celebrationBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  celebrationEmoji: {
+    fontSize: 18,
   },
 
   // Birthstone Modal Styles

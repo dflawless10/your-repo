@@ -173,7 +173,7 @@ export default function FullImageScreen() {
             onPress={() => router.back()}
             style={styles.backButton}
           >
-            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+            <Ionicons name="arrow-back" size={28} color="#6A0DAD" />
           </TouchableOpacity>
           <Text style={styles.pageTitle} numberOfLines={1} ellipsizeMode="tail">
             {itemTitle}

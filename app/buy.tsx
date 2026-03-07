@@ -30,21 +30,74 @@ export default function BuyScreen({ item }: Readonly<BuyScreenProps>) {
 
     try {
       const token = await AsyncStorage.getItem('jwtToken');
-      const res = await fetch(`http://10.0.0.170:5000/item/${item.id}/bid`, {
+      if (!token) {
+        Alert.alert('Please sign in', 'You need to be signed in to purchase');
+        return;
+      }
+
+      const res = await fetch(`${API_BASE_URL}/api/buy-now`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ amount: item.buy_it_now }),
+        body: JSON.stringify({
+          item_id: item.id,
+          sale_price: item.buy_it_now
+        }),
       })
+
+      const result = await res.json();
+
+      // Handle confirmation requirement (seller buying own item)
+      if (result.requires_confirmation) {
+        Alert.alert(
+          result.message || 'Confirmation Required',
+          `${result.details}\n\nItem: ${result.item_name}\nPrice: $${result.sale_price}`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Yes, Buy It Back',
+              style: 'destructive',
+              onPress: async () => {
+                try {
+                  // Send second request with confirmation
+                  const confirmRes = await fetch(`${API_BASE_URL}/api/buy-now`, {
+                    method: 'POST',
+                    headers: {
+                      Authorization: `Bearer ${token}`,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      item_id: item.id,
+                      sale_price: item.buy_it_now,
+                      confirm_buy_own_item: true,
+                    }),
+                  });
+
+                  if (confirmRes.ok) {
+                    await playGoatSound('Victory Baa');
+                    Alert.alert('Success', `You bought back ${item.name} for $${item.buy_it_now.toFixed(2)}!`);
+                  } else {
+                    const errorData = await confirmRes.json();
+                    Alert.alert('Buy failed', errorData.error || 'Purchase failed');
+                  }
+                } catch (err) {
+                  console.error('Buyback confirmation error:', err);
+                  Alert.alert('Error', 'Could not complete purchase.');
+                }
+              },
+            },
+          ]
+        );
+        return;
+      }
 
       if (res.ok) {
         await playGoatSound('Victory Baa');
         Alert.alert('Success', `You bought ${item.name} for $${item.buy_it_now.toFixed(2)}!`);
       } else {
-        const msg = await res.text();
-        Alert.alert('Buy failed', msg);
+        Alert.alert('Buy failed', result.error || 'Purchase failed');
       }
     } catch (err) {
       console.error('Buy error:', err);

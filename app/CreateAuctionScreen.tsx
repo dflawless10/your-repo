@@ -57,6 +57,10 @@ const API_URL = API_BASE_URL;
   const [gender, setGender] = useState<string>('unisex');
   const [loading, setLoading] = useState(false);
 
+  // Item-level return policy overrides
+  const [returnPolicyOverride, setReturnPolicyOverride] = useState<string>('use_default');
+  const [showPolicyOverride, setShowPolicyOverride] = useState(false);
+
   // Preset duration options
   const presetDurations = [
     { label: '24h', hours: '24' },
@@ -153,6 +157,11 @@ const API_URL = API_BASE_URL;
   };
 
   const handleSubmit = async () => {
+    // Prevent duplicate submissions
+    if (loading) {
+      return;
+    }
+
     // Validate required fields
     if (!name || !description || !categoryId || !startPrice || !durationHours || imageUris.length === 0) {
       Alert.alert('Missing Fields', 'Please fill out all fields, select a category, and upload at least one photo');
@@ -201,6 +210,9 @@ const API_URL = API_BASE_URL;
       return;
     }
 
+    // Set loading state to prevent duplicate submissions
+    setLoading(true);
+
     const token = await AsyncStorage.getItem('jwtToken');
     const formData = new FormData();
 
@@ -214,6 +226,7 @@ const API_URL = API_BASE_URL;
     formData.append('reserve_price', reservePrice || '');
     formData.append('weight_lbs', weightLbs);
     formData.append('gender', gender);
+    formData.append('return_policy_override', returnPolicyOverride);
 
     // Main image (first image)
     formData.append('photo', {
@@ -295,10 +308,12 @@ const API_URL = API_BASE_URL;
       } else {
         const msg = await res.text();
         Alert.alert('Error', msg);
+        setLoading(false);
       }
     } catch (error) {
       console.error('Listing error:', error);
       Alert.alert('Network Error', 'Could not reach the server.');
+      setLoading(false);
     }
   };
 
@@ -306,30 +321,9 @@ const API_URL = API_BASE_URL;
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <EnhancedHeader scrollY={scrollY} onSearch={() => {}} />
 
-      {/* Title with Back Arrow */}
-      <Animated.View style={[
-        styles.headerTitleContainer,
-        {
-          opacity: headerOpacity,
-          transform: [{ scale: headerScale }],
-          backgroundColor: colors.background,
-          borderBottomColor: theme === 'dark' ? '#333' : '#E5E5E5'
-        }
-      ]}>
-        <View style={styles.titleWithArrow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
-            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-          </TouchableOpacity>
-          <View>
-            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{editItemId ? 'Edit Auction' : 'Create Auction'}</Text>
-            {editItemId && <Text style={[styles.headerSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]}>Update your listing details</Text>}
-          </View>
-        </View>
-      </Animated.View>
-
       <ScrollView
         style={[styles.container, { backgroundColor: colors.background }]}
-        contentContainerStyle={{ paddingTop: 240, paddingBottom: 120, backgroundColor: colors.background }}
+        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT, paddingBottom: 120, backgroundColor: colors.background }}
         scrollEventThrottle={16}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={true}
@@ -338,6 +332,26 @@ const API_URL = API_BASE_URL;
           { useNativeDriver: false }
         )}
       >
+        {/* Title with Back Arrow - Now inside ScrollView */}
+        <Animated.View style={[
+          styles.headerTitleContainer,
+          {
+            opacity: headerOpacity,
+            transform: [{ scale: headerScale }],
+            backgroundColor: colors.background,
+            borderBottomColor: theme === 'dark' ? '#333' : '#E5E5E5'
+          }
+        ]}>
+          <View style={styles.titleWithArrow}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
+               <Ionicons name="arrow-back" size={28} color="#B794F4"  />
+            </TouchableOpacity>
+            <View>
+              <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{editItemId ? 'Edit Auction' : 'Create Auction'}</Text>
+              {editItemId && <Text style={[styles.headerSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]}>Update your listing details</Text>}
+            </View>
+          </View>
+        </Animated.View>
         <CategorySelector
           selectedCategory={categoryId}
           onSelectCategory={(id, name) => {
@@ -393,9 +407,11 @@ const API_URL = API_BASE_URL;
           helpText="💡 Great descriptions include: condition, materials, measurements, brand (if applicable), and what makes this item special"
         />
 
-
-
+        <Text style={[styles.label, { color: colors.textPrimary }]}>Starting Bid Price</Text>
         <TextInput placeholder="Starting Bid Price ($)" placeholderTextColor={theme === 'dark' ? '#666' : '#999'} value={startPrice} onChangeText={setStartPrice} keyboardType="numeric" style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: colors.textPrimary, borderColor: theme === 'dark' ? '#3C3C3E' : '#DDD' }]} />
+        <Text style={styles.helperText}>
+          💡 Set a competitive starting bid to attract bidders. Lower prices create more bidding activity and can drive final sale price higher.
+        </Text>
 
         <Text style={[styles.label, { color: colors.textPrimary }]}>Auction Duration</Text>
         <View style={styles.presetButtonRow}>
@@ -450,11 +466,15 @@ const API_URL = API_BASE_URL;
           />
         )}
 
-        <Text style={[styles.helperText, { color: theme === 'dark' ? '#999' : '#666' }]}>
+        <Text style={styles.helperText}>
           💡 Choose a preset or enter custom duration (24-720 hours)
         </Text>
 
+        <Text style={[styles.label, { color: colors.textPrimary }]}>Reserve Price (Optional)</Text>
         <TextInput placeholder="Reserve Price (minimum to sell, optional)" placeholderTextColor={theme === 'dark' ? '#666' : '#999'} value={reservePrice} onChangeText={setReservePrice} keyboardType="numeric" style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: colors.textPrimary, borderColor: theme === 'dark' ? '#3C3C3E' : '#DDD' }]} />
+        <Text style={styles.helperText}>
+          💡 Reserve price protects you from selling below your minimum. If bidding doesn't reach this price, the item won't sell. Leave blank to sell to highest bidder.
+        </Text>
 
         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>📦 Item Details</Text>
         <TextInput
@@ -482,6 +502,7 @@ const API_URL = API_BASE_URL;
           <Picker.Item label="Extremely Rare" value="extremely_rare" />
         </Picker>
 
+        <Text style={[styles.label, { color: colors.textPrimary }]}>Shipping Weight</Text>
         <TextInput placeholder="Weight (lbs) - for shipping" placeholderTextColor={theme === 'dark' ? '#666' : '#999'} value={weightLbs} onChangeText={setWeightLbs} keyboardType="decimal-pad" style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: colors.textPrimary, borderColor: theme === 'dark' ? '#3C3C3E' : '#DDD' }]} />
 
         {/* Only show Gender picker for wearable items (jewelry, accessories, watches, clothing) */}
@@ -508,11 +529,64 @@ const API_URL = API_BASE_URL;
           ) : null;
         })()}
 
+        {/* Return Policy Override */}
         <TouchableOpacity
-          style={styles.buttonContainer}
-          onPress={handleSubmit}
+          style={[styles.overrideToggle, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F8F9FA', borderColor: theme === 'dark' ? '#3C3C3E' : '#E0E0E0' }]}
+          onPress={() => setShowPolicyOverride(!showPolicyOverride)}
+          activeOpacity={0.7}
         >
-          <Text style={styles.buttonTitle}>Create Auction</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.overrideToggleText, { color: colors.textPrimary }]}>
+              {returnPolicyOverride === 'use_default' ? '📋 Use My Default Return Policy' : '⚠️ Override Return Policy for This Item'}
+            </Text>
+            {returnPolicyOverride !== 'use_default' && (
+              <Text style={[styles.overrideSubtext, { color: theme === 'dark' ? '#999' : '#666' }]}>
+                This item: {returnPolicyOverride === 'no_returns' ? 'No Returns (Final Sale)' : returnPolicyOverride.replace('_', '-')}
+              </Text>
+            )}
+          </View>
+          <Ionicons
+            name={showPolicyOverride ? 'chevron-up' : 'chevron-down'}
+            size={20}
+            color="#6A0DAD"
+          />
+        </TouchableOpacity>
+
+        {showPolicyOverride && (
+          <View style={[styles.overridePanel, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#3C3C3E' : '#E0E0E0' }]}>
+            <Text style={[styles.overrideLabel, { color: colors.textPrimary }]}>Return Policy for THIS Item Only:</Text>
+            <Picker
+              selectedValue={returnPolicyOverride}
+              onValueChange={(value) => setReturnPolicyOverride(value)}
+              style={[styles.picker, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: colors.textPrimary, borderColor: theme === 'dark' ? '#3C3C3E' : '#ccc' }]}
+              dropdownIconColor={theme === 'dark' ? '#B794F4' : '#6A0DAD'}
+              mode="dropdown"
+            >
+              <Picker.Item label="📋 Use My Default Return Policy" value="use_default" />
+              <Picker.Item label="30-day Returns" value="30_days" />
+              <Picker.Item label="14-day Returns" value="14_days" />
+              <Picker.Item label="7-day Returns" value="7_days" />
+              <Picker.Item label="🚫 No Returns (Final Sale)" value="no_returns" />
+            </Picker>
+            <Text style={[styles.overrideHint, { color: theme === 'dark' ? '#999' : '#666' }]}>
+              ℹ️ This override only applies to this listing. To change your default return policy, go to Settings → My Store.
+            </Text>
+          </View>
+        )}
+
+        <TouchableOpacity
+          style={[styles.buttonContainer, loading && styles.buttonDisabled]}
+          onPress={handleSubmit}
+          disabled={loading}
+        >
+          {loading ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={styles.buttonTitle}>Creating...</Text>
+              <Ionicons name="hourglass-outline" size={20} color="#FFF" />
+            </View>
+          ) : (
+            <Text style={styles.buttonTitle}>Create Auction</Text>
+          )}
         </TouchableOpacity>
       </ScrollView>
       <GlobalFooter />
@@ -526,14 +600,10 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   headerTitleContainer: {
-    position: 'absolute',
-    top: HEADER_MAX_HEIGHT + 48,
-    left: 0,
-    right: 0,
     paddingHorizontal: 16,
     paddingVertical: 16,
+    paddingTop: 60,
     borderBottomWidth: 1,
-    zIndex: 100,
   },
   titleWithArrow: {
     flexDirection: 'row',
@@ -574,10 +644,12 @@ const styles = StyleSheet.create({
   },
   helperText: {
     fontSize: 12,
-    marginTop: -8,
-    marginBottom: 12,
-    marginLeft: 4,
+    color: '#6B7280',
     fontStyle: 'italic',
+    marginTop: 4,
+    marginBottom: 12,
+    paddingHorizontal: 4,
+    lineHeight: 16,
   },
   presetButtonRow: {
     flexDirection: 'row',
@@ -627,6 +699,10 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
+  },
+  buttonDisabled: {
+    backgroundColor: '#CCCCCC',
+    opacity: 0.6,
   },
 
 buttonTitle: {
@@ -684,6 +760,46 @@ buttonTitle: {
     fontSize: 16,
     color: '#1A202C',
     fontWeight: '500',
+  },
+  overrideToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F7FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+  },
+  overrideToggleText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2D3748',
+  },
+  overrideSubtext: {
+    fontSize: 13,
+    color: '#718096',
+    marginTop: 4,
+  },
+  overridePanel: {
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  overrideLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#2D3748',
+    marginBottom: 8,
+  },
+  overrideHint: {
+    fontSize: 13,
+    color: '#718096',
+    fontStyle: 'italic',
+    marginTop: 8,
   },
 });
 

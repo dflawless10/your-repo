@@ -166,7 +166,7 @@ export default function PremiumSellerScreen() {
           }
         ]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+             <Ionicons name="arrow-back" size={28} color="#B794F4"  />
           </TouchableOpacity>
           <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Premium Seller</Text>
         </Animated.View>
@@ -322,7 +322,7 @@ const createStyles = (isDark: boolean, colors: any) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 40,
+    paddingTop: 60,
     paddingBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: isDark ? '#333' : '#E2E8F0',
@@ -332,7 +332,7 @@ const createStyles = (isDark: boolean, colors: any) => StyleSheet.create({
     padding: 4,
   },
   pageTitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
     color: colors.textPrimary,
   },

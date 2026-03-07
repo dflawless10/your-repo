@@ -7,6 +7,7 @@ export type AlertType = 'price_drop' | 'auction_ending' | 'new_bid' | 'outbid' |
 export interface AlertRegistration {
   item_id: number;
   type: AlertType;
+  threshold?: number; // Optional: For price_drop alerts (in dollars)
 }
 
 export interface AlertResponse {
@@ -16,7 +17,7 @@ export interface AlertResponse {
 /**
  * Register an alert for an item
  * Alert types:
- * - price_drop: Notify when item price drops
+ * - price_drop: Notify when item price drops (requires threshold)
  * - auction_ending: Notify when auction is about to end
  * - new_bid: Notify when someone places a bid
  * - outbid: Notify when user gets outbid
@@ -25,12 +26,21 @@ export interface AlertResponse {
  */
 export const registerAlert = async (
   itemId: number,
-  alertType: AlertType
+  alertType: AlertType,
+  threshold?: number
 ): Promise<{ success: boolean; message: string }> => {
   try {
     const token = await AsyncStorage.getItem('jwtToken');
     if (!token) {
       return { success: false, message: 'Not authenticated' };
+    }
+
+    // Validate threshold for price_drop
+    if (alertType === 'price_drop' && !threshold) {
+      return {
+        success: false,
+        message: 'Price drop alerts require a threshold value'
+      };
     }
 
     const response = await fetch(`${API_BASE_URL}/api/alerts`, {
@@ -42,6 +52,7 @@ export const registerAlert = async (
       body: JSON.stringify({
         item_id: itemId,
         type: alertType,
+        threshold: threshold,
       }),
     });
 

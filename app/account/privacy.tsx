@@ -90,7 +90,7 @@ export default function PrivacySettingsScreen() {
         return;
       }
 
-      const response = await fetch('http://10.0.0.170:5000/api/user/privacy-settings', {
+      const response = await fetch(`${API_BASE_URL}/api/user/privacy-settings`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -113,7 +113,7 @@ export default function PrivacySettingsScreen() {
       const token = await AsyncStorage.getItem('jwtToken');
       if (!token) return;
 
-      await fetch('http://10.0.0.170:5000/api/user/privacy-settings', {
+      await fetch(`${API_BASE_URL}/api/user/privacy-settings`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -137,7 +137,7 @@ export default function PrivacySettingsScreen() {
           onPress: async () => {
             try {
               const token = await AsyncStorage.getItem('jwtToken');
-              await fetch('http://10.0.0.170:5000/api/user/request-data-download', {
+              await fetch(`${API_BASE_URL}/api/user/request-data-download`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}` },
               });
@@ -195,7 +195,7 @@ export default function PrivacySettingsScreen() {
             onPress={() => router.back()}
             style={styles.backButton}
           >
-            <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+            <Ionicons name="arrow-back" size={28} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
           <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Privacy Settings</Text>
         </Animated.View>

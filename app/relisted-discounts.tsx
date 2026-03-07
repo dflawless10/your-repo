@@ -5,9 +5,11 @@ import { ActivityIndicator, View, Text, StyleSheet } from "react-native";
 import RelistedDiscountsScreen from "app/components/RelistedDiscountsScreen";
 import { ListedItem } from "@/types/items";
 import { useTheme } from '@/app/theme/ThemeContext';
+import { useLocalSearchParams } from 'expo-router';
 
 export default function RelistedDiscountsPage() {
   const { theme, colors } = useTheme();
+  const { search } = useLocalSearchParams<{ search?: string }>();
   const styles = createStyles(theme === 'dark', colors);
   const [items, setItems] = useState<ListedItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -16,12 +18,28 @@ export default function RelistedDiscountsPage() {
   useEffect(() => {
     const fetchItems = async () => {
       try {
-        const res = await fetch("http://10.0.0.170:5000/api/shop/relisted-discounts");
+        const res = await fetch(`${API_BASE_URL}/api/shop/relisted-discounts`);
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);
         }
         const data = await res.json();
-        setItems(data.items || []);
+
+        // Apply search filter if search param exists
+        let filteredItems = data.items || [];
+        if (search) {
+          const searchLower = search.toLowerCase();
+          const searchResults = filteredItems.filter((item: any) =>
+            item.name?.toLowerCase().includes(searchLower) ||
+            item.description?.toLowerCase().includes(searchLower) ||
+            item.tags?.toLowerCase().includes(searchLower)
+          );
+          // If search results exist, use them; otherwise show all price dropped items
+          if (searchResults.length > 0) {
+            filteredItems = searchResults;
+          }
+        }
+
+        setItems(filteredItems);
       } catch (err: any) {
         setError(err.message || "Failed to load relisted discounts");
       } finally {
@@ -30,7 +48,7 @@ export default function RelistedDiscountsPage() {
     };
 
     fetchItems();
-  }, []);
+  }, [search]);
 
   if (loading) {
     return (

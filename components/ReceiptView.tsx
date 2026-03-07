@@ -2,6 +2,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
 import { parseISO, format } from 'date-fns';
+import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '@/app/theme/ThemeContext';
 
 // types/items.ts
 export interface CartItem {
@@ -14,6 +16,14 @@ export interface CartItem {
   listed_at?: string;
   listedAt?: string;
   registration_time?: string;
+  seller?: {
+    username: string;
+    memberSince: string;
+    rating: number;
+    reviewCount: number;
+    shippingPolicy: string;
+    returnPolicyDays: number;
+  };
 }
 function safeFormat(dateString: string | undefined, formatStr: string): string {
   if (!dateString) return 'Unknown';
@@ -27,48 +37,116 @@ function safeFormat(dateString: string | undefined, formatStr: string): string {
 }
 
 export default function ReceiptView({
-  items, address,
+  items,
+  total,
+  address,
   deliveryDate,
+  buyerName,
 }: Readonly<{
   items: CartItem[];
   total: number;
   address: string;
   deliveryDate: string;
+  buyerName?: string;
 }>) {
+  const { theme, colors } = useTheme();
 
   console.log('🧪 Receipt items:', items);
+  console.log('🧪 Receipt total prop:', total);
 
-const computedTotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
-
+  // Get seller info from first item (all items should have same seller in BidGoat)
+  const seller = items[0]?.seller;
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.heading}>🧾 Receipt Summary</Text>
-      <Text style={styles.section}>📦 Shipping to:</Text>
-      <Text style={styles.detail}>{address}</Text>
+    <View style={[styles.container, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#f9f9f9' }]}>
+      <Text style={[styles.heading, { color: colors.textPrimary }]}>🧾 Receipt Summary</Text>
+
+      {/* Shipping Address with Buyer Name */}
+      <Text style={[styles.section, { color: colors.textPrimary }]}>📦 Shipping to:</Text>
+      {buyerName && <Text style={[styles.detail, { color: colors.textPrimary, fontWeight: '600' }]}>Attn: {buyerName}</Text>}
+      <Text style={[styles.detail, { color: colors.textSecondary }]}>{address}</Text>
 
 
-      <Text style={styles.section}>🎁 Items:</Text>
+      <Text style={[styles.section, { color: colors.textPrimary }]}>🎁 Items:</Text>
       {items.map((item) => (
         <View key={item.id} style={styles.itemRow}>
           <Image source={{ uri: item.photo_url }} style={styles.thumbnail} />
-          <View style={{ marginLeft: 10 }}>
-            <Text>{item.name}</Text>
-            <Text>${item.price.toFixed(2)}</Text>
-            <Text>🕒 Listed: {safeFormat(item.listed_at || item.listedAt || item.registration_time, 'PPP')}</Text>
-<Text>
-  {item.quantity} × ${item.price.toFixed(2)}
-</Text>
-
+          <View style={{ marginLeft: 10, flex: 1 }}>
+            <Text style={{ color: colors.textPrimary, fontWeight: '600' }}>{item.name}</Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+              {item.quantity} × ${item.price.toFixed(2)}
+            </Text>
           </View>
         </View>
       ))}
 
-      <Text style={styles.section}>🕒 Estimated Delivery:</Text>
-      <Text style={styles.detail}>{deliveryDate}</Text>
+      {/* Seller Trust Signals */}
+      {seller && (
+        <>
+          <View style={{ height: 1, backgroundColor: theme === 'dark' ? '#333' : '#E5E5E5', marginVertical: 12 }} />
+          <Text style={[styles.section, { color: colors.textPrimary }]}>👤 Seller Information:</Text>
 
-      <Text style={styles.section}>💰 Total:</Text>
-     <Text style={styles.total}>${computedTotal.toFixed(2)}</Text>
+          <View style={{ gap: 6, marginTop: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Ionicons name="person-outline" size={14} color={colors.textSecondary} />
+              <Text style={{ color: colors.textSecondary, fontSize: 13 }}>{seller.username}</Text>
+            </View>
+
+            {seller.memberSince && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
+                <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+                  Member since {new Date(seller.memberSince).getFullYear()}
+                </Text>
+              </View>
+            )}
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              {seller.rating > 0 ? (
+                <>
+                  <Ionicons name="star" size={14} color="#FFD700" />
+                  <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '600' }}>
+                    {seller.rating.toFixed(1)} ({seller.reviewCount} reviews)
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Ionicons name="star-outline" size={14} color={colors.textSecondary} />
+                  <Text style={{ color: colors.textSecondary, fontSize: 13, fontStyle: 'italic' }}>
+                    New Seller (No reviews yet)
+                  </Text>
+                </>
+              )}
+            </View>
+
+            {seller.shippingPolicy && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="cube-outline" size={14} color={colors.textSecondary} />
+                <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+                  {seller.shippingPolicy}
+                </Text>
+              </View>
+            )}
+
+            {seller.returnPolicyDays > 0 && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="return-down-back-outline" size={14} color={colors.textSecondary} />
+                <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+                  {seller.returnPolicyDays}-day returns
+                </Text>
+              </View>
+            )}
+          </View>
+        </>
+      )}
+
+      <View style={{ height: 1, backgroundColor: theme === 'dark' ? '#333' : '#E5E5E5', marginVertical: 12 }} />
+
+      <Text style={[styles.section, { color: colors.textPrimary }]}>🕒 Estimated Delivery:</Text>
+      <Text style={[styles.detail, { color: colors.textSecondary }]}>{deliveryDate}</Text>
+
+      <Text style={[styles.section, { color: colors.textPrimary }]}>💰 Total:</Text>
+      <Text style={[styles.total, { color: colors.textPrimary }]}>${total.toFixed(2)}</Text>
 
     </View>
   );

@@ -47,7 +47,7 @@ export default function DiamondAppraisalScreen() {
   const [certificationLab, setCertificationLab] = useState('GIA');
   const [certificationNumber, setCertificationNumber] = useState('');
   const [ethicallySourced, setEthicallySourced] = useState('Yes');
-  const [rarity, setRarity] = useState('rare');
+  const [rarity, setRarity] = useState('common');
   const [price, setPrice] = useState<string>('');
   const [loading, setLoading] = useState(false);
 
@@ -173,7 +173,7 @@ export default function DiamondAppraisalScreen() {
       <Animated.View style={[styles.headerTitleContainer, { opacity: headerOpacity, transform: [{ scale: headerScale }], backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
         <View style={styles.titleWithArrow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
-            <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+            <Ionicons name="arrow-back" size={28} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
           <View>
             <Text style={[styles.headerTitleText, { color: colors.textPrimary }]}>Diamond Price Calculator</Text>
@@ -192,6 +192,7 @@ export default function DiamondAppraisalScreen() {
         scrollEventThrottle={16}
         keyboardShouldPersistTaps="handled"
       >
+        <Text style={[styles.label, { color: colors.textPrimary }]}>Carat Weight</Text>
         <TextInput
           style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : 'white', color: colors.textPrimary, borderColor: theme === 'dark' ? '#3C3C3E' : '#ccc' }]}
           placeholder="Carat Weight (0.1 - 10.00)"
@@ -226,7 +227,7 @@ export default function DiamondAppraisalScreen() {
           </Picker>
         </View>
 
-        <Text style={[styles.label, { color: colors.textPrimary }]}>Shape</Text>
+        <Text style={[styles.label, { color: colors.textPrimary }]}>Cut</Text>
         <View style={[styles.pickerContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#3C3C3E' : '#ccc' }]}>
           <Picker
             selectedValue={shape}
@@ -261,19 +262,18 @@ export default function DiamondAppraisalScreen() {
                 selectedValue={certificationLab}
                 onValueChange={(v) => setCertificationLab(v)}
                 style={[styles.picker, { color: colors.textPrimary }]}
-                itemStyle={styles.pickerItem}
               >
-                <Picker.Item label="Select Lab..." value="" style={styles.pickerItem} />
-                <Picker.Item label="GIA - Gemological Institute of America" value="GIA" style={styles.pickerItem} />
-                <Picker.Item label="IGI - International Gemological Institute" value="IGI" style={styles.pickerItem} />
-                <Picker.Item label="AGS - American Gem Society" value="AGS" style={styles.pickerItem} />
-                <Picker.Item label="EGL - European Gemological Laboratories" value="EGL" style={styles.pickerItem} />
-                <Picker.Item label="HRD - Hoge Raad Voor Diamant" value="HRD" style={styles.pickerItem} />
-                <Picker.Item label="GCAL - Gem Certification & Assurance Lab" value="GCAL" style={styles.pickerItem} />
-                <Picker.Item label="GSI - Gemological Science International" value="GSI" style={styles.pickerItem} />
-                <Picker.Item label="DGLA - Diamond & Gem Laboratories" value="DGLA" style={styles.pickerItem} />
-                <Picker.Item label="PGGL - Precision Gem Grading Laboratory" value="PGGL" style={styles.pickerItem} />
-                <Picker.Item label="Other" value="Other" style={styles.pickerItem} />
+                <Picker.Item label="Select Lab..." value="" />
+                <Picker.Item label="GIA - Gemological Institute of America" value="GIA" />
+                <Picker.Item label="IGI - International Gemological Institute" value="IGI" />
+                <Picker.Item label="AGS - American Gem Society" value="AGS" />
+                <Picker.Item label="EGL - European Gemological Laboratories" value="EGL" />
+                <Picker.Item label="HRD - Hoge Raad Voor Diamant" value="HRD" />
+                <Picker.Item label="GCAL - Gem Certification & Assurance Lab" value="GCAL" />
+                <Picker.Item label="GSI - Gemological Science International" value="GSI" />
+                <Picker.Item label="DGLA - Diamond & Gem Laboratories" value="DGLA" />
+                <Picker.Item label="PGGL - Precision Gem Grading Laboratory" value="PGGL" />
+                <Picker.Item label="Other" value="Other" />
               </Picker>
             </View>
 
@@ -299,10 +299,9 @@ export default function DiamondAppraisalScreen() {
             selectedValue={ethicallySourced}
             onValueChange={(v) => setEthicallySourced(v)}
             style={[styles.picker, { color: colors.textPrimary }]}
-            itemStyle={styles.pickerItem}
           >
-            <Picker.Item label="Yes - Conflict-Free Diamond" value="Yes" style={styles.pickerItem} />
-            <Picker.Item label="No / Unknown" value="No" style={styles.pickerItem} />
+            <Picker.Item label="Yes - Conflict-Free Diamond" value="Yes" />
+            <Picker.Item label="No / Unknown" value="No" />
           </Picker>
         </View>
 
@@ -312,13 +311,12 @@ export default function DiamondAppraisalScreen() {
             selectedValue={rarity}
             onValueChange={(v) => setRarity(v)}
             style={[styles.picker, { color: colors.textPrimary }]}
-            itemStyle={styles.pickerItem}
           >
-            <Picker.Item label="Common" value="common" style={styles.pickerItem} />
-            <Picker.Item label="Rare" value="rare" style={styles.pickerItem} />
-            <Picker.Item label="Very Rare" value="very_rare" style={styles.pickerItem} />
-            <Picker.Item label="Extremely Rare" value="extremely_rare" style={styles.pickerItem} />
-            <Picker.Item label="Collectible" value="collectible" style={styles.pickerItem} />
+            <Picker.Item label="Common" value="common" />
+            <Picker.Item label="Rare" value="rare" />
+            <Picker.Item label="Very Rare" value="very_rare" />
+            <Picker.Item label="Extremely Rare" value="extremely_rare" />
+            <Picker.Item label="Collectible" value="collectible" />
           </Picker>
         </View>
 
@@ -392,13 +390,13 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   headerTitleText: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
     color: '#1A202C',
     marginBottom: 2,
   },
   headerSubtitle: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#718096',
   },
   input: {

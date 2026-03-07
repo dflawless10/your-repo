@@ -14,6 +14,8 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
 import StarRating from 'app/seller/StarRating';
 import { validateContentQuick } from 'app/utils/contentModeration';
 import { useTheme } from '@/app/theme/ThemeContext';
@@ -23,8 +25,9 @@ type Seller = { id: number };
 
 const API_BASE = API_BASE_URL;
 
-export default function BuyerReviewForm({ seller }: Readonly<{ seller: Seller }>) {
+export default function BuyerReviewForm({ seller, orderId }: Readonly<{ seller: Seller; orderId?: number }>) {
   const { theme, colors } = useTheme();
+  const router = useRouter();
   const [review, setReview] = useState({
     reviewer_name: '',
     rating: 5,
@@ -34,6 +37,31 @@ export default function BuyerReviewForm({ seller }: Readonly<{ seller: Seller }>
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmitReview = async () => {
+    // Check if user is authenticated
+    const token = await AsyncStorage.getItem('jwtToken');
+    if (!token) {
+      Alert.alert(
+        'Sign In Required',
+        'You must be signed in to leave a review.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Sign In', onPress: () => router.push('/sign-in') }
+        ]
+      );
+      return;
+    }
+
+    // Get current user ID
+    let buyerId = null;
+    try {
+      const userIdStr = await AsyncStorage.getItem('userId');
+      if (userIdStr) {
+        buyerId = parseInt(userIdStr);
+      }
+    } catch (error) {
+      console.warn('Failed to get user ID:', error);
+    }
+
     if (!review.reviewer_name.trim() || !review.comment.trim()) {
       Alert.alert('Missing fields', 'Please enter your name and comment.');
       return;
@@ -54,17 +82,35 @@ export default function BuyerReviewForm({ seller }: Readonly<{ seller: Seller }>
 
     setSubmitting(true);
     try {
+      const requestBody: any = {
+        seller_id: seller.id,
+        buyer_id: buyerId,
+        ...review,
+      };
+
+      // Include order_id if provided
+      if (orderId) {
+        requestBody.order_id = orderId;
+      }
+
       const response = await fetch(`${API_BASE}/api/reviews`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          seller_id: seller.id,
-          ...review,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (response.ok) {
-        Alert.alert('Review submitted', 'Goat bleated with gratitude!');
+        Alert.alert('Review submitted', 'Goat bleated with gratitude!', [
+          {
+            text: 'OK',
+            onPress: () => {
+              // If this was from an order, navigate back to past purchases
+              if (orderId) {
+                router.push('/account/past-purchases');
+              }
+            }
+          }
+        ]);
         setReview({ reviewer_name: '', rating: 5, mascot_mood: '🐐', comment: '' });
       } else {
         const msg = await response.text();

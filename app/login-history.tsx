@@ -1,10 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Animated } from 'react-native';
 import { getLoginHistory } from '@/api/authService';
 import { LoginRecord } from '@/types/Auth';
+import { useTheme } from '@/app/theme/ThemeContext';
+import EnhancedHeader from '@/app/components/EnhancedHeader';
+import GlobalFooter from '@/app/components/GlobalFooter';
 
 const LoginHistoryScreen = () => {
   const [logins, setLogins] = useState<LoginRecord[]>([]);
+  const { colors } = useTheme();
+  const scrollY = new Animated.Value(0);
 
   useEffect(() => {
   (async () => {
@@ -22,44 +27,57 @@ const LoginHistoryScreen = () => {
 
 
   const renderItem = ({ item }: { item: LoginRecord }) => (
-    <View style={styles.card}>
-      <Text style={styles.ip}>📍 {item.ip_address}</Text>
-      <Text style={styles.time}>🕒 {new Date(item.login_time).toLocaleString()}</Text>
+    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.textTertiary }]}>
+      <Text style={[styles.ip, { color: colors.textPrimary }]}>📍 {item.ip_address}</Text>
+      <Text style={[styles.time, { color: colors.textSecondary }]}>🕒 {new Date(item.login_time).toLocaleString()}</Text>
     </View>
   );
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Recent Logins</Text>
-      <Text style={styles.tally}>
-        🧮 Total Sessions: {logins.length}
-      </Text>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <EnhancedHeader scrollY={scrollY} />
 
-      <FlatList
-        data={logins}
-        keyExtractor={(item, index) => index.toString()}
-        renderItem={renderItem}
-        contentContainerStyle={styles.list}
-      />
+      <Animated.View style={styles.content}>
+        <View style={styles.header}>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>Recent Logins</Text>
+          <Text style={[styles.tally, { color: colors.textSecondary }]}>
+            🧮 Total Sessions: {logins.length}
+          </Text>
+        </View>
+
+        <FlatList
+          data={logins}
+          keyExtractor={(item, index) => index.toString()}
+          renderItem={renderItem}
+          contentContainerStyle={styles.list}
+          onScroll={Animated.event(
+            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+            { useNativeDriver: false }
+          )}
+          scrollEventThrottle={16}
+        />
+      </Animated.View>
+
+      <GlobalFooter />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { padding: 16, backgroundColor: '#fff', flex: 1 },
-  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 8 },
-  tally: { fontSize: 16, color: '#444', marginBottom: 16 },
-  list: { paddingBottom: 32 },
+  container: { flex: 1 },
+  content: { flex: 1, paddingTop: 80 },
+  header: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
+  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 30},
+  tally: { fontSize: 16, marginBottom: 16 },
+  list: { paddingHorizontal: 16, paddingBottom: 120 },
   card: {
     padding: 12,
     borderBottomWidth: 1,
-    borderColor: '#ccc',
-    backgroundColor: '#f9f9f9',
     borderRadius: 8,
     marginBottom: 8,
   },
   ip: { fontSize: 16, fontWeight: '500' },
-  time: { fontSize: 14, color: '#666', marginTop: 4 },
+  time: { fontSize: 14, marginTop: 4 },
 });
 
 export default LoginHistoryScreen;

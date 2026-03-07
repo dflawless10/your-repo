@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+ import { playGoatSound }from '@/components/ui/GoatSound';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import Animated, {
@@ -32,22 +33,29 @@ export default function GoatGenieBadge({ onWish, size = 48 }: { onWish: () => vo
     opacity: showGenie ? 1 : 0,
   }));
 
-  const handlePress = () => {
-    setShowGenie(true);
-    spin.value = withSequence(
-      withTiming(360, { duration: 600 }),
-      withTiming(0, { duration: 0 })
-    );
-    scale.value = withSequence(
-      withTiming(1.2, { duration: 300 }),
-      withTiming(1, { duration: 300 })
-    );
 
-    setTimeout(() => {
-      setShowGenie(false);
-      onWish(); // trigger wishlist logic
-    }, 1200);
-  };
+
+const handlePress = async () => {
+  await playGoatSound();   // 🐐 BLEAT RIGHT HERE
+
+  setShowGenie(true);
+
+  spin.value = withSequence(
+    withTiming(360, { duration: 600 }),
+    withTiming(0, { duration: 0 })
+  );
+
+  scale.value = withSequence(
+    withTiming(1.2, { duration: 300 }),
+    withTiming(1, { duration: 300 })
+  );
+
+  setTimeout(() => {
+    setShowGenie(false);
+    onWish(); // trigger wishlist logic
+  }, 1200);
+};
+
 
   return (
     <View style={[styles.container, { width: size, height: size }]}>

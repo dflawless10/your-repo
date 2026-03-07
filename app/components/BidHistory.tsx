@@ -3,7 +3,7 @@ import { View, Text, Image, FlatList, StyleSheet } from 'react-native';
 
 interface Bid {
   bid_id: number;
-  avatar: string;
+  avatar_url: string;
   username: string;
   amount: number;
 }
@@ -19,7 +19,7 @@ export default function BidHistory({ bids }: Readonly<BidHistoryProps>) {
       keyExtractor={(item) => item.bid_id.toString()}
       renderItem={({ item }) => (
         <View style={styles.row}>
-          <Image source={{ uri: item.avatar }} style={styles.avatar} />
+          <Image source={{ uri: item.avatar_url }} style={styles.avatar} />
           <Text>{item.username}</Text>
           <Text style={styles.amount}>${item.amount}</Text>
         </View>

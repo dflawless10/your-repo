@@ -109,7 +109,7 @@ export default function MyBidsScreen() {
       }
 
       console.log('🐐 [MyBids] Fetching from API...');
-      const response = await fetch('http://10.0.0.170:5000/api/my-bids', {
+      const response = await fetch(`${API_BASE_URL}/api/my-bids`, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -153,7 +153,7 @@ if (Number.isNaN(maxBid) || maxBid <= selectedBidItem.current_highest_bid) {
 
     try {
       const token = await AsyncStorage.getItem('jwtToken');
-      const response = await fetch('http://10.0.0.170:5000/api/auto-bid/setup', {
+      const response = await fetch(`${API_BASE_URL}/api/auto-bid/setup`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -181,7 +181,7 @@ if (Number.isNaN(maxBid) || maxBid <= selectedBidItem.current_highest_bid) {
   const disableAutoBid = async (itemId: number) => {
     try {
       const token = await AsyncStorage.getItem('jwtToken');
-      const response = await fetch(`http://10.0.0.170:5000/api/auto-bid/disable/${itemId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/auto-bid/disable/${itemId}`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -471,87 +471,96 @@ if (Number.isNaN(maxBid) || maxBid <= selectedBidItem.current_highest_bid) {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <EnhancedHeader scrollY={scrollY} />
 
-      <RNAnimated.View style={[
-        styles.headerTitleContainer,
-        {
-          opacity: headerOpacity,
-          transform: [{ scale: headerScale }],
-          backgroundColor: colors.background,
-          borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0'
-        }
-      ]}>
-        <View style={styles.headerTitleRow}>
-          <View style={styles.titleWithArrow}>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={styles.backArrow}
-            >
-              <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-            </TouchableOpacity>
-            <View>
-              <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>My Bids</Text>
-              <Text style={[styles.headerSubtitle, { color: theme === 'dark' ? '#999' : '#718096' }]}>Track your auction activity</Text>
-            </View>
-          </View>
-          <TouchableOpacity
-            style={[styles.statsButton, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F3E5F5' }]}
-            onPress={() => router.push('/auto-bid-stats')}
-          >
-            <Ionicons name="stats-chart" size={20} color="#6A0DAD" />
-            <Text style={styles.statsButtonText}>Stats</Text>
-          </TouchableOpacity>
-        </View>
-      </RNAnimated.View>
-
-      {/* Tabs */}
-      <View style={[
-        styles.tabsContainer,
-        { backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0' }
-      ]}>
-        {(['active', 'won', 'lost'] as TabType[]).map((tab) => {
-          const count = bids.filter(b => {
-            if (tab === 'active') return b.status === 'active' || b.status === 'outbid';
-            return b.status === tab;
-          }).length;
-
-          return (
-            <TouchableOpacity
-              key={tab}
-              style={[
-                styles.tab,
-                { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F5F5' },
-                activeTab === tab && styles.activeTab
-              ]}
-              onPress={() => setActiveTab(tab)}
-            >
-              <Text style={[
-                styles.tabText,
-                { color: theme === 'dark' && activeTab !== tab ? '#ECEDEE' : '#666' },
-                activeTab === tab && styles.activeTabText
-              ]}>
-                {tab.charAt(0).toUpperCase() + tab.slice(1)} ({count})
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
       {/* Bids List */}
       {filteredBids.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Ionicons name="hammer-outline" size={64} color="#CCC" />
-          <Text style={styles.emptyText}>
-            {activeTab === 'active' && 'No active bids yet'}
-            {activeTab === 'won' && 'No won auctions yet'}
-            {activeTab === 'lost' && 'No lost auctions yet'}
-          </Text>
-          <TouchableOpacity
-            style={styles.exploreButton}
-            onPress={() => router.push('/(tabs)/explore')}
-          >
-            <Text style={styles.exploreButtonText}>Explore Auctions</Text>
-          </TouchableOpacity>
-        </View>
+        <RNAnimated.ScrollView
+          contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT }}
+          onScroll={RNAnimated.event(
+            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+            { useNativeDriver: false }
+          )}
+          scrollEventThrottle={16}
+        >
+          <RNAnimated.View style={[
+            styles.headerTitleContainer,
+            {
+              opacity: headerOpacity,
+              transform: [{ scale: headerScale }],
+              backgroundColor: colors.background,
+              borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0'
+            }
+          ]}>
+            <View style={styles.headerTitleRow}>
+              <View style={styles.titleWithArrow}>
+                <TouchableOpacity
+                  onPress={() => router.back()}
+                  style={styles.backArrow}
+                >
+                   <Ionicons name="arrow-back" size={28} color="#B794F4"  />
+                </TouchableOpacity>
+                <View>
+                  <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>My Bids</Text>
+                  <Text style={[styles.headerSubtitle, { color: theme === 'dark' ? '#999' : '#718096' }]}>Track your auction activity</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={[styles.statsButton, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F3E5F5' }]}
+                onPress={() => router.push('/auto-bid-stats')}
+              >
+                <Ionicons name="stats-chart" size={20} color="#4CAF50" />
+                <Text style={styles.statsButtonText}>Stats</Text>
+              </TouchableOpacity>
+            </View>
+          </RNAnimated.View>
+
+          {/* Tabs */}
+          <View style={[
+            styles.tabsContainer,
+            { backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0' }
+          ]}>
+            {(['active', 'won', 'lost'] as TabType[]).map((tab) => {
+              const count = bids.filter(b => {
+                if (tab === 'active') return b.status === 'active' || b.status === 'outbid';
+                return b.status === tab;
+              }).length;
+
+              return (
+                <TouchableOpacity
+                  key={tab}
+                  style={[
+                    styles.tab,
+                    { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F5F5' },
+                    activeTab === tab && styles.activeTab
+                  ]}
+                  onPress={() => setActiveTab(tab)}
+                >
+                  <Text style={[
+                    styles.tabText,
+                    { color: theme === 'dark' && activeTab !== tab ? '#ECEDEE' : '#666' },
+                    activeTab === tab && styles.activeTabText
+                  ]}>
+                    {tab.charAt(0).toUpperCase() + tab.slice(1)} ({count})
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <View style={styles.emptyState}>
+            <Ionicons name="hammer-outline" size={64} color="#CCC" />
+            <Text style={styles.emptyText}>
+              {activeTab === 'active' && 'No active bids yet'}
+              {activeTab === 'won' && 'No won auctions yet'}
+              {activeTab === 'lost' && 'No lost auctions yet'}
+            </Text>
+            <TouchableOpacity
+              style={styles.exploreButton}
+              onPress={() => router.push('/(tabs)/explore')}
+            >
+              <Text style={styles.exploreButtonText}>Explore Auctions</Text>
+            </TouchableOpacity>
+          </View>
+        </RNAnimated.ScrollView>
       ) : (
         <RNAnimated.FlatList
           data={filteredBids}
@@ -564,6 +573,74 @@ if (Number.isNaN(maxBid) || maxBid <= selectedBidItem.current_highest_bid) {
             { useNativeDriver: false }
           )}
           scrollEventThrottle={16}
+          ListHeaderComponent={
+            <>
+              <RNAnimated.View style={[
+                styles.headerTitleContainer,
+                {
+                  opacity: headerOpacity,
+                  transform: [{ scale: headerScale }],
+                  backgroundColor: colors.background,
+                  borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0'
+                }
+              ]}>
+                <View style={styles.headerTitleRow}>
+                  <View style={styles.titleWithArrow}>
+                    <TouchableOpacity
+                      onPress={() => router.back()}
+                      style={styles.backArrow}
+                    >
+                       <Ionicons name="arrow-back" size={28} color="#B794F4"  />
+                    </TouchableOpacity>
+                    <View>
+                      <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>My Bids</Text>
+                      <Text style={[styles.headerSubtitle, { color: theme === 'dark' ? '#999' : '#718096' }]}>Track your auction activity</Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.statsButton, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F3E5F5' }]}
+                    onPress={() => router.push('/auto-bid-stats')}
+                  >
+                    <Ionicons name="stats-chart" size={20} color="#4CAF50" />
+                    <Text style={styles.statsButtonText}>Stats</Text>
+                  </TouchableOpacity>
+                </View>
+              </RNAnimated.View>
+
+              {/* Tabs */}
+              <View style={[
+                styles.tabsContainer,
+                { backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0' }
+              ]}>
+                {(['active', 'won', 'lost'] as TabType[]).map((tab) => {
+                  const count = bids.filter(b => {
+                    if (tab === 'active') return b.status === 'active' || b.status === 'outbid';
+                    return b.status === tab;
+                  }).length;
+
+                  return (
+                    <TouchableOpacity
+                      key={tab}
+                      style={[
+                        styles.tab,
+                        { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F5F5' },
+                        activeTab === tab && styles.activeTab
+                      ]}
+                      onPress={() => setActiveTab(tab)}
+                    >
+                      <Text style={[
+                        styles.tabText,
+                        { color: theme === 'dark' && activeTab !== tab ? '#ECEDEE' : '#666' },
+                        activeTab === tab && styles.activeTabText
+                      ]}>
+                        {tab.charAt(0).toUpperCase() + tab.slice(1)} ({count})
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </>
+          }
         />
       )}
 
@@ -697,16 +774,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitleContainer: {
-    position: 'absolute',
-    top: HEADER_MAX_HEIGHT + 48,
-    left: 0,
-    right: 0,
     paddingHorizontal: 16,
     paddingVertical: 16,
+    paddingTop: 60,
     backgroundColor: '#FFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
-    zIndex: 100,
   },
   headerTitleRow: {
     flexDirection: 'row',
@@ -728,7 +801,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   headerSubtitle: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#718096',
   },
   statsButton: {
@@ -746,10 +819,6 @@ const styles = StyleSheet.create({
     color: '#6A0DAD',
   },
   tabsContainer: {
-    position: 'absolute',
-    top: HEADER_MAX_HEIGHT + 130,
-    left: 0,
-    right: 0,
     flexDirection: 'row',
     backgroundColor: '#FFF',
     paddingHorizontal: 16,
@@ -757,7 +826,6 @@ const styles = StyleSheet.create({
     gap: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
-    zIndex: 99,
   },
   tab: {
     flex: 1,
@@ -780,7 +848,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
-    paddingTop: 300,
+    paddingTop: HEADER_MAX_HEIGHT,
   },
   bidCard: {
     flexDirection: 'row',

@@ -31,7 +31,7 @@ export async function completeUserProfile(payload: {
     const fullPayload = { ...payload, email };
     console.log("📦 Sending profile payload:", fullPayload);
 
-    const res = await fetch("http://10.0.0.170:5000/api/complete_profile", {
+    const res = await fetch(`${API_BASE_URL}/api/complete_profile`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(fullPayload),
@@ -66,7 +66,9 @@ export const makeApiRequest = async (
   options: RequestInit
 ): Promise<{ response: Response; data: any } | null> => {
   try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const fullUrl = `${API_BASE_URL}${endpoint}`;
+    console.log(`🐐 API Request to: ${fullUrl}`);
+    const response = await fetch(fullUrl, {
       ...options,
       headers: {
         "Content-Type": "application/json",
@@ -362,7 +364,7 @@ export const searchListings = async (
   }
 };
 
-fetch("http://10.0.0.170:5000/ping")
+fetch(`${API_BASE_URL}/ping`)
   .then((res) => res.json())
   .then((data) => console.log("🐐 Ping response:", data))
   .catch((err) => console.error("🐐 Ping failed:", err));

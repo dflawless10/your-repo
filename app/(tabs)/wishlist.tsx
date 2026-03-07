@@ -1,7 +1,9 @@
 import React, { useCallback, useState, useMemo, useRef, useEffect } from 'react';
+import { API_BASE_URL } from '@/config';
 import {
   StyleSheet,
   FlatList,
+  ScrollView,
   View,
   Text,
   TouchableOpacity,
@@ -12,6 +14,7 @@ import {
   Image as RNImage,
   Animated as RNAnimated,
   Platform,
+  TextInput,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
@@ -28,6 +31,7 @@ import { AuctionItem } from '@/types/items';
 import { persistWishlist, loadWishlist } from '@/utils/persistWishlist';
 import { useWishlist } from '@/app/wishlistContext';
 import { getAuctionReminders, setAuctionReminders } from '@/api/reminders';
+import { registerAlert } from '@/api/alerts';
 import { useTheme } from '@/app/theme/ThemeContext';
 
 const { width, height } = Dimensions.get('window');
@@ -46,8 +50,10 @@ export default function WishlistScreen() {
   const [filterBy, setFilterBy] = useState<FilterOption>('all');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [reminderModalVisible, setReminderModalVisible] = useState(false);
+  const [priceAlertModalVisible, setPriceAlertModalVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState<AuctionItem | null>(null);
-  const [selectedReminders, setSelectedReminders] = useState<number[]>([60, 30, 5]);
+  const [selectedReminders, setSelectedReminders] = useState<number[]>([120, 60, 30, 10]);
+  const [priceThreshold, setPriceThreshold] = useState('');
   const { removeFromWishlist: removeFromWishlistBackend } = useWishlist();
   const scrollY = useRef(new RNAnimated.Value(0)).current;
   const headerOpacity = useRef(new RNAnimated.Value(0)).current;
@@ -136,7 +142,7 @@ export default function WishlistScreen() {
         return;
       }
 
-      const response = await fetch('http://10.0.0.170:5000/api/wishlist', {
+      const response = await fetch(`${API_BASE_URL}/api/wishlist`, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -189,7 +195,7 @@ export default function WishlistScreen() {
     if (existingReminders.length > 0) {
       setSelectedReminders(existingReminders.map(r => r.minutes_before));
     } else {
-      setSelectedReminders([60, 30, 5]);
+      setSelectedReminders([120, 60, 30, 10]); // 2 hours, 1 hour, 30 min, 10 min
     }
     setReminderModalVisible(true);
   };
@@ -209,6 +215,49 @@ export default function WishlistScreen() {
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to set reminders');
+    }
+  };
+
+  const handleSetPriceAlert = (item: AuctionItem) => {
+    setSelectedItem(item);
+    // Default to 10% below current price
+    const suggestedPrice = Math.floor((item.price || 0) * 0.9);
+    setPriceThreshold(suggestedPrice.toString());
+    setPriceAlertModalVisible(true);
+  };
+
+  const savePriceAlert = async () => {
+    if (!selectedItem || !priceThreshold) {
+      Alert.alert('Error', 'Please enter a price threshold');
+      return;
+    }
+
+    const threshold = parseFloat(priceThreshold);
+    if (isNaN(threshold) || threshold <= 0) {
+      Alert.alert('Error', 'Please enter a valid price');
+      return;
+    }
+
+    if (threshold >= (selectedItem.price || 0)) {
+      Alert.alert('Error', 'Threshold must be below current price');
+      return;
+    }
+
+    try {
+      const itemId = typeof selectedItem.id === 'string' ? parseInt(selectedItem.id) : selectedItem.id;
+      const result = await registerAlert(itemId, 'price_drop', threshold);
+
+      if (result.success) {
+        Alert.alert(
+          '🔔 Price Alert Set!',
+          `You'll be notified when "${selectedItem.name}" drops to $${threshold} or below`
+        );
+        setPriceAlertModalVisible(false);
+      } else {
+        Alert.alert('Error', result.message || 'Failed to set price alert');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to set price alert');
     }
   };
 
@@ -268,7 +317,10 @@ export default function WishlistScreen() {
 
   const renderGridItem = ({ item }: { item: AuctionItem }) => {
     const isEnded = item.timeLeft === 'Ended';
-    const isEndingSoon = !isEnded && item.timeLeft && typeof item.timeLeft === 'string' && item.timeLeft.includes('h');
+    // Only show "ending soon" for items with less than 24 hours left
+    const isEndingSoon = !isEnded && item.timeLeft && typeof item.timeLeft === 'string' &&
+      (item.timeLeft.includes('m') ||
+       (item.timeLeft.includes('h') && !item.timeLeft.includes('d') && parseInt(item.timeLeft) < 24));
 
     return (
       <TouchableOpacity
@@ -288,7 +340,9 @@ export default function WishlistScreen() {
             {/* Status Badge */}
             {isEnded && (
               <View style={styles.endedBadge}>
-                <Text style={styles.endedBadgeText}>Ended</Text>
+                <Text style={styles.endedBadgeText}>
+                  {item.status === 'sold' ? 'Sold' : item.status === 'expired_unsold' ? 'Expired - Unsold' : 'Ended'}
+                </Text>
               </View>
             )}
             {isEndingSoon && (
@@ -296,6 +350,43 @@ export default function WishlistScreen() {
                 <Ionicons name="flame" size={12} color="#FFF" />
                 <Text style={styles.endingSoonBadgeText}>ENDING SOON</Text>
               </View>
+            )}
+
+            {/* Alert Badges - Top Right */}
+            {(item.reminder_active || item.price_alert_active) && (
+              <TouchableOpacity
+                style={styles.cardAlertBadge}
+                onPress={async (e) => {
+                  e.stopPropagation();
+                  // Mark reminder as seen if active
+                  if (item.reminder_active) {
+                    try {
+                      const token = await AsyncStorage.getItem('jwtToken');
+                      await fetch(`${API_BASE_URL}/api/wishlist/${item.id}/reminder/mark-seen`, {
+                        method: 'POST',
+                        headers: { Authorization: `Bearer ${token}` },
+                      });
+                      // Refresh wishlist to update badge state
+                      fetchWishlist();
+                    } catch (error) {
+                      console.error('Error marking reminder as seen:', error);
+                    }
+                  }
+                  handleItemPress(item.id);
+                }}
+              >
+                {item.reminder_active && item.price_alert_active ? (
+                  // Split circle
+                  <View style={styles.cardSplitBadge}>
+                    <View style={[styles.cardSplitHalf, styles.cardSplitLeft]} />
+                    <View style={[styles.cardSplitHalf, styles.cardSplitRight]} />
+                  </View>
+                ) : item.reminder_active ? (
+                  <View style={[styles.cardSolidBadge, { backgroundColor: '#4A90E2' }]} />
+                ) : (
+                  <View style={[styles.cardSolidBadge, { backgroundColor: '#10B981' }]} />
+                )}
+              </TouchableOpacity>
             )}
 
             {/* Action Buttons */}
@@ -311,6 +402,15 @@ export default function WishlistScreen() {
                   <Ionicons name="notifications" size={16} color="#FFF" />
                 </TouchableOpacity>
               )}
+              <TouchableOpacity
+                style={[styles.gridActionButton, styles.priceAlertActionButton]}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleSetPriceAlert(item);
+                }}
+              >
+                <MaterialCommunityIcons name="bell-badge" size={16} color="#FFF" />
+              </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.gridActionButton, styles.deleteActionButton]}
                 onPress={(e) => {
@@ -380,6 +480,15 @@ export default function WishlistScreen() {
             </TouchableOpacity>
           )}
           <TouchableOpacity
+            style={[styles.listActionButton, styles.priceAlertActionButton]}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleSetPriceAlert(item);
+            }}
+          >
+            <MaterialCommunityIcons name="bell-badge" size={18} color="#FFF" />
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[styles.listActionButton, styles.deleteActionButton]}
             onPress={(e) => {
               e.stopPropagation();
@@ -390,6 +499,111 @@ export default function WishlistScreen() {
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
+    );
+  };
+
+  const renderContent = () => {
+    if (isLoading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#6A0DAD" />
+          <Text style={styles.loadingText}>Loading your wishlist...</Text>
+        </View>
+      );
+    }
+
+    if (wishlistItems.length === 0) {
+      return renderEmptyState();
+    }
+
+    return (
+      <>
+        {/* Stats Bar */}
+        <View style={[styles.statsBar, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, { color: colors.textPrimary }]}>{wishlistItems.length}</Text>
+            <Text style={[styles.statLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Items</Text>
+          </View>
+          <View style={[styles.statDivider, { backgroundColor: theme === 'dark' ? '#333' : '#E5E5E5' }]} />
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, { color: colors.textPrimary }]}>{activeCount}</Text>
+            <Text style={[styles.statLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Active</Text>
+          </View>
+          <View style={[styles.statDivider, { backgroundColor: theme === 'dark' ? '#333' : '#E5E5E5' }]} />
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, styles.statValueGreen]}>
+              ${totalValue.toLocaleString()}
+            </Text>
+            <Text style={[styles.statLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Total Value</Text>
+          </View>
+        </View>
+
+        {/* Filter & Sort Bar */}
+        <View style={[styles.controlBar, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
+          <View style={styles.filterSection}>
+            <Text style={[styles.controlLabel, { color: colors.textPrimary }]}>Filter:</Text>
+            {(['all', 'active', 'ended'] as FilterOption[]).map((option) => (
+              <TouchableOpacity
+                key={option}
+                style={[
+                  styles.filterChip,
+                  { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F5F5', borderColor: theme === 'dark' ? '#3C3C3E' : '#E0E0E0' },
+                  filterBy === option && styles.filterChipActive
+                ]}
+                onPress={() => setFilterBy(option)}
+              >
+                <Text style={[
+                  styles.filterChipText,
+                  { color: theme === 'dark' && filterBy !== option ? '#ECEDEE' : '#666' },
+                  filterBy === option && styles.filterChipTextActive
+                ]}>
+                  {option === 'all' ? 'All' : option === 'active' ? 'Active' : 'Ended'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <View style={styles.viewControls}>
+            <TouchableOpacity
+              style={[styles.viewButton, viewMode === 'grid' && styles.viewButtonActive]}
+              onPress={() => setViewMode('grid')}
+            >
+              <Ionicons name="grid" size={20} color={viewMode === 'grid' ? '#FFF' : '#6A0DAD'} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.viewButton, viewMode === 'list' && styles.viewButtonActive]}
+              onPress={() => setViewMode('list')}
+            >
+              <Ionicons name="list" size={20} color={viewMode === 'list' ? '#FFF' : '#6A0DAD'} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Items List */}
+        {viewMode === 'grid' ? (
+          <FlatList
+            key="grid-view"
+            data={filteredAndSortedItems}
+            keyExtractor={(item) => String(item.id)}
+            renderItem={renderGridItem}
+            numColumns={2}
+            columnWrapperStyle={styles.gridRow}
+            contentContainerStyle={styles.gridContainer}
+            showsVerticalScrollIndicator={false}
+            scrollEnabled={false}
+          />
+        ) : (
+          <FlatList
+            key="list-view"
+            data={filteredAndSortedItems}
+            keyExtractor={(item) => String(item.id)}
+            renderItem={renderListItem}
+            contentContainerStyle={styles.listContainer}
+            showsVerticalScrollIndicator={false}
+            scrollEnabled={false}
+          />
+        )}
+      </>
     );
   };
 
@@ -421,107 +635,12 @@ export default function WishlistScreen() {
             style={styles.backButton}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+             <Ionicons name="arrow-back" size={28} color='#6A0DAD'  />
           </TouchableOpacity>
           <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>My Wishlist</Text>
         </RNAnimated.View>
 
-        {isLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#6A0DAD" />
-            <Text style={styles.loadingText}>Loading your wishlist...</Text>
-          </View>
-        ) : wishlistItems.length === 0 ? (
-          renderEmptyState()
-        ) : (
-          <>
-            {/* Stats Bar */}
-            <View style={[styles.statsBar, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, { color: colors.textPrimary }]}>{wishlistItems.length}</Text>
-                <Text style={[styles.statLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Items</Text>
-              </View>
-              <View style={[styles.statDivider, { backgroundColor: theme === 'dark' ? '#333' : '#E5E5E5' }]} />
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, { color: colors.textPrimary }]}>{activeCount}</Text>
-                <Text style={[styles.statLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Active</Text>
-              </View>
-              <View style={[styles.statDivider, { backgroundColor: theme === 'dark' ? '#333' : '#E5E5E5' }]} />
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, styles.statValueGreen]}>
-                  ${totalValue.toLocaleString()}
-                </Text>
-                <Text style={[styles.statLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Total Value</Text>
-              </View>
-            </View>
-
-            {/* Filter & Sort Bar */}
-            <View style={[styles.controlBar, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
-              <View style={styles.filterSection}>
-                <Text style={[styles.controlLabel, { color: colors.textPrimary }]}>Filter:</Text>
-                {(['all', 'active', 'ended'] as FilterOption[]).map((option) => (
-                  <TouchableOpacity
-                    key={option}
-                    style={[
-                      styles.filterChip,
-                      { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F5F5', borderColor: theme === 'dark' ? '#3C3C3E' : '#E0E0E0' },
-                      filterBy === option && styles.filterChipActive
-                    ]}
-                    onPress={() => setFilterBy(option)}
-                  >
-                    <Text style={[
-                      styles.filterChipText,
-                      { color: theme === 'dark' && filterBy !== option ? '#ECEDEE' : '#666' },
-                      filterBy === option && styles.filterChipTextActive
-                    ]}>
-                      {option === 'all' ? 'All' : option === 'active' ? 'Active' : 'Ended'}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <View style={styles.viewControls}>
-                <TouchableOpacity
-                  style={[styles.viewButton, viewMode === 'grid' && styles.viewButtonActive]}
-                  onPress={() => setViewMode('grid')}
-                >
-                  <Ionicons name="grid" size={20} color={viewMode === 'grid' ? '#FFF' : '#6A0DAD'} />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.viewButton, viewMode === 'list' && styles.viewButtonActive]}
-                  onPress={() => setViewMode('list')}
-                >
-                  <Ionicons name="list" size={20} color={viewMode === 'list' ? '#FFF' : '#6A0DAD'} />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Items List */}
-            {viewMode === 'grid' ? (
-              <FlatList
-                key="grid-view"
-                data={filteredAndSortedItems}
-                keyExtractor={(item) => String(item.id)}
-                renderItem={renderGridItem}
-                numColumns={2}
-                columnWrapperStyle={styles.gridRow}
-                contentContainerStyle={styles.gridContainer}
-                showsVerticalScrollIndicator={false}
-                scrollEnabled={false}
-              />
-            ) : (
-              <FlatList
-                key="list-view"
-                data={filteredAndSortedItems}
-                keyExtractor={(item) => String(item.id)}
-                renderItem={renderListItem}
-                contentContainerStyle={styles.listContainer}
-                showsVerticalScrollIndicator={false}
-                scrollEnabled={false}
-              />
-            )}
-          </>
-        )}
+        {renderContent()}
       </RNAnimated.ScrollView>
 
 
@@ -545,56 +664,125 @@ export default function WishlistScreen() {
               </TouchableOpacity>
             </View>
 
+            <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+              <Text style={[styles.modalSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]} numberOfLines={2}>
+                {selectedItem?.name}
+              </Text>
+
+              <View style={styles.reminderOptions}>
+                {[
+                  { minutes: 120, label: '2 Hours', icon: 'time' },
+                  { minutes: 60, label: '1 Hour', icon: 'time-outline' },
+                  { minutes: 30, label: '30 Minutes', icon: 'alarm' },
+                  { minutes: 10, label: '10 Minutes', icon: 'flash' },
+                ].map(({ minutes, label, icon }) => (
+                  <TouchableOpacity
+                    key={minutes}
+                    style={[
+                      styles.reminderOption,
+                      { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F5F5', borderColor: theme === 'dark' ? '#3C3C3E' : '#E0E0E0' },
+                      selectedReminders.includes(minutes) && styles.reminderOptionActive
+                    ]}
+                    onPress={() => toggleReminder(minutes)}
+                  >
+                    <Ionicons
+                      name={icon as any}
+                      size={22}
+                      color={selectedReminders.includes(minutes) ? '#FFF' : (theme === 'dark' ? '#B794F4' : '#6A0DAD')}
+                    />
+                    <Text style={[
+                      styles.reminderOptionText,
+                      { color: theme === 'dark' ? '#ECEDEE' : '#333' },
+                      selectedReminders.includes(minutes) && styles.reminderOptionTextActive
+                    ]}>
+                      {label} Before
+                    </Text>
+                    {selectedReminders.includes(minutes) && (
+                      <Ionicons name="checkmark-circle" size={22} color="#FFF" />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <TouchableOpacity
+                style={styles.saveButton}
+                onPress={saveReminders}
+                disabled={selectedReminders.length === 0}
+              >
+                <LinearGradient
+                  colors={selectedReminders.length > 0 ? ['#6A0DAD', '#8B5CF6'] : ['#CCC', '#DDD']}
+                  style={styles.saveButtonGradient}
+                >
+                  <Text style={styles.saveButtonText}>
+                    Save {selectedReminders.length} Reminder{selectedReminders.length !== 1 ? 's' : ''}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Price Alert Modal */}
+      <Modal
+        visible={priceAlertModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPriceAlertModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalTitleRow}>
+                <MaterialCommunityIcons name="bell-badge" size={28} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+                <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Set Price Alert</Text>
+              </View>
+              <TouchableOpacity onPress={() => setPriceAlertModalVisible(false)}>
+                <Ionicons name="close" size={28} color={theme === 'dark' ? '#999' : '#666'} />
+              </TouchableOpacity>
+            </View>
+
             <Text style={[styles.modalSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]} numberOfLines={2}>
               {selectedItem?.name}
             </Text>
 
-            <View style={styles.reminderOptions}>
-              {[
-                { minutes: 60, label: '1 Hour', icon: 'time' },
-                { minutes: 30, label: '30 Minutes', icon: 'alarm' },
-                { minutes: 15, label: '15 Minutes', icon: 'timer' },
-                { minutes: 5, label: '5 Minutes', icon: 'flash' },
-              ].map(({ minutes, label, icon }) => (
-                <TouchableOpacity
-                  key={minutes}
-                  style={[
-                    styles.reminderOption,
-                    { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F5F5', borderColor: theme === 'dark' ? '#3C3C3E' : '#E0E0E0' },
-                    selectedReminders.includes(minutes) && styles.reminderOptionActive
-                  ]}
-                  onPress={() => toggleReminder(minutes)}
-                >
-                  <Ionicons
-                    name={icon as any}
-                    size={22}
-                    color={selectedReminders.includes(minutes) ? '#FFF' : (theme === 'dark' ? '#B794F4' : '#6A0DAD')}
-                  />
-                  <Text style={[
-                    styles.reminderOptionText,
-                    { color: theme === 'dark' ? '#ECEDEE' : '#333' },
-                    selectedReminders.includes(minutes) && styles.reminderOptionTextActive
-                  ]}>
-                    {label} Before
-                  </Text>
-                  {selectedReminders.includes(minutes) && (
-                    <Ionicons name="checkmark-circle" size={22} color="#FFF" />
-                  )}
-                </TouchableOpacity>
-              ))}
+            <View style={styles.priceAlertContent}>
+              <Text style={[styles.currentPriceLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>
+                Current Price: ${selectedItem?.price?.toLocaleString()}
+              </Text>
+
+              <Text style={[styles.priceInputLabel, { color: colors.textPrimary }]}>
+                Notify me when price drops to:
+              </Text>
+
+              <View style={[styles.priceInputContainer, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F5F5', borderColor: theme === 'dark' ? '#3C3C3E' : '#E0E0E0' }]}>
+                <Text style={[styles.dollarSign, { color: colors.textPrimary }]}>$</Text>
+                <TextInput
+                  style={[styles.priceInput, { color: colors.textPrimary }]}
+                  value={priceThreshold}
+                  onChangeText={setPriceThreshold}
+                  keyboardType="numeric"
+                  placeholder="Enter price"
+                  placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
+                />
+              </View>
+
+              <Text style={[styles.priceHint, { color: theme === 'dark' ? '#666' : '#999' }]}>
+                💡 Tip: Set a price below the current price to get notified when it drops
+              </Text>
             </View>
 
             <TouchableOpacity
               style={styles.saveButton}
-              onPress={saveReminders}
-              disabled={selectedReminders.length === 0}
+              onPress={savePriceAlert}
+              disabled={!priceThreshold || parseFloat(priceThreshold) <= 0}
             >
               <LinearGradient
-                colors={selectedReminders.length > 0 ? ['#6A0DAD', '#8B5CF6'] : ['#CCC', '#DDD']}
+                colors={priceThreshold && parseFloat(priceThreshold) > 0 ? ['#6A0DAD', '#8B5CF6'] : ['#CCC', '#DDD']}
                 style={styles.saveButtonGradient}
               >
                 <Text style={styles.saveButtonText}>
-                  Save {selectedReminders.length} Reminder{selectedReminders.length !== 1 ? 's' : ''}
+                  Set Price Alert
                 </Text>
               </LinearGradient>
             </TouchableOpacity>
@@ -614,8 +802,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingTop: HEADER_MAX_HEIGHT + 30,
-    paddingBottom: 100,
+    paddingTop: HEADER_MAX_HEIGHT + 48,
+    paddingBottom: 120,
   },
   pageHeader: {
     flexDirection: 'row',
@@ -623,8 +811,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
     marginBottom: 8,
   },
   backButton: {
@@ -632,7 +818,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   pageTitle: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '700',
     color: '#1A1A1A',
   },
@@ -913,6 +1099,9 @@ const styles = StyleSheet.create({
   reminderActionButton: {
     backgroundColor: '#4A90E2',
   },
+  priceAlertActionButton: {
+    backgroundColor: '#10B981',
+  },
   deleteActionButton: {
     backgroundColor: '#FF4757',
   },
@@ -1095,5 +1284,79 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 17,
     fontWeight: '700',
+  },
+  priceAlertContent: {
+    paddingVertical: 24,
+  },
+  currentPriceLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  priceInputLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  priceInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  dollarSign: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginRight: 8,
+  },
+  priceInput: {
+    flex: 1,
+    fontSize: 24,
+    fontWeight: '600',
+  },
+  priceHint: {
+    fontSize: 13,
+    fontStyle: 'italic',
+    lineHeight: 18,
+  },
+
+  // Alert Badge on Cards
+  cardAlertBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#FFF',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  cardSolidBadge: {
+    width: '100%',
+    height: '100%',
+  },
+  cardSplitBadge: {
+    flexDirection: 'row',
+    width: '100%',
+    height: '100%',
+  },
+  cardSplitHalf: {
+    width: '50%',
+    height: '100%',
+  },
+  cardSplitLeft: {
+    backgroundColor: '#4A90E2', // Blue (reminder)
+  },
+  cardSplitRight: {
+    backgroundColor: '#10B981', // Green (price alert)
   },
 });

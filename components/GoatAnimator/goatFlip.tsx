@@ -19,14 +19,14 @@ type GoatFlipProps = {
 };
 
 const sounds = [
-  require('../../assets/sounds/goatScream.wav'),
-  require('../../assets/sounds/goatChill.wav'),
+  require('assets/sounds/goatScream.mp3'),
+  require('assets/sound/goat-stutter-baa.wav'),
   require('../../assets/goatExcited.wav'),
 ];
 
 const moodSounds: Partial<Record<MascotMood, any>> = {
   Celebrate: require('../../assets/sounds/goatExcited.wav'),
-  Grumpy: require('../../assets/sounds/goatScream.wav'),
+  Grumpy: require('assets/sounds/goatScream.mp3'),
   Sleepy: require('../../assets/sounds/goatChill.wav'),
   // Add more mappings as needed
 };
@@ -58,6 +58,8 @@ export const GoatFlip: React.FC<GoatFlipProps> = ({ trigger, onComplete, bidAmou
   }, [trigger]);
 
  const playGoatSound = async (mood?: MascotMood) => {
+  console.log('🐐 Goat sound triggered! mood:', mood);
+
   const selectedSound = mood ? moodSounds[mood] : sounds[Math.floor(Math.random() * sounds.length)];
   if (!selectedSound) return;
 
@@ -68,6 +70,7 @@ export const GoatFlip: React.FC<GoatFlipProps> = ({ trigger, onComplete, bidAmou
     console.warn('🐐 Failed to play goat sound:', err);
   }
 };
+
 
 
   return (

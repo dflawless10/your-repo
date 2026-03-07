@@ -12,7 +12,7 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 import { AuthProvider } from '@/hooks/AuthContext';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Provider } from 'react-redux';
 import store from '@/utils/filestore';
 import {
@@ -24,6 +24,7 @@ import {
 import * as Notifications from 'expo-notifications';
 import { ThemeProvider as AppThemeProvider, useTheme } from 'app/theme/ThemeContext';
 import Toast from 'react-native-toast-message';
+
 
 function ThemedNavigation({ children }: { children: React.ReactNode }) {
   const { theme } = useTheme();
@@ -39,11 +40,8 @@ export default function RootLayout() {
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
 
- const notificationListener = useRef<Notifications.Subscription | null>(null);
-const responseListener = useRef<Notifications.Subscription | null>(null);
-
-
-
+  const notificationListener = useRef<Notifications.Subscription | null>(null);
+  const responseListener = useRef<Notifications.Subscription | null>(null);
 
   useEffect(() => {
     const initializeNotifications = async () => {
@@ -54,7 +52,8 @@ const responseListener = useRef<Notifications.Subscription | null>(null);
           await sendPushTokenToBackend(token);
         }
       } catch (error) {
-        console.error('🐐 Push notification setup failed:', error);
+        console.log('🐐 Push notifications not configured yet (this is okay for testing)');
+        // Silenced - push notifications are optional for now
       }
     };
 
@@ -115,20 +114,28 @@ const responseListener = useRef<Notifications.Subscription | null>(null);
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <Provider store={store}>
-        <AppThemeProvider>
-          <ThemedNavigation>
-            <AuthProvider>
-              <>
-                <Stack>
+
+          <AppThemeProvider>
+            <ThemedNavigation>
+              <AuthProvider>
+                <>
+                  <Stack>
                   <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                  <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+                  <Stack.Screen name="register" options={{ headerShown: false }} />
+                  <Stack.Screen name="landing" options={{ headerShown: false }} />
                   <Stack.Screen name="about" options={{ headerShown: false }} />
                   <Stack.Screen name="help" options={{ headerShown: false }} />
                   <Stack.Screen name="admin-on-duty" options={{ headerShown: false }} />
+                  <Stack.Screen name="import-reputation" options={{ headerShown: false }} />
                   <Stack.Screen name="account/settings" options={{ headerShown: false }} />
                   <Stack.Screen name="notifications" options={{ headerShown: false }} />
                   <Stack.Screen name="orders" options={{ headerShown: false }} />
+                  <Stack.Screen name="login-history" options={{ headerShown: false }} />
                   <Stack.Screen name="buyer/sent-offers" options={{ headerShown: false }} />
                   <Stack.Screen name="purchases" options={{ headerShown: false }} />
+                  <Stack.Screen name="dispute-details" options={{ headerShown: false }} />
+                  <Stack.Screen name="my-disputes" options={{ headerShown: false }} />
                   <Stack.Screen name="relisted-discounts" options={{ headerShown: false }} />
                   <Stack.Screen name="seller/dashboard" options={{ headerShown: false }} />
                   <Stack.Screen name="seller/orders" options={{ headerShown: false }} />
@@ -137,11 +144,14 @@ const responseListener = useRef<Notifications.Subscription | null>(null);
                   <Stack.Screen name="seller/[sellerId]" options={{ headerShown: false }} />
                   <Stack.Screen name="admin/dashboard" options={{ headerShown: false }} />
                   <Stack.Screen name="admin/moderation" options={{ headerShown: false }} />
+                  <Stack.Screen name="admin/users-list" options={{ headerShown: false }} />
+                  <Stack.Screen name="admin/items-list" options={{ headerShown: false }} />
                   <Stack.Screen name="watch-appraisal" options={{ headerShown: false }} />
                   <Stack.Screen name="watch-listing" options={{ headerShown: false }} />
                   <Stack.Screen name="diamond-appraisal" options={{ headerShown: false }} />
                   <Stack.Screen name="diamond-listing" options={{ headerShown: false }} />
                   <Stack.Screen name="jewelry-box" options={{ headerShown: false }} />
+                  <Stack.Screen name="premium-benefits" options={{ headerShown: false }} />
                   <Stack.Screen name="MustSellScreen" options={{ headerShown: false }} />
                   <Stack.Screen name="category/[name]" options={{ headerShown: false }} />
                   <Stack.Screen name="CreateAuctionScreen" options={{ headerShown: false }} />
@@ -149,12 +159,12 @@ const responseListener = useRef<Notifications.Subscription | null>(null);
                   <Stack.Screen name="bid-history/[itemId]" options={{ headerShown: false }} />
                   <Stack.Screen name="+not-found" />
                 </Stack>
-                <StatusBar style="auto" />
-                <Toast />
-              </>
-            </AuthProvider>
-          </ThemedNavigation>
-        </AppThemeProvider>
+                  <StatusBar style="auto" />
+                  <Toast />
+                </>
+              </AuthProvider>
+            </ThemedNavigation>
+          </AppThemeProvider>
       </Provider>
     </GestureHandlerRootView>
   );

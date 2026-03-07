@@ -216,7 +216,7 @@ export default function ImageUploader({
       <View style={[styles.tips, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F7FAFC' }]}>
         <Ionicons name="information-circle-outline" size={16} color={theme === 'dark' ? '#999' : '#666'} />
         <Text style={[styles.tipsText, { color: theme === 'dark' ? '#999' : '#666' }]}>
-          First photo will be the main image. Drag to reorder.
+          First photo will be the main image shown in listings.
         </Text>
       </View>
 

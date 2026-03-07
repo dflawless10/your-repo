@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -28,6 +28,7 @@ export default function Register() {
   const [showPassword, setShowPassword] = useState(false);
 
   const router = useRouter();
+  const scrollViewRef = useRef<ScrollView>(null);
 
   const handleRegister = async () => {
     if (!email || !password || !username || !firstname || !lastname) {
@@ -93,19 +94,30 @@ export default function Register() {
     }
   };
 
+  const handleEmailChange = (text: string) => {
+    setEmail(text);
+    // Auto-scroll when email is entered (@ symbol typically means they're done typing)
+    if (text.includes('@') && text.length > 5) {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollTo({ y: 200, animated: true });
+      }, 300);
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView
+        ref={scrollViewRef}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         {/* Header Section */}
         <LinearGradient
-          colors={['#8B5CF6', '#FF6B35']}
+          colors={['#4CAF50', '#6A0DAD']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.header}
@@ -168,7 +180,7 @@ export default function Register() {
               placeholder="Email"
               placeholderTextColor="#9CA3AF"
               value={email}
-              onChangeText={setEmail}
+              onChangeText={handleEmailChange}
               keyboardType="email-address"
               autoCapitalize="none"
             />

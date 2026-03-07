@@ -1,6 +1,9 @@
 import React from 'react';
-import {View, Text, StyleSheet, Image as RNImage} from 'react-native';
+import {View, Text, StyleSheet, Image as RNImage, TouchableOpacity} from 'react-native';
 import {AuctionItem} from "@/types/items";
+import {Ionicons} from '@expo/vector-icons';
+import {formatTimeWithSeconds} from '@/utils/time';
+import {router} from 'expo-router';
 
 
 
@@ -81,6 +84,50 @@ export const CardContent: React.FC<CardProps> = ({item, onPress}: CardProps) => 
                 <Text style={styles.price}>
                     {getPriceDisplay()}
                 </Text>
+
+                {/* Time Remaining */}
+                {item.auction_ends_at && (
+                  <View style={styles.timeRow}>
+                    <Ionicons name="time-outline" size={14} color="#666" />
+                    <Text style={styles.timeText}>
+                      {formatTimeWithSeconds(item.auction_ends_at, Date.now())}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Seller Info */}
+                {item.seller && (
+                  <TouchableOpacity
+                    style={styles.sellerRow}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      if (item.seller?.id) {
+                        router.push(`/seller/${item.seller.id}` as any);
+                      }
+                    }}
+                  >
+                    {item.seller.avatar && (
+                      <RNImage source={{ uri: item.seller.avatar }} style={styles.sellerAvatar} />
+                    )}
+                    <View style={styles.sellerInfo}>
+                      <Text style={styles.sellerName} numberOfLines={1}>
+                        {item.seller.username}
+                      </Text>
+                      {typeof item.seller.avg_rating === 'number' && (
+                        <View style={styles.ratingRow}>
+                          <Ionicons name="star" size={12} color="#FFD700" />
+                          <Text style={styles.ratingText}>
+                            {item.seller.avg_rating.toFixed(1)}
+                          </Text>
+                          <Text style={styles.reviewCount}>
+                            ({item.seller.total_reviews || 0})
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                )}
+
                 {tagList.length > 0 && (
                   <View style={styles.tagContainer}>
                     {tagList.slice(0, 3).map((tag: string, index: number) => (
@@ -233,5 +280,55 @@ const styles = StyleSheet.create({
         fontSize: 11,
         fontWeight: 'bold',
         letterSpacing: 0.5,
+    },
+    timeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        marginTop: 4,
+    },
+    timeText: {
+        fontSize: 12,
+        color: '#666',
+        fontWeight: '600',
+    },
+    sellerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginTop: 6,
+        paddingTop: 6,
+        borderTopWidth: 1,
+        borderTopColor: '#eee',
+    },
+    sellerAvatar: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: '#eee',
+    },
+    sellerInfo: {
+        flex: 1,
+        gap: 2,
+    },
+    sellerName: {
+        fontSize: 12,
+        color: '#444',
+        fontWeight: '500',
+    },
+    ratingRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 2,
+    },
+    ratingText: {
+        fontSize: 11,
+        color: '#666',
+        fontWeight: '600',
+    },
+    reviewCount: {
+        fontSize: 11,
+        color: '#666',
+        textDecorationLine: 'underline',
     },
 });

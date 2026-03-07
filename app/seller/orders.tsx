@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -24,6 +24,198 @@ import { formatShippingTimeRemaining } from '@/utils/time';
 import { useTheme } from '@/app/theme/ThemeContext';
 
 const API_URL = API_BASE_URL;
+
+// Helper Functions
+const formatDate = (dateString: string) => {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+};
+
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case 'pending_shipment':
+      return '#F6AD55';
+    case 'shipped':
+      return '#4299E1';
+    case 'delivered':
+      return '#48BB78';
+    default:
+      return '#A0AEC0';
+  }
+};
+
+const getStatusLabel = (status: string) => {
+  switch (status) {
+    case 'pending_shipment':
+      return '⏳ Awaiting Shipment';
+    case 'shipped':
+      return '📦 Shipped';
+    case 'delivered':
+      return '✅ Delivered';
+    default:
+      return status;
+  }
+};
+
+const getUrgencyBadge = (urgencyLevel?: string, isLate?: boolean) => {
+  if (isLate) {
+    return { emoji: '⚠️', label: 'OVERDUE', color: '#E53E3E', bgColor: '#FED7D7' };
+  }
+  switch (urgencyLevel) {
+    case 'urgent':
+      return { emoji: '🔥', label: 'URGENT', color: '#E53E3E', bgColor: '#FED7D7' };
+    case 'high':
+      return { emoji: '⚡', label: 'HIGH', color: '#DD6B20', bgColor: '#FEEBC8' };
+    case 'normal':
+      return { emoji: '📦', label: 'NORMAL', color: '#3182CE', bgColor: '#BEE3F8' };
+    default:
+      return null;
+  }
+};
+
+// Helper Components
+const UrgencyBadge = ({ order, theme }: { order: Order; theme: string }) => {
+  const urgencyBadge = getUrgencyBadge(order.urgency_level, order.is_late);
+  if (!urgencyBadge) return null;
+
+  return (
+    <View style={[styles.urgencyBadge, { backgroundColor: urgencyBadge.bgColor }]}>
+      <Text style={styles.urgencyEmoji}>{urgencyBadge.emoji}</Text>
+      <Text style={[styles.urgencyLabel, { color: urgencyBadge.color }]}>
+        {urgencyBadge.label}
+      </Text>
+      {order.premium_shipping && (
+        <View style={styles.premiumShippingTag}>
+          <Ionicons name="flash" size={14} color="#FFF" />
+          <Text style={styles.premiumShippingText}>RUSH</Text>
+        </View>
+      )}
+    </View>
+  );
+};
+
+const TimeRemainingBanner = ({ order }: { order: Order }) => {
+  if (!order.shipping_deadline) return null;
+
+  return (
+    <View style={[styles.timeRemainingBanner, order.is_late && styles.timeRemainingLate]}>
+      <Ionicons
+        name={order.is_late ? "warning" : "time-outline"}
+        size={18}
+        color={order.is_late ? "#E53E3E" : "#2D3748"}
+      />
+      <Text style={[styles.timeRemainingText, order.is_late && styles.timeRemainingTextLate]}>
+        {formatShippingTimeRemaining(order.shipping_deadline)}
+      </Text>
+    </View>
+  );
+};
+
+const OrderHeader = ({ order, theme, colors }: { order: Order; theme: string; colors: any }) => (
+  <View style={styles.orderHeader}>
+    <Image source={{ uri: order.photo_url }} style={styles.itemImage} />
+    <View style={styles.orderInfo}>
+      <Text style={[styles.itemName, { color: colors.textPrimary }]} numberOfLines={2}>
+        {order.item_name}
+      </Text>
+      <Text style={[styles.orderDate, { color: theme === 'dark' ? '#999' : '#718096' }]}>
+        {formatDate(order.created_at)}
+      </Text>
+      <Text style={styles.orderPrice}>${order.sale_price.toFixed(2)}</Text>
+    </View>
+  </View>
+);
+
+const PriceBreakdown = ({ order, theme, colors }: { order: Order; theme: string; colors: any }) => (
+  <View style={[styles.priceBreakdown, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC' }]}>
+    <View style={styles.priceRow}>
+      <Text style={[styles.priceLabel, { color: theme === 'dark' ? '#999' : '#718096' }]}>Sale Price</Text>
+      <Text style={[styles.priceValue, { color: colors.textPrimary }]}>${order.sale_price.toFixed(2)}</Text>
+    </View>
+    {order.bidgoat_commission != null && (
+      <View style={styles.priceRow}>
+        <Text style={styles.feeLabel}>BidGoat Fee (8%)</Text>
+        <Text style={styles.feeValue}>-${order.bidgoat_commission.toFixed(2)}</Text>
+      </View>
+    )}
+    <View style={[styles.divider, { backgroundColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]} />
+    {order.seller_payout != null && (
+      <View style={styles.priceRow}>
+        <Text style={[styles.totalLabel, { color: colors.textPrimary }]}>Your Payout</Text>
+        <Text style={styles.totalValue}>${order.seller_payout.toFixed(2)}</Text>
+      </View>
+    )}
+  </View>
+);
+
+const ShippingAddress = ({ order, theme, colors }: { order: Order; theme: string; colors: any }) => (
+  <View style={[styles.addressSection, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC' }]}>
+    <Text style={[styles.addressTitle, { color: colors.textPrimary }]}>📍 Ship To:</Text>
+    <Text style={[styles.addressText, { color: theme === 'dark' ? '#CCC' : '#4A5568' }]}>{order.buyer.name}</Text>
+    <Text style={[styles.addressText, { color: theme === 'dark' ? '#CCC' : '#4A5568' }]}>{order.shipping_address.address}</Text>
+    <Text style={[styles.addressText, { color: theme === 'dark' ? '#CCC' : '#4A5568' }]}>
+      {order.shipping_address.city}, {order.shipping_address.state} {order.shipping_address.zip}
+    </Text>
+    <Text style={[styles.addressText, { color: theme === 'dark' ? '#CCC' : '#4A5568' }]}>{order.shipping_address.country}</Text>
+  </View>
+);
+
+const PendingOrderCard = ({
+  order,
+  theme,
+  colors,
+  onShip
+}: {
+  order: Order;
+  theme: string;
+  colors: any;
+  onShip: (order: Order) => void;
+}) => (
+  <View key={order.id} style={[styles.orderCard, styles.orderPending, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}>
+    <UrgencyBadge order={order} theme={theme} />
+    <TimeRemainingBanner order={order} />
+    <OrderHeader order={order} theme={theme} colors={colors} />
+    <PriceBreakdown order={order} theme={theme} colors={colors} />
+    <ShippingAddress order={order} theme={theme} colors={colors} />
+
+    <TouchableOpacity style={styles.shipButton} onPress={() => onShip(order)}>
+      <Ionicons name="rocket" size={20} color="#fff" />
+      <Text style={styles.shipButtonText}>Mark as Shipped</Text>
+    </TouchableOpacity>
+  </View>
+);
+
+const ShippedOrderCard = ({ order, theme, colors }: { order: Order; theme: string; colors: any }) => (
+  <View key={order.id} style={[styles.orderCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}>
+    <View style={styles.orderHeader}>
+      <Image source={{ uri: order.photo_url }} style={styles.itemImage} />
+      <View style={styles.orderInfo}>
+        <Text style={[styles.itemName, { color: colors.textPrimary }]} numberOfLines={2}>
+          {order.item_name}
+        </Text>
+        <Text style={[styles.orderDate, { color: theme === 'dark' ? '#999' : '#718096' }]}>
+          Shipped {order.shipped_at ? formatDate(order.shipped_at) : ''}
+        </Text>
+      </View>
+      <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) }]}>
+        <Text style={styles.statusText}>{getStatusLabel(order.status)}</Text>
+      </View>
+    </View>
+
+    {order.tracking_number && (
+      <View style={styles.trackingSection}>
+        <Ionicons name="location" size={16} color="#4299E1" />
+        <Text style={styles.trackingText}>
+          {order.carrier}: {order.tracking_number}
+        </Text>
+      </View>
+    )}
+  </View>
+);
 
 type Order = {
   id: number;
@@ -82,6 +274,24 @@ export default function SellerOrdersScreen() {
   const [shipping, setShipping] = useState(false);
   const [celebrationVisible, setCelebrationVisible] = useState(false);
   const [celebrationOrder, setCelebrationOrder] = useState<Order | null>(null);
+  const slideAnim = useRef(new Animated.Value(-500)).current;
+
+  // Animate ship modal slide from top
+  useEffect(() => {
+    if (shipModalVisible) {
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      Animated.timing(slideAnim, {
+        toValue: -500,
+        duration: 250,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [shipModalVisible, slideAnim]);
 
   // Fade in header title and arrow
   useEffect(() => {
@@ -198,57 +408,6 @@ export default function SellerOrdersScreen() {
     }
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending_shipment':
-        return '#F6AD55';
-      case 'shipped':
-        return '#4299E1';
-      case 'delivered':
-        return '#48BB78';
-      default:
-        return '#A0AEC0';
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'pending_shipment':
-        return '⏳ Awaiting Shipment';
-      case 'shipped':
-        return '📦 Shipped';
-      case 'delivered':
-        return '✅ Delivered';
-      default:
-        return status;
-    }
-  };
-
-  const getUrgencyBadge = (urgencyLevel?: string, isLate?: boolean) => {
-    if (isLate) {
-      return { emoji: '⚠️', label: 'OVERDUE', color: '#E53E3E', bgColor: '#FED7D7' };
-    }
-    switch (urgencyLevel) {
-      case 'urgent':
-        return { emoji: '🔥', label: 'URGENT', color: '#E53E3E', bgColor: '#FED7D7' };
-      case 'high':
-        return { emoji: '⚡', label: 'HIGH', color: '#DD6B20', bgColor: '#FEEBC8' };
-      case 'normal':
-        return { emoji: '📦', label: 'NORMAL', color: '#3182CE', bgColor: '#BEE3F8' };
-      default:
-        return null;
-    }
-  };
-
   const pendingOrders = orders.filter(o => o.status === 'pending_shipment');
   const shippedOrders = orders.filter(o => o.status !== 'pending_shipment');
 
@@ -259,7 +418,7 @@ export default function SellerOrdersScreen() {
         <View style={[styles.headerTitleContainer, { backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
           <View style={styles.titleWithArrow}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
-              <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+              <Ionicons name="arrow-back" size={28} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
             </TouchableOpacity>
             <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Selling Orders</Text>
           </View>
@@ -277,7 +436,7 @@ export default function SellerOrdersScreen() {
       <Animated.View style={[styles.headerTitleContainer, { opacity: headerOpacity, transform: [{ scale: headerScale }], backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
         <View style={styles.titleWithArrow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
-            <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+            <Ionicons name="arrow-back" size={28} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Selling Orders</Text>
         </View>
@@ -320,94 +479,15 @@ export default function SellerOrdersScreen() {
         {pendingOrders.length > 0 && (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>🚨 Action Required</Text>
-            {pendingOrders.map((order) => {
-              const urgencyBadge = getUrgencyBadge(order.urgency_level, order.is_late);
-              return (
-                <View key={order.id} style={[styles.orderCard, styles.orderPending, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}>
-                  {/* Urgency Badge */}
-                  {urgencyBadge && (
-                    <View style={[styles.urgencyBadge, { backgroundColor: urgencyBadge.bgColor }]}>
-                      <Text style={styles.urgencyEmoji}>{urgencyBadge.emoji}</Text>
-                      <Text style={[styles.urgencyLabel, { color: urgencyBadge.color }]}>
-                        {urgencyBadge.label}
-                      </Text>
-                      {order.premium_shipping && (
-                        <View style={styles.premiumShippingTag}>
-                          <Ionicons name="flash" size={14} color="#FFF" />
-                          <Text style={styles.premiumShippingText}>RUSH</Text>
-                        </View>
-                      )}
-                    </View>
-                  )}
-
-                  {/* Time Remaining */}
-                  {order.shipping_deadline && (
-                    <View style={[styles.timeRemainingBanner, order.is_late && styles.timeRemainingLate]}>
-                      <Ionicons
-                        name={order.is_late ? "warning" : "time-outline"}
-                        size={18}
-                        color={order.is_late ? "#E53E3E" : "#2D3748"}
-                      />
-                      <Text style={[styles.timeRemainingText, order.is_late && styles.timeRemainingTextLate]}>
-                        {formatShippingTimeRemaining(order.shipping_deadline)}
-                      </Text>
-                    </View>
-                  )}
-
-                  <View style={styles.orderHeader}>
-                    <Image source={{ uri: order.photo_url }} style={styles.itemImage} />
-                    <View style={styles.orderInfo}>
-                      <Text style={[styles.itemName, { color: colors.textPrimary }]} numberOfLines={2}>
-                        {order.item_name}
-                      </Text>
-                      <Text style={[styles.orderDate, { color: theme === 'dark' ? '#999' : '#718096' }]}>{formatDate(order.created_at)}</Text>
-                      <Text style={styles.orderPrice}>${order.sale_price.toFixed(2)}</Text>
-                    </View>
-                  </View>
-
-                  {/* Price Breakdown */}
-                  <View style={[styles.priceBreakdown, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC' }]}>
-                    <View style={styles.priceRow}>
-                      <Text style={[styles.priceLabel, { color: theme === 'dark' ? '#999' : '#718096' }]}>Sale Price</Text>
-                      <Text style={[styles.priceValue, { color: colors.textPrimary }]}>${order.sale_price.toFixed(2)}</Text>
-                    </View>
-                    {order.bidgoat_commission != null && (
-                      <View style={styles.priceRow}>
-                        <Text style={styles.feeLabel}>BidGoat Fee (8%)</Text>
-                        <Text style={styles.feeValue}>-${order.bidgoat_commission.toFixed(2)}</Text>
-                      </View>
-                    )}
-                    <View style={[styles.divider, { backgroundColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]} />
-                    {order.seller_payout != null && (
-                      <View style={styles.priceRow}>
-                        <Text style={[styles.totalLabel, { color: colors.textPrimary }]}>Your Payout</Text>
-                        <Text style={styles.totalValue}>${order.seller_payout.toFixed(2)}</Text>
-                      </View>
-                    )}
-                  </View>
-
-                  {/* Shipping Address */}
-                  <View style={[styles.addressSection, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC' }]}>
-                    <Text style={[styles.addressTitle, { color: colors.textPrimary }]}>📍 Ship To:</Text>
-                    <Text style={[styles.addressText, { color: theme === 'dark' ? '#CCC' : '#4A5568' }]}>{order.buyer.name}</Text>
-                    <Text style={[styles.addressText, { color: theme === 'dark' ? '#CCC' : '#4A5568' }]}>{order.shipping_address.address}</Text>
-                    <Text style={[styles.addressText, { color: theme === 'dark' ? '#CCC' : '#4A5568' }]}>
-                      {order.shipping_address.city}, {order.shipping_address.state} {order.shipping_address.zip}
-                    </Text>
-                    <Text style={[styles.addressText, { color: theme === 'dark' ? '#CCC' : '#4A5568' }]}>{order.shipping_address.country}</Text>
-                  </View>
-
-                  {/* Ship Button */}
-                  <TouchableOpacity
-                    style={styles.shipButton}
-                    onPress={() => openShipModal(order)}
-                  >
-                    <Ionicons name="rocket" size={20} color="#fff" />
-                    <Text style={styles.shipButtonText}>Mark as Shipped</Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            })}
+            {pendingOrders.map((order) => (
+              <PendingOrderCard
+                key={order.id}
+                order={order}
+                theme={theme}
+                colors={colors}
+                onShip={openShipModal}
+              />
+            ))}
           </View>
         )}
 
@@ -416,31 +496,12 @@ export default function SellerOrdersScreen() {
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>📦 Shipped Orders</Text>
             {shippedOrders.map((order) => (
-              <View key={order.id} style={[styles.orderCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}>
-                <View style={styles.orderHeader}>
-                  <Image source={{ uri: order.photo_url }} style={styles.itemImage} />
-                  <View style={styles.orderInfo}>
-                    <Text style={[styles.itemName, { color: colors.textPrimary }]} numberOfLines={2}>
-                      {order.item_name}
-                    </Text>
-                    <Text style={[styles.orderDate, { color: theme === 'dark' ? '#999' : '#718096' }]}>
-                      Shipped {order.shipped_at ? formatDate(order.shipped_at) : ''}
-                    </Text>
-                  </View>
-                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) }]}>
-                    <Text style={styles.statusText}>{getStatusLabel(order.status)}</Text>
-                  </View>
-                </View>
-
-                {order.tracking_number && (
-                  <View style={styles.trackingSection}>
-                    <Ionicons name="location" size={16} color="#4299E1" />
-                    <Text style={styles.trackingText}>
-                      {order.carrier}: {order.tracking_number}
-                    </Text>
-                  </View>
-                )}
-              </View>
+              <ShippedOrderCard
+                key={order.id}
+                order={order}
+                theme={theme}
+                colors={colors}
+              />
             ))}
           </View>
         )}
@@ -457,15 +518,23 @@ export default function SellerOrdersScreen() {
       {/* Ship Modal */}
       <Modal
         visible={shipModalVisible}
-        animationType="slide"
+        animationType="none"
         transparent={true}
         onRequestClose={() => setShipModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}>
+          <Animated.View
+            style={[
+              styles.modalContent,
+              {
+                transform: [{ translateY: slideAnim }],
+                backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff',
+              },
+            ]}
+          >
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Mark as Shipped</Text>
-              <TouchableOpacity onPress={() => setShipModalVisible(false)}>
+              <TouchableOpacity onPress={() => setShipModalVisible(false)} style={{ marginTop: 4 }}>
                 <Ionicons name="close" size={24} color={theme === 'dark' ? '#999' : '#666'} />
               </TouchableOpacity>
             </View>
@@ -521,8 +590,15 @@ export default function SellerOrdersScreen() {
                   <Text style={styles.confirmButtonText}>Confirm Shipment</Text>
                 )}
               </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.cancelButton, { borderColor: theme === 'dark' ? '#444' : '#ddd' }]}
+                onPress={() => setShipModalVisible(false)}
+              >
+                <Text style={[styles.cancelButtonText, { color: colors.textPrimary }]}>Cancel</Text>
+              </TouchableOpacity>
             </ScrollView>
-          </View>
+          </Animated.View>
         </View>
       </Modal>
 
@@ -798,7 +874,8 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-start',
+    marginTop: 4,
   },
   modalContent: {
     backgroundColor: '#fff',
@@ -887,6 +964,17 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '700',
+  },
+  cancelButton: {
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    marginTop: 12,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
   urgencyBadge: {
     flexDirection: 'row',

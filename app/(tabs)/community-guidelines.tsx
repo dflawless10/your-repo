@@ -60,7 +60,7 @@ export default function CommunityGuidelinesScreen() {
         {/* Title with Back Arrow */}
         <Animated.View style={[styles.pageHeader, { opacity: headerOpacity, transform: [{ scale: headerScale }], backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E5E5E5' }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
-            <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+            <Ionicons name="arrow-back" size={28} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Community Guidelines</Text>
         </Animated.View>
@@ -234,10 +234,69 @@ export default function CommunityGuidelinesScreen() {
         <Text style={[styles.bodyText, { color: theme === 'dark' ? '#999' : '#374151' }]}>
           On any listing, tap the &quot;Report&quot; button and select the reason. Our team will review within 24 hours.
         </Text>
+      </View>
 
-        <TouchableOpacity style={styles.reportButton} onPress={handleReportIssue}>
-          <Text style={styles.reportButtonText}>📧 Contact Support</Text>
+      {/* Contact Information */}
+      <View style={[styles.section, { backgroundColor: theme === 'dark' ? '#1C1C1E' : 'white' }]}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionIcon}>📧</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Contact Us:</Text>
+        </View>
+
+        <Text style={[styles.bodyText, { color: theme === 'dark' ? '#999' : '#374151', fontWeight: '600', marginTop: 8 }]}>
+          Report Violations & Legal Issues:
+        </Text>
+        <TouchableOpacity onPress={() => Linking.openURL('mailto:legal@bidgoat.com?subject=Report: Community Guidelines Violation')}>
+          <Text style={[styles.emailLink, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>
+            legal@bidgoat.com
+          </Text>
         </TouchableOpacity>
+        <Text style={[styles.bodyText, { color: theme === 'dark' ? '#777' : '#6B7280', fontSize: 13, marginTop: 4 }]}>
+          For fraud, counterfeit items, disputes, and policy violations
+        </Text>
+
+        <Text style={[styles.bodyText, { color: theme === 'dark' ? '#999' : '#374151', fontWeight: '600', marginTop: 16 }]}>
+          Customer Support:
+        </Text>
+        <TouchableOpacity onPress={() => Linking.openURL('mailto:support@bidgoat.com?subject=Community Guidelines Question')}>
+          <Text style={[styles.emailLink, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>
+            support@bidgoat.com
+          </Text>
+        </TouchableOpacity>
+        <Text style={[styles.bodyText, { color: theme === 'dark' ? '#777' : '#6B7280', fontSize: 13, marginTop: 4 }]}>
+          For general questions, order issues, and account help
+        </Text>
+
+        <Text style={[styles.bodyText, { color: theme === 'dark' ? '#999' : '#374151', fontWeight: '600', marginTop: 16 }]}>
+          Security Issues:
+        </Text>
+        <TouchableOpacity onPress={() => Linking.openURL('mailto:security@bidgoat.com?subject=Security Issue Report')}>
+          <Text style={[styles.emailLink, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>
+            security@bidgoat.com
+          </Text>
+        </TouchableOpacity>
+        <Text style={[styles.bodyText, { color: theme === 'dark' ? '#777' : '#6B7280', fontSize: 13, marginTop: 4 }]}>
+          Report security vulnerabilities and account safety concerns
+        </Text>
+
+        <Text style={[styles.bodyText, { color: theme === 'dark' ? '#999' : '#374151', fontWeight: '600', marginTop: 16 }]}>
+          Privacy Requests:
+        </Text>
+        <TouchableOpacity onPress={() => Linking.openURL('mailto:privacy@bidgoat.com?subject=Privacy Request')}>
+          <Text style={[styles.emailLink, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>
+            privacy@bidgoat.com
+          </Text>
+        </TouchableOpacity>
+        <Text style={[styles.bodyText, { color: theme === 'dark' ? '#777' : '#6B7280', fontSize: 13, marginTop: 4 }]}>
+          For data deletion, access requests, and GDPR inquiries
+        </Text>
+
+        <View style={[styles.noteBox, { marginTop: 20, backgroundColor: theme === 'dark' ? '#1E3A5F' : '#DBEAFE' }]}>
+          <Text style={[styles.noteTitle, { color: theme === 'dark' ? '#60A5FA' : '#1E40AF' }]}>⏱️ Response Time:</Text>
+          <Text style={[styles.noteText, { color: theme === 'dark' ? '#93C5FD' : '#1E3A8A' }]}>
+            We aim to respond to all inquiries within 24-48 hours.
+          </Text>
+        </View>
       </View>
 
       {/* Footer */}
@@ -246,7 +305,7 @@ export default function CommunityGuidelinesScreen() {
           Thank you for helping keep BidGoat safe and trustworthy! 🐐
         </Text>
         <Text style={[styles.footerSubtext, { color: theme === 'dark' ? '#666' : '#9CA3AF' }]}>
-          Last updated: December 2024
+          Last updated: February 2025
         </Text>
       </View>
       <View style={{ height: 40 }} />
@@ -334,7 +393,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
     color: '#1A1A1A',
   },
@@ -414,6 +473,12 @@ const styles = StyleSheet.create({
     color: '#374151',
     lineHeight: 24,
     marginBottom: 12,
+  },
+  emailLink: {
+    fontSize: 16,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+    marginTop: 4,
   },
   consequencesList: {
     marginTop: 8,

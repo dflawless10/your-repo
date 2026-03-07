@@ -47,9 +47,7 @@ export default function PaymentMethodsScreen() {
   const [addingCard, setAddingCard] = useState(false);
 
   // Card form state
-  const [cardNumber, setCardNumber] = useState('');
-  const [expiryDate, setExpiryDate] = useState('');
-  const [cvv, setCvv] = useState('');
+  const [cardDetails, setCardDetails] = useState<any>(null);
   const [cardholderName, setCardholderName] = useState('');
   const [billingZip, setBillingZip] = useState('');
 
@@ -65,7 +63,7 @@ export default function PaymentMethodsScreen() {
         return;
       }
 
-      const response = await fetch('http://10.0.0.170:5000/api/payment/methods', {
+      const response = await fetch(`${API_BASE_URL}/api/payment/methods`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -83,7 +81,7 @@ export default function PaymentMethodsScreen() {
   const handleSetDefault = async (methodId: string) => {
     try {
       const token = await AsyncStorage.getItem('jwtToken');
-      const response = await fetch(`http://10.0.0.170:5000/api/payment/methods/${methodId}/set-default`, {
+      const response = await fetch(`${API_BASE_URL}/api/payment/methods/${methodId}/set-default`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -109,7 +107,7 @@ export default function PaymentMethodsScreen() {
           onPress: async () => {
             try {
               const token = await AsyncStorage.getItem('jwtToken');
-              const response = await fetch(`http://10.0.0.170:5000/api/payment/methods/${methodId}`, {
+              const response = await fetch(`${API_BASE_URL}/api/payment/methods/${methodId}`, {
                 method: 'DELETE',
                 headers: { Authorization: `Bearer ${token}` },
               });
@@ -127,142 +125,43 @@ export default function PaymentMethodsScreen() {
     );
   };
 
-  const formatCardNumber = (text: string) => {
-    const cleaned = text.replace(/\D/g, '');
-    const formatted = cleaned.match(/.{1,4}/g)?.join(' ') || cleaned;
-    return formatted.substring(0, 19);
-  };
-
-  const formatExpiryDate = (text: string) => {
-    const cleaned = text.replace(/\D/g, '');
-    if (cleaned.length >= 2) {
-      return cleaned.substring(0, 2) + '/' + cleaned.substring(2, 4);
-    }
-    return cleaned;
-  };
-
-  const validateCard = () => {
-    const cleanedCardNumber = cardNumber.replace(/\s/g, '');
-
-    if (!cardholderName.trim()) {
-      Alert.alert('Error', 'Please enter cardholder name');
-      return false;
-    }
-
-    if (cleanedCardNumber.length < 13 || cleanedCardNumber.length > 19) {
-      Alert.alert('Error', 'Please enter a valid card number');
-      return false;
-    }
-
-    if (expiryDate.length !== 5 || !expiryDate.includes('/')) {
-      Alert.alert('Error', 'Please enter expiry date in MM/YY format');
-      return false;
-    }
-
-    const [month, year] = expiryDate.split('/');
-    const expMonth = parseInt(month);
-    const expYear = parseInt('20' + year);
-
-    if (expMonth < 1 || expMonth > 12) {
-      Alert.alert('Error', 'Invalid expiry month');
-      return false;
-    }
-
-    const today = new Date();
-    const expDate = new Date(expYear, expMonth - 1);
-    if (expDate < today) {
-      Alert.alert('Error', 'Card has expired');
-      return false;
-    }
-
-    if (cvv.length < 3 || cvv.length > 4) {
-      Alert.alert('Error', 'Please enter a valid CVV');
-      return false;
-    }
-
-    if (billingZip.length < 5) {
-      Alert.alert('Error', 'Please enter a valid billing ZIP code');
-      return false;
-    }
-
-    return true;
-  };
 
   const handleAddCard = async () => {
     if (!cardholderName.trim()) {
       Alert.alert('Error', 'Please enter cardholder name');
       return;
     }
-    if (!cardNumber.trim()) {
-      Alert.alert('Error', 'Please enter card number');
-      return;
-    }
-    if (!expiryDate.trim() || !cvv.trim()) {
-      Alert.alert('Error', 'Please enter card details');
-      return;
-    }
-    if (!billingZip.trim()) {
-      Alert.alert('Error', 'Please enter billing ZIP code');
+
+    if (!cardDetails || !cardDetails.complete) {
+      Alert.alert('Error', 'Please enter valid card information');
       return;
     }
 
     setAddingCard(true);
 
     try {
-      const token = await AsyncStorage.getItem('jwtToken');
-      const [expMonth, expYear] = expiryDate.split('/');
-
-      // ✅ Use Stripe to create payment method token (secure, PCI-compliant)
-      // For now, send to backend which will create via Stripe API
-      // In production mobile app, use @stripe/stripe-react-native CardField
-      const response = await fetch(`${API_BASE_URL}/api/payment/methods/create-token`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
+      // Create payment method using Stripe SDK (secure, PCI-compliant)
+      const { error, paymentMethod } = await createPaymentMethod({
+        paymentMethodType: 'Card',
+        paymentMethodData: {
+          billingDetails: {
+            name: cardholderName,
+          },
         },
-        body: JSON.stringify({
-          card_number: cardNumber.replace(/\s/g, ''),
-          exp_month: parseInt(expMonth),
-          exp_year: parseInt('20' + expYear),
-          cvv: cvv,
-          cardholder_name: cardholderName,
-          billing_zip: billingZip,
-        }),
       });
 
-      const data = await response.json();
+      if (error) {
+        Alert.alert('Error', error.message || 'Failed to process card');
+        setAddingCard(false);
+        return;
+      }
 
-      if (response.ok && data.payment_method_id) {
-        // Now attach the payment method to the user
-        const attachResponse = await fetch(`${API_BASE_URL}/api/payment/methods`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            payment_method_id: data.payment_method_id,
-            type: 'card',
-          }),
-        });
-
-        const attachData = await attachResponse.json();
-
-        if (attachResponse.ok) {
-          await loadPaymentMethods();
-          setShowAddModal(false);
-          setCardNumber('');
-          setExpiryDate('');
-          setCvv('');
-          setCardholderName('');
-          setBillingZip('');
-          Alert.alert('Success', 'Payment method added successfully');
-        } else {
-          Alert.alert('Error', attachData.error || 'Failed to add payment method');
-        }
-      } else {
-        Alert.alert('Error', data.error || 'Failed to process card');
+      if (paymentMethod) {
+        await savePaymentMethodToBackend(paymentMethod.id, 'card');
+        setShowAddModal(false);
+        setCardDetails(null);
+        setCardholderName('');
+        setBillingZip('');
       }
     } catch (error) {
       console.error('Add card error:', error);
@@ -383,7 +282,7 @@ export default function PaymentMethodsScreen() {
             onPress={() => router.back()}
             style={styles.backButton}
           >
-            <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+            <Ionicons name="arrow-back" size={28} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
           <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Payment Methods</Text>
         </View>
@@ -426,11 +325,11 @@ export default function PaymentMethodsScreen() {
         {/* Stripe Integration Notice */}
         <TouchableOpacity style={[styles.stripeNotice, { backgroundColor: theme === 'dark' ? '#1C1C2E' : '#F0F4FF', borderColor: theme === 'dark' ? '#2C2C3E' : '#D1D9FF' }]} onPress={handleLearnMoreStripe}>
           <View style={styles.stripeNoticeContent}>
-            <Ionicons name="information-circle" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+            <Ionicons name="shield-checkmark" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
             <View style={styles.stripeNoticeText}>
-              <Text style={[styles.stripeNoticeTitle, { color: theme === 'dark' ? '#B794F4' : '#1E40AF' }]}>Full Stripe Integration Available</Text>
+              <Text style={[styles.stripeNoticeTitle, { color: theme === 'dark' ? '#B794F4' : '#1E40AF' }]}>Powered by Stripe</Text>
               <Text style={[styles.stripeNoticeSubtitle, { color: theme === 'dark' ? '#999' : '#1E40AF' }]}>
-                To enable Apple Pay, Google Pay, and enhanced security, build with Stripe SDK
+                Secure payment processing with Apple Pay, Google Pay, and card payments
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
@@ -459,9 +358,8 @@ export default function PaymentMethodsScreen() {
           <Text style={[styles.infoTitle, { color: theme === 'dark' ? '#B794F4' : '#1E40AF' }]}>💳 Accepted Payment Methods</Text>
           <Text style={[styles.infoText, { color: theme === 'dark' ? '#999' : '#1E40AF' }]}>
             • Visa, Mastercard, American Express, Discover{'\n'}
-            • Apple Pay (coming soon - requires native build){'\n'}
-            • Google Pay (coming soon - requires native build){'\n'}
-            • Bank transfers (coming soon)
+            • Secure card payments via Stripe{'\n'}
+            • Apple Pay & Google Pay (coming soon)
           </Text>
         </View>
 
@@ -512,73 +410,17 @@ export default function PaymentMethodsScreen() {
               </View>
             </View>
 
-            {/* Card Number */}
+            {/* Card Information - Coming Soon */}
             <View style={styles.inputSection}>
-              <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>Card Number</Text>
-              <View style={[styles.inputContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
-                <Ionicons name="card-outline" size={20} color={theme === 'dark' ? '#666' : '#999'} style={styles.inputIcon} />
-                <TextInput
-                  style={[styles.input, { color: colors.textPrimary }]}
-                  value={cardNumber}
-                  onChangeText={(text) => setCardNumber(formatCardNumber(text))}
-                  placeholder="4242 4242 4242 4242"
-                  placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
-                  keyboardType="number-pad"
-                  maxLength={19}
-                />
-              </View>
-            </View>
-
-            {/* Expiry and CVV */}
-            <View style={styles.rowInputs}>
-              <View style={[styles.inputSection, { flex: 1, marginRight: 12 }]}>
-                <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>Expiry Date</Text>
-                <View style={[styles.inputContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
-                  <Ionicons name="calendar-outline" size={20} color={theme === 'dark' ? '#666' : '#999'} style={styles.inputIcon} />
-                  <TextInput
-                    style={[styles.input, { color: colors.textPrimary }]}
-                    value={expiryDate}
-                    onChangeText={(text) => setExpiryDate(formatExpiryDate(text))}
-                    placeholder="MM/YY"
-                    placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
-                    keyboardType="number-pad"
-                    maxLength={5}
-                  />
-                </View>
-              </View>
-
-              <View style={[styles.inputSection, { flex: 1 }]}>
-                <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>CVV</Text>
-                <View style={[styles.inputContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
-                  <Ionicons name="shield-checkmark-outline" size={20} color={theme === 'dark' ? '#666' : '#999'} style={styles.inputIcon} />
-                  <TextInput
-                    style={[styles.input, { color: colors.textPrimary }]}
-                    value={cvv}
-                    onChangeText={(text) => setCvv(text.replace(/\D/g, '').substring(0, 4))}
-                    placeholder="123"
-                    placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
-                    keyboardType="number-pad"
-                    maxLength={4}
-                    secureTextEntry
-                  />
-                </View>
-              </View>
-            </View>
-
-            {/* Billing ZIP */}
-            <View style={styles.inputSection}>
-              <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>Billing ZIP Code</Text>
-              <View style={[styles.inputContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
-                <Ionicons name="location-outline" size={20} color={theme === 'dark' ? '#666' : '#999'} style={styles.inputIcon} />
-                <TextInput
-                  style={[styles.input, { color: colors.textPrimary }]}
-                  value={billingZip}
-                  onChangeText={setBillingZip}
-                  placeholder="12345"
-                  placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
-                  keyboardType="number-pad"
-                  maxLength={10}
-                />
+              <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>Card Information</Text>
+              <View style={[styles.comingSoonBox, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F5F5F5', borderColor: colors.border }]}>
+                <Ionicons name="card-outline" size={32} color={colors.textSecondary} />
+                <Text style={[styles.comingSoonText, { color: colors.textSecondary }]}>
+                  Stripe integration coming soon
+                </Text>
+                <Text style={[styles.comingSoonSubtext, { color: colors.textSecondary }]}>
+                  Add payment methods securely
+                </Text>
               </View>
             </View>
 
@@ -974,5 +816,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#1E40AF',
     lineHeight: 20,
+  },
+  comingSoonBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+  },
+  comingSoonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 12,
+  },
+  comingSoonSubtext: {
+    fontSize: 14,
+    marginTop: 4,
   },
 });

@@ -234,16 +234,6 @@ if (!token) {
   return (
     <View style={{ flex: 1 }}>
       <EnhancedHeader scrollY={scrollY} onSearch={() => {}} />
-      
-      {/* Title with Back Arrow */}
-      <View style={styles.headerTitleContainer}>
-        <View style={styles.titleWithArrow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
-            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Buy It Now Listing</Text>
-        </View>
-      </View>
 
       <Animated.ScrollView
         contentContainerStyle={styles.container}
@@ -253,6 +243,16 @@ if (!token) {
         )}
         scrollEventThrottle={16}
       >
+        {/* Title with Back Arrow */}
+        <View style={styles.headerTitleContainer}>
+          <View style={styles.titleWithArrow}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
+              <Ionicons name="arrow-back" size={28} color="#6A0DAD" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Buy It Now Listing</Text>
+          </View>
+        </View>
+
         <Text style={styles.label}>Select Category</Text>
       <Picker
         selectedValue={category}
@@ -375,19 +375,14 @@ if (!token) {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 16, paddingTop: 260 },
+  container: { padding: 16, paddingTop: HEADER_MAX_HEIGHT },
   headerTitleContainer: {
-    position: 'absolute',
-    top: HEADER_MAX_HEIGHT + 70,
-    left: 0,
-    right: 0,
     paddingHorizontal: 16,
     paddingVertical: 16,
+    paddingTop: 60,
     backgroundColor: '#FFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
-    zIndex: 100,
-    elevation: 10,
   },
   titleWithArrow: {
     flexDirection: 'row',

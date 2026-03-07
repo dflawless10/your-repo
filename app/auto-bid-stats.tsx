@@ -71,7 +71,7 @@ export default function AutoBidStatsScreen() {
         return;
       }
 
-      const response = await fetch('http://10.0.0.170:5000/api/auto-bid/stats', {
+      const response = await fetch(`${API_BASE_URL}/api/auto-bid/stats`, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -147,7 +147,7 @@ export default function AutoBidStatsScreen() {
             onPress={() => router.back()}
             style={styles.backButton}
           >
-            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+            <Ionicons name="arrow-back" size={28} color="#6A0DAD" />
           </TouchableOpacity>
           <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>⚡ Auto-Bid Statistics</Text>
         </Animated.View>

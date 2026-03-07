@@ -20,6 +20,7 @@ import GlobalFooter from "./components/GlobalFooter";
 import { API_BASE_URL } from '@/config';
 import CategorySelector, { QUICK_CATEGORIES } from '@/app/components/CategorySelector';
 import { useTheme } from '@/app/theme/ThemeContext';
+import {playGoatSoundByName} from "@/assets/sounds/officialGoatSoundsSoundtrack";
 
 const API_URL = API_BASE_URL;
 
@@ -28,10 +29,11 @@ export default function MustSellScreen() {
   const scrollY = useRef(new Animated.Value(0)).current;
   const headerOpacity = useRef(new Animated.Value(0)).current;
   const headerScale = useRef(new Animated.Value(1)).current;
+  const scrollViewRef = useRef<ScrollView>(null);
   const router = useRouter();
   const params = useLocalSearchParams();
   const editItemId = params.editItemId as string | undefined;
-
+const [showConfetti, setShowConfetti] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [imageUris, setImageUris] = useState<string[]>([]);
@@ -45,6 +47,10 @@ export default function MustSellScreen() {
   const [condition, setCondition] = useState('good');
   const [rarity, setRarity] = useState('common');
   const [loading, setLoading] = useState(false);
+
+  // Item-level return policy overrides
+  const [returnPolicyOverride, setReturnPolicyOverride] = useState<string>('use_default');
+  const [showPolicyOverride, setShowPolicyOverride] = useState(false);
 
   const { goatTrigger, lastBidAmount, triggerGoat } = useGoatBid();
 
@@ -138,7 +144,38 @@ console.log("🐐 FULL ITEM:", item);
     setTimeout(() => setShowGoat(false), 2000);
   };
 
+  // Refs for each field to enable auto-scroll
+  const categorySelectorRef = useRef<View>(null);
+  const imageUploaderRef = useRef<View>(null);
+  const nameInputRef = useRef<View>(null);
+  const descriptionInputRef = useRef<View>(null);
+  const tagsInputRef = useRef<TextInput>(null);
+  const rarityPickerRef = useRef<View>(null);
+  const weightInputRef = useRef<TextInput>(null);
+  const genderPickerRef = useRef<View>(null);
+
+  // Helper function to scroll field into view below EnhancedHeader
+  const scrollToField = (ref: React.RefObject<any>) => {
+    if (ref.current && scrollViewRef.current) {
+      ref.current.measureLayout(
+        scrollViewRef.current,
+        (x: number, y: number) => {
+          scrollViewRef.current?.scrollTo({
+            y: Math.max(0, y - HEADER_MAX_HEIGHT - 10),
+            animated: true
+          });
+        },
+        () => {}
+      );
+    }
+  };
+
   const handleSubmit = async () => {
+    // Prevent duplicate submissions
+    if (loading) {
+      return;
+    }
+
     if (!name || !description || !categoryId || imageUris.length === 0 || !durationHours) {
       Alert.alert('Missing Fields', 'Please fill out all fields, select a category, and upload at least one photo');
       return;
@@ -171,9 +208,13 @@ console.log("🐐 FULL ITEM:", item);
       return;
     }
 
+    // Set loading state to prevent duplicate submissions
+    setLoading(true);
+
     const token = await AsyncStorage.getItem('jwtToken');
     if (!token) {
       Alert.alert('Error', 'You must be logged in to create a listing.');
+      setLoading(false);
       router.push('/login');
       return;
     }
@@ -190,21 +231,27 @@ console.log("🐐 FULL ITEM:", item);
     formData.append('category_id', categoryId);
     formData.append('gender', gender);
     formData.append('selling_strategy', 'must_sell');
+    formData.append('return_policy_override', returnPolicyOverride);
 
-    // Main image (first image)
-    formData.append('photo', {
-      uri: imageUris[0],
-      name: 'photo.jpg',
-      type: 'image/jpeg',
-    } as any);
-
-    // Additional images
-    for (let i = 1; i < imageUris.length; i++) {
-      formData.append(`additional_photo_${i - 1}`, {
-        uri: imageUris[i],
-        name: `extra_${i - 1}.jpg`,
+    // Handle images: only send if they're new local files (not existing URLs)
+    if (imageUris[0] && imageUris[0].startsWith('file://')) {
+      // Main image (first image) - only if it's a new local file
+      formData.append('photo', {
+        uri: imageUris[0],
+        name: 'photo.jpg',
         type: 'image/jpeg',
       } as any);
+    }
+
+    // Additional images - only send new local files
+    for (let i = 1; i < imageUris.length; i++) {
+      if (imageUris[i].startsWith('file://')) {
+        formData.append(`additional_photo_${i - 1}`, {
+          uri: imageUris[i],
+          name: `extra_${i - 1}.jpg`,
+          type: 'image/jpeg',
+        } as any);
+      }
     }
 
     try {
@@ -252,8 +299,9 @@ console.log("🐐 FULL ITEM:", item);
           const randomCompliment = compliments[Math.floor(Math.random() * compliments.length)];
 
           Alert.alert('Success!', randomCompliment, [
-            { text: 'OK', onPress: () => router.back() }
+            {text: 'OK', onPress: () => router.back()}
           ]);
+
         } else {
           // Clear form only for new listings
           setName('');
@@ -266,31 +314,44 @@ console.log("🐐 FULL ITEM:", item);
           setRarity('common');
           setDurationHours('24');
 
-          // Show success and redirect to review
-          Alert.alert(
-            'Success! 🎉',
-            'Your Must Sell listing will be live in an hour! Want to preview it?',
-            [
-              {
-                text: 'Preview Now',
-                onPress: () => router.push(`/seller/review-item/${itemId}` as any),
-              },
-              {
-                text: 'Later',
-                style: 'cancel',
-                onPress: () => router.push('/(tabs)/MyAuctionScreen' as any),
-              },
-            ],
-            { cancelable: false }
-          );
+          // Celebration flow
+          // 1. Play goat audio
+          await playGoatSoundByName('Victory Baa');
+
+          // 2. Trigger confetti
+          setShowConfetti(true);
+
+          // 3. Wait for confetti animation
+          setTimeout(() => {
+            // 4. Show success alert AFTER confetti
+            Alert.alert(
+              'Success! 🎉',
+              'Your Must Sell listing will be live in an hour! Want to preview it?',
+              [
+                {
+                  text: 'Preview Now',
+                  onPress: () => router.push(`/seller/review-item/${itemId}` as any),
+                },
+                {
+                  text: 'Later',
+                  style: 'cancel',
+                  onPress: () => router.push('/(tabs)/MyAuctionScreen' as any),
+                },
+              ],
+              {cancelable: false}
+            );
+          }, 1200);
+
         }
       } else {
         const errorData = await res.json();
         Alert.alert('Error', errorData.error || 'Failed to save Must Sell listing');
+        setLoading(false);
       }
     } catch (error) {
       console.error('Must Sell listing error:', error);
       Alert.alert('Network Error', 'Could not reach the server.');
+      setLoading(false);
     }
   };
 
@@ -298,19 +359,8 @@ console.log("🐐 FULL ITEM:", item);
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <EnhancedHeader scrollY={scrollY} />
 
-      <Animated.View style={[styles.headerTitleContainer, { opacity: headerOpacity, transform: [{ scale: headerScale }], backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
-        <View style={styles.titleWithArrow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
-            <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
-          </TouchableOpacity>
-          <View>
-            <Text style={[styles.headerTitleText, { color: colors.textPrimary }]}>{editItemId ? 'Edit Must Sell' : 'Must Sell'}</Text>
-            <Text style={[styles.headerSubtitle, { color: theme === 'dark' ? '#999' : '#718096' }]}>{editItemId ? 'Update your listing details' : 'No reserve - highest bidder wins!'}</Text>
-          </View>
-        </View>
-      </Animated.View>
-
       <Animated.ScrollView
+        ref={scrollViewRef}
         style={{ backgroundColor: colors.background }}
         contentContainerStyle={[styles.container, { paddingBottom: 120, backgroundColor: colors.background }]}
         keyboardShouldPersistTaps="handled"
@@ -320,28 +370,50 @@ console.log("🐐 FULL ITEM:", item);
         )}
         scrollEventThrottle={16}
       >
-          <CategorySelector
-            selectedCategory={categoryId}
-            onSelectCategory={(id, name) => {
-              setCategoryId(id);
-              setCategoryName(name);
-            }}
-            required={true}
-            showSelectedBanner={true}
-          />
+        <Animated.View style={[styles.headerTitleContainer, { opacity: headerOpacity, transform: [{ scale: headerScale }], backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
+          <View style={styles.titleWithArrow}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
+              <Ionicons name="arrow-back" size={28} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+            </TouchableOpacity>
+            <View>
+              <Text style={[styles.headerTitleText, { color: colors.textPrimary }]}>{editItemId ? 'Edit Must Sell' : 'Must Sell'}</Text>
+              <Text style={[styles.headerSubtitle, { color: theme === 'dark' ? '#999' : '#718096' }]}>{editItemId ? 'Update your listing details' : 'No reserve - highest bidder wins!'}</Text>
+            </View>
+          </View>
+        </Animated.View>
 
-          <ImageUploader
-            maxImages={5}
-            imageUris={imageUris}
-            onImagesChange={(uris) => {
-              setImageUris(uris);
-              if (uris.length > 0) {
-                triggerGoat(0);
-              }
-            }}
-            title="Upload Item Photos"
-            subtitle="Add up to 5 photos"
-          />
+          <View ref={categorySelectorRef}>
+            <CategorySelector
+              selectedCategory={categoryId}
+              onSelectCategory={(id, name) => {
+                setCategoryId(id);
+                setCategoryName(name);
+                // Scroll category into view after selection
+                setTimeout(() => scrollToField(categorySelectorRef), 100);
+              }}
+              required={true}
+              showSelectedBanner={true}
+            />
+          </View>
+
+          <View ref={imageUploaderRef}>
+            <ImageUploader
+              maxImages={5}
+              imageUris={imageUris}
+              onImagesChange={(uris) => {
+                setImageUris(uris);
+                if (uris.length > 0) {
+                  triggerGoat(0);
+                }
+                // Scroll to image uploader when images are added
+                if (uris.length > 0) {
+                  setTimeout(() => scrollToField(imageUploaderRef), 100);
+                }
+              }}
+              title="Upload Item Photos"
+              subtitle="Add up to 5 photos"
+            />
+          </View>
 
           {/* Image Validation Feedback */}
           {imageUris.length > 0 && (
@@ -350,27 +422,33 @@ console.log("🐐 FULL ITEM:", item);
 
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>⚡ Must Sell Listing</Text>
 
-          <CharacterCounterInput
-            label="Item Name"
-            placeholder="Enter item name"
-            value={name}
-            onChangeText={setName}
-            minLength={CHARACTER_LIMITS.NAME_MIN}
-            maxLength={CHARACTER_LIMITS.NAME_MAX}
-          />
+          <View ref={nameInputRef}>
+            <CharacterCounterInput
+              label="Item Name"
+              placeholder="Enter item name"
+              value={name}
+              onChangeText={setName}
+              minLength={CHARACTER_LIMITS.NAME_MIN}
+              maxLength={CHARACTER_LIMITS.NAME_MAX}
+              onFocus={() => scrollToField(nameInputRef)}
+            />
+          </View>
 
-          <CharacterCounterInput
-            label="Description"
-            placeholder="Describe your item in detail (condition, materials, size, unique features...)"
-            value={description}
-            onChangeText={setDescription}
-            minLength={CHARACTER_LIMITS.DESCRIPTION_MIN}
-            maxLength={CHARACTER_LIMITS.DESCRIPTION_MAX}
-            multiline
-            numberOfLines={5}
-            textAlignVertical="top"
-            helpText="💡 Great descriptions include: condition, materials, measurements, brand (if applicable), and what makes this item special"
-          />
+          <View ref={descriptionInputRef}>
+            <CharacterCounterInput
+              label="Description"
+              placeholder="Describe your item in detail (condition, materials, size, unique features...)"
+              value={description}
+              onChangeText={setDescription}
+              minLength={CHARACTER_LIMITS.DESCRIPTION_MIN}
+              maxLength={CHARACTER_LIMITS.DESCRIPTION_MAX}
+              multiline
+              numberOfLines={5}
+              textAlignVertical="top"
+              helpText="💡 Great descriptions include: condition, materials, measurements, brand (if applicable), and what makes this item special"
+              onFocus={() => scrollToField(descriptionInputRef)}
+            />
+          </View>
 
           <Text style={[styles.label, { color: colors.textPrimary }]}>Condition</Text>
           <View style={{ backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderRadius: 8, borderWidth: 1, borderColor: theme === 'dark' ? '#3C3C3E' : '#DDD' }}>
@@ -406,6 +484,7 @@ console.log("🐐 FULL ITEM:", item);
 
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>📦 Item Details</Text>
           <TextInput
+            ref={tagsInputRef}
             placeholder="Tags (comma-separated)"
             placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
             value={tags}
@@ -414,57 +493,110 @@ console.log("🐐 FULL ITEM:", item);
             multiline
             numberOfLines={3}
             textAlignVertical="top"
+            onFocus={() => scrollToField(tagsInputRef)}
           />
 
           {/* Item Rarity Dropdown */}
-          <Text style={[styles.label, { color: colors.textPrimary }]}>Item Rarity</Text>
-          <View style={{ backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderRadius: 8, borderWidth: 1, borderColor: theme === 'dark' ? '#3C3C3E' : '#DDD' }}>
-            <Picker
-              selectedValue={rarity}
-              onValueChange={(value) => setRarity(value)}
-              style={[styles.picker, { color: colors.textPrimary }]}
-              dropdownIconColor={theme === 'dark' ? '#B794F4' : '#6A0DAD'}
-              mode="dropdown"
-            >
-              <Picker.Item label="Common" value="common" />
-              <Picker.Item label="Rare" value="rare" />
-              <Picker.Item label="Extremely Rare" value="extremely_rare" />
-            </Picker>
+          <View ref={rarityPickerRef}>
+            <Text style={[styles.label, { color: colors.textPrimary }]}>Item Rarity</Text>
+            <View style={{ backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderRadius: 8, borderWidth: 1, borderColor: theme === 'dark' ? '#3C3C3E' : '#DDD' }}>
+              <Picker
+                selectedValue={rarity}
+                onValueChange={(value) => setRarity(value)}
+                style={[styles.picker, { color: colors.textPrimary }]}
+                dropdownIconColor={theme === 'dark' ? '#B794F4' : '#6A0DAD'}
+                mode="dropdown"
+                onFocus={() => scrollToField(rarityPickerRef)}
+              >
+                <Picker.Item label="Common" value="common" />
+                <Picker.Item label="Rare" value="rare" />
+                <Picker.Item label="Extremely Rare" value="extremely_rare" />
+              </Picker>
+            </View>
           </View>
 
+          <Text style={[styles.label, { color: colors.textPrimary }]}>Shipping Weight</Text>
           <TextInput
+            ref={weightInputRef}
             placeholder="Weight (lbs) - for shipping"
             placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
             value={weightLbs}
             onChangeText={setWeightLbs}
             keyboardType="decimal-pad"
             style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: colors.textPrimary, borderColor: theme === 'dark' ? '#3C3C3E' : '#DDD' }]}
+            onFocus={() => scrollToField(weightInputRef)}
           />
 
-          <Text style={[styles.label, { color: colors.textPrimary }]}>Gender</Text>
-          <View style={{ backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderRadius: 8, borderWidth: 1, borderColor: theme === 'dark' ? '#3C3C3E' : '#DDD' }}>
-            <Picker
-              selectedValue={gender}
-              onValueChange={(value) => setGender(value)}
-              style={[styles.picker, { color: colors.textPrimary }]}
-              dropdownIconColor={theme === 'dark' ? '#B794F4' : '#6A0DAD'}
-              mode="dropdown"
-            >
-              <Picker.Item label="Unisex / Not Specified" value="unisex" />
-              <Picker.Item label="👨 Men's" value="men" />
-              <Picker.Item label="👩 Women's" value="women" />
-            </Picker>
+          <View ref={genderPickerRef}>
+            <Text style={[styles.label, { color: colors.textPrimary }]}>Gender</Text>
+            <View style={{ backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderRadius: 8, borderWidth: 1, borderColor: theme === 'dark' ? '#3C3C3E' : '#DDD' }}>
+              <Picker
+                selectedValue={gender}
+                onValueChange={(value) => setGender(value)}
+                style={[styles.picker, { color: colors.textPrimary }]}
+                dropdownIconColor={theme === 'dark' ? '#B794F4' : '#6A0DAD'}
+                mode="dropdown"
+                onFocus={() => scrollToField(genderPickerRef)}
+              >
+                <Picker.Item label="Unisex / Not Specified" value="unisex" />
+                <Picker.Item label="👨 Men's" value="men" />
+                <Picker.Item label="👩 Women's" value="women" />
+              </Picker>
+            </View>
           </View>
 
-          <View style={{ alignItems: 'center', marginBottom: 20 }}>
-            <GoatFlip trigger={goatTrigger || showGoat} bidAmount={lastBidAmount || 0} />
-          </View>
+          {/* Return Policy Override */}
+          <TouchableOpacity
+            style={[styles.overrideToggle, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F8F9FA', borderColor: theme === 'dark' ? '#3C3C3E' : '#E0E0E0' }]}
+            onPress={() => setShowPolicyOverride(!showPolicyOverride)}
+            activeOpacity={0.7}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.overrideToggleText, { color: colors.textPrimary }]}>
+                {returnPolicyOverride === 'use_default' ? '📋 Use My Default Return Policy' : '⚠️ Override Return Policy for This Item'}
+              </Text>
+              {returnPolicyOverride !== 'use_default' && (
+                <Text style={[styles.overrideSubtext, { color: theme === 'dark' ? '#999' : '#666' }]}>
+                  This item: {returnPolicyOverride === 'no_returns' ? 'No Returns (Final Sale)' : returnPolicyOverride.replace('_', '-')}
+                </Text>
+              )}
+            </View>
+            <Ionicons name={showPolicyOverride ? 'chevron-up' : 'chevron-down'} size={20} color="#6A0DAD" />
+          </TouchableOpacity>
+
+          {showPolicyOverride && (
+            <View style={[styles.overridePanel, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#3C3C3E' : '#E0E0E0' }]}>
+              <Text style={[styles.overrideLabel, { color: colors.textPrimary }]}>Return Policy for THIS Item Only:</Text>
+              <Picker
+                selectedValue={returnPolicyOverride}
+                onValueChange={(value) => setReturnPolicyOverride(value)}
+                style={[styles.picker, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: colors.textPrimary }]}
+              >
+                <Picker.Item label="📋 Use My Default Return Policy" value="use_default" />
+                <Picker.Item label="30-day Returns" value="30_days" />
+                <Picker.Item label="14-day Returns" value="14_days" />
+                <Picker.Item label="7-day Returns" value="7_days" />
+                <Picker.Item label="🚫 No Returns (Final Sale)" value="no_returns" />
+              </Picker>
+              <Text style={[styles.overrideHint, { color: theme === 'dark' ? '#999' : '#666' }]}>
+                ℹ️ This override only applies to this listing. To change your default return policy, go to Settings → My Store.
+              </Text>
+            </View>
+          )}
 
           <TouchableOpacity
-            style={styles.submitButton}
+            style={[styles.submitButton, loading && styles.submitButtonDisabled]}
             onPress={handleSubmit}
+            disabled={loading}
           >
-            <Text style={styles.submitButtonText}>List Must Sell</Text>
+            {loading ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={styles.submitButtonText}>Creating...</Text>
+                <Ionicons name="hourglass-outline" size={20} color="#FFF" />
+              </View>
+            ) : (
+              <Text style={styles.submitButtonText}>List Must Sell</Text>
+            )}
           </TouchableOpacity>
       </Animated.ScrollView>
       <GlobalFooter />
@@ -496,12 +628,12 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   headerTitleText: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
     marginBottom: 2,
   },
   headerSubtitle: {
-    fontSize: 14,
+    fontSize: 12,
   },
   label: { marginBottom: 4, fontWeight: '500' },
   sectionTitle: {
@@ -536,6 +668,10 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
+  },
+  submitButtonDisabled: {
+    backgroundColor: '#CCCCCC',
+    opacity: 0.6,
   },
   submitButtonText: {
     color: '#fff',
@@ -589,5 +725,45 @@ const styles = StyleSheet.create({
   selectedCategoryText: {
     fontSize: 15,
     fontWeight: '600',
+  },
+  overrideToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F7FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+  },
+  overrideToggleText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2D3748',
+  },
+  overrideSubtext: {
+    fontSize: 13,
+    color: '#718096',
+    marginTop: 4,
+  },
+  overridePanel: {
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  overrideLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#2D3748',
+    marginBottom: 8,
+  },
+  overrideHint: {
+    fontSize: 13,
+    color: '#718096',
+    fontStyle: 'italic',
+    marginTop: 8,
   },
 });

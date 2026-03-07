@@ -43,6 +43,7 @@ function SellerDashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [stripeStatus, setStripeStatus] = useState<any>(null);
   const scrollY = new Animated.Value(0);
   const headerOpacity = React.useRef(new Animated.Value(0)).current;
   const headerScale = React.useRef(new Animated.Value(1)).current;
@@ -77,7 +78,24 @@ function SellerDashboardScreen() {
 useEffect(() => {
   fetchDashboardData();
   loadUsername();
+  checkStripeStatus();
 }, []);
+
+const checkStripeStatus = async () => {
+  try {
+    const token = await AsyncStorage.getItem('jwtToken');
+    if (!token) return;
+
+    const response = await fetch(`${API_URL}/api/stripe-connect/onboarding/status`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    const data = await response.json();
+    console.log('🔵 Stripe status:', data);
+    setStripeStatus(data);
+  } catch (error) {
+    console.error('Error checking Stripe status:', error);
+  }
+};
 
 const loadUsername = async () => {
   const email = await AsyncStorage.getItem('userEmail');
@@ -187,10 +205,69 @@ return (
             onPress={() => router.back()}
             style={styles.backButton}
           >
-            <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+            <Ionicons name="arrow-back" size={28} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
           <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Seller Dashboard</Text>
         </Animated.View>
+
+        {/* Stripe Connect Banner */}
+        {stripeStatus && !stripeStatus.payouts_enabled && (
+          <TouchableOpacity
+            style={{
+              backgroundColor: '#FFA500',
+              padding: 16,
+              marginHorizontal: 16,
+              marginBottom: 16,
+              borderRadius: 12,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 12,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 4,
+              elevation: 3,
+            }}
+            onPress={() => router.push('/seller/stripe-connect-onboarding' as any)}
+          >
+            <Ionicons name="card" size={28} color="#FFF" />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 16, marginBottom: 4 }}>
+                ⚠️ Enable Payments
+              </Text>
+              <Text style={{ color: '#FFF', fontSize: 14, lineHeight: 18 }}>
+                Complete Stripe setup to receive payments from your sales
+              </Text>
+            </View>
+            <Ionicons name="arrow-forward-circle" size={28} color="#FFF" />
+          </TouchableOpacity>
+        )}
+
+        {/* Success Banner */}
+        {stripeStatus?.payouts_enabled && (
+          <View
+            style={{
+              backgroundColor: '#48BB78',
+              padding: 16,
+              marginHorizontal: 16,
+              marginBottom: 16,
+              borderRadius: 12,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 12,
+            }}
+          >
+            <Ionicons name="checkmark-circle" size={28} color="#FFF" />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 16 }}>
+                ✅ Payments Enabled
+              </Text>
+              <Text style={{ color: '#FFF', fontSize: 14 }}>
+                You're all set to receive payouts
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* Revenue Summary Card */}
         <View style={[styles.summaryCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}>

@@ -17,10 +17,23 @@ export default function LandingPage() {
   const router = useRouter();
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Hero Section */}
+    <View style={styles.container}>
+      {/* Header with Back Button */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <Ionicons name="arrow-back" size={24} color="#1F2937" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Learn Why We're Different</Text>
+        <View style={{ width: 24 }} />
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Hero Section */}
       <LinearGradient
-        colors={['#8B5CF6', '#FF6B35', '#F7931E']}
+        colors={['#4CAF50', '#6A0DAD']}
         style={styles.hero}
       >
         <Text style={styles.goatEmoji}>🐐</Text>
@@ -227,7 +240,8 @@ export default function LandingPage() {
           🐐 BidGoat - The Greatest Of All Time in auction intelligence
         </Text>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -236,8 +250,27 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFF',
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 60,
+    paddingBottom: 16,
+    backgroundColor: '#FFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1F2937',
+  },
   hero: {
-    paddingTop: 80,
+    paddingTop: 40,
     paddingBottom: 60,
     paddingHorizontal: 24,
     alignItems: 'center',

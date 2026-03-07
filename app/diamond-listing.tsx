@@ -99,6 +99,10 @@ export default function DiamondListingScreen() {
   const [isMustSell, setIsMustSell] = useState(false);
   const [appraisedValue] = useState(getParamString(params.price));
 
+  // Item-level return policy overrides
+  const [returnPolicyOverride, setReturnPolicyOverride] = useState<string>('use_default');
+  const [showPolicyOverride, setShowPolicyOverride] = useState(false);
+
   // Image validation
   const imageValidation = useImageValidation(params.imageUrl as string | null);
 
@@ -265,6 +269,10 @@ console.log('diamond_specifications:', diamondSpecs);
         console.log('appraised_value:', parseFloat(appraisedValue));
       }
 
+      // Add return policy override
+      formData.append('return_policy_override', returnPolicyOverride);
+      console.log('return_policy_override:', returnPolicyOverride);
+
       // Handle the main image file
       const imageUri = params.imageUrl as string;
       const filename = imageUri.split('/').pop() || 'diamond.jpg';
@@ -304,8 +312,8 @@ console.log('diamond_specifications:', diamondSpecs);
 
       // Use PUT for edits, POST for new listings
       const endpoint = isEditMode
-        ? `http://10.0.0.170:5000/item/${editItemId}`
-        : 'http://10.0.0.170:5000/create_item';
+        ? `${API_BASE_URL}/item/${editItemId}`
+        : `${API_BASE_URL}/create_item`;
 
       const response = await fetch(endpoint, {
         method: isEditMode ? 'PUT' : 'POST',
@@ -385,12 +393,12 @@ console.log('diamond_specifications:', diamondSpecs);
     >
       <ScrollView
         style={[styles.container, { backgroundColor: colors.background }]}
-        contentContainerStyle={{ paddingBottom: 150 }}
+        contentContainerStyle={{ paddingBottom: 120 }}
         keyboardShouldPersistTaps="handled"
       >
         <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E2E8F0' }]}>
           <TouchableOpacity onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+            <Ionicons name="arrow-back" size={28} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
             {isEditMode ? 'Edit Diamond Listing' : 'List Your Diamond'}
@@ -688,6 +696,45 @@ console.log('diamond_specifications:', diamondSpecs);
             <Text style={[styles.cancelButtonText, { color: theme === 'dark' ? '#999' : '#718096' }]}>Cancel</Text>
           </TouchableOpacity>
 
+          {/* Return Policy Override */}
+          <TouchableOpacity
+            style={[styles.overrideToggle, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F8F9FA', borderColor: theme === 'dark' ? '#3C3C3E' : '#E0E0E0' }]}
+            onPress={() => setShowPolicyOverride(!showPolicyOverride)}
+            activeOpacity={0.7}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.overrideToggleText, { color: colors.textPrimary }]}>
+                {returnPolicyOverride === 'use_default' ? '📋 Use My Default Return Policy' : '⚠️ Override Return Policy for This Item'}
+              </Text>
+              {returnPolicyOverride !== 'use_default' && (
+                <Text style={[styles.overrideSubtext, { color: theme === 'dark' ? '#999' : '#666' }]}>
+                  This item: {returnPolicyOverride === 'no_returns' ? 'No Returns (Final Sale)' : returnPolicyOverride.replace('_', '-')}
+                </Text>
+              )}
+            </View>
+            <Ionicons name={showPolicyOverride ? 'chevron-up' : 'chevron-down'} size={20} color="#6A0DAD" />
+          </TouchableOpacity>
+
+          {showPolicyOverride && (
+            <View style={[styles.overridePanel, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#3C3C3E' : '#E0E0E0' }]}>
+              <Text style={[styles.overrideLabel, { color: colors.textPrimary }]}>Return Policy for THIS Item Only:</Text>
+              <Picker
+                selectedValue={returnPolicyOverride}
+                onValueChange={(value) => setReturnPolicyOverride(value)}
+                style={[styles.picker, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: colors.textPrimary }]}
+              >
+                <Picker.Item label="📋 Use My Default Return Policy" value="use_default" />
+                <Picker.Item label="30-day Returns" value="30_days" />
+                <Picker.Item label="14-day Returns" value="14_days" />
+                <Picker.Item label="7-day Returns" value="7_days" />
+                <Picker.Item label="🚫 No Returns (Final Sale)" value="no_returns" />
+              </Picker>
+              <Text style={[styles.overrideHint, { color: theme === 'dark' ? '#999' : '#666' }]}>
+                ℹ️ This override only applies to this listing. To change your default return policy, go to Settings → My Store.
+              </Text>
+            </View>
+          )}
+
           <TouchableOpacity
             style={styles.submitButton}
             onPress={handleCreateListing}
@@ -713,12 +760,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
+    paddingTop: 60,
     paddingVertical: 16,
     borderBottomWidth: 1,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
   },
   previewImage: {
     width: '100%',
@@ -1012,5 +1060,45 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#718096',
+  },
+  overrideToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F7FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+  },
+  overrideToggleText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2D3748',
+  },
+  overrideSubtext: {
+    fontSize: 13,
+    color: '#718096',
+    marginTop: 4,
+  },
+  overridePanel: {
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  overrideLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#2D3748',
+    marginBottom: 8,
+  },
+  overrideHint: {
+    fontSize: 13,
+    color: '#718096',
+    fontStyle: 'italic',
+    marginTop: 8,
   },
 });

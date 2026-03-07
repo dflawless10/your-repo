@@ -6,6 +6,7 @@ import { Colors } from '@/constants/Colors';
 import wishlistIcon from '@/assets/goat-stamp-coin.png';
 import { useAppSelector } from '@/hooks/reduxHooks';
 import { useTheme } from '@/app/theme/ThemeContext';
+import { playGoatSound } from '@/components/ui/GoatSound';
 
 
 type FooterButtonProps = {
@@ -24,7 +25,7 @@ function FooterButton({ children, label, active, onPress, textColor }: Readonly<
       activeOpacity={0.7}
     >
       {children}
-      <Text style={[styles.label, active && styles.activeLabel]}>{label}</Text>
+      <Text style={[styles.label, { color: textColor }, active && styles.activeLabel]}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -96,28 +97,49 @@ export default function GlobalFooter() {
       </FooterButton>
 
       {/* Wishlist */}
-      <FooterButton
-        label="Wishlist"
-        active={isActive('wishlist')}
-        onPress={() => router.push('/wishlist')}
-        textColor={isActive('wishlist') ? activeColor : inactiveColor}
-      >
+
+
+<FooterButton
+  label="Wishlist"
+  active={isActive('wishlist')}
+  onPress={async () => {
+    await playGoatSound();
+    router.push('/wishlist');
+  }}
+  textColor={isActive('wishlist') ? activeColor : inactiveColor}
+>
+
         <View style={{ position: 'relative' }}>
           <Image
-            source={wishlistIcon}
-            style={[
-              { width: 24, height: 24 },
-              { tintColor: isActive('wishlist') ? activeColor : inactiveColor }
-            ]}
-            resizeMode="contain"
-          />
-          {wishlistItems.length > 0 && (
-            <View style={[styles.badge, { borderColor: colors.background }]}>
-              <Text style={styles.badgeText}>
-                {wishlistItems.length > 99 ? '99+' : wishlistItems.length}
-              </Text>
-            </View>
-          )}
+  source={wishlistIcon}
+  style={{ width: 24, height: 24 }}
+  resizeMode="contain"
+/>
+
+          {(() => {
+            const hasReminder = wishlistItems.some(item => item.reminder_active);
+            const hasPriceAlert = wishlistItems.some(item => item.price_alert_active);
+
+            if (!hasReminder && !hasPriceAlert) return null;
+
+            return (
+              <View style={[styles.alertBadge, { borderColor: colors.background }]}>
+                {hasReminder && hasPriceAlert ? (
+                  // Split circle: left blue, right green
+                  <View style={styles.splitBadge}>
+                    <View style={[styles.splitBadgeHalf, styles.splitBadgeLeft]} />
+                    <View style={[styles.splitBadgeHalf, styles.splitBadgeRight]} />
+                  </View>
+                ) : hasReminder ? (
+                  // Blue only
+                  <View style={[styles.solidBadge, styles.reminderBadge]} />
+                ) : (
+                  // Green only
+                  <View style={[styles.solidBadge, styles.priceAlertBadge]} />
+                )}
+              </View>
+            );
+          })()}
         </View>
       </FooterButton>
     </View>
@@ -167,5 +189,42 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 10,
     fontWeight: '700',
+  },
+  alertBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -10,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: '#FFF',
+    overflow: 'hidden',
+  },
+  solidBadge: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 7,
+  },
+  reminderBadge: {
+    backgroundColor: '#4A90E2', // Blue
+  },
+  priceAlertBadge: {
+    backgroundColor: '#10B981', // Green
+  },
+  splitBadge: {
+    flexDirection: 'row',
+    width: '100%',
+    height: '100%',
+  },
+  splitBadgeHalf: {
+    width: '50%',
+    height: '100%',
+  },
+  splitBadgeLeft: {
+    backgroundColor: '#4A90E2', // Blue (reminder)
+  },
+  splitBadgeRight: {
+    backgroundColor: '#10B981', // Green (price alert)
   },
 });

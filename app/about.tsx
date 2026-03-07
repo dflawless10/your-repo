@@ -68,7 +68,7 @@ export default function AboutScreen() {
             onPress={() => router.back()}
             style={styles.backArrow}
           >
-            <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+            <Ionicons name="arrow-back" size={28} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>About BidGoat</Text>
         </Animated.View>

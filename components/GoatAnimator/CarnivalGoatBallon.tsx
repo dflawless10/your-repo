@@ -9,7 +9,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Audio } from 'expo-av';
 
-import goatImg from './assets/goat.png';
+import goatImg from '@/assets/images/goat.png';
 import balloonImg from './assets/balloons.png';
 // Optional: use this if you want to play goatSound instead
 // import goatSound from './assets/goat-bells.wav';

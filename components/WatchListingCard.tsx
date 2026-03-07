@@ -11,6 +11,7 @@ import { Image } from 'expo-image'; // 👈 use expo-image for reliable local fi
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '@/app/theme/ThemeContext';
 
 type Props = {
   imageUrl: string;
@@ -76,6 +77,7 @@ const WatchListingCard = ({
   isNew,
   watchSpecs,
 }: Props) => {
+  const { theme, colors } = useTheme();
   const [imageUris, setImageUris] = useState<string[]>([]);
   const [coverIndex, setCoverIndex] = useState(0);
   const router = useRouter();
@@ -156,21 +158,21 @@ const WatchListingCard = ({
   };
 
   return (
-    <View style={{ padding: 16, marginTop: 20 }}>
-      <Text style={{ fontSize: 22, fontWeight: 'bold', textAlign: 'center', marginBottom: 12 }}>
+    <View style={{ padding: 16, marginTop: 20, backgroundColor: colors.background }}>
+      <Text style={{ fontSize: 22, fontWeight: 'bold', textAlign: 'center', marginBottom: 12, color: colors.textPrimary }}>
         Your Watch Preview
       </Text>
 
-      <View style={styles.card}>
+      <View style={[styles.card, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#ffffff' }]}>
         {/* Top Section: Specs */}
         <View style={styles.specSection}>
           <Text style={styles.shapeIcons}>⌚</Text>
-          <Text style={styles.title}>⌚ {brand} {model}</Text>
-          {!!(year) && <Text style={styles.specs}>📅 Year: {year}</Text>}
+          <Text style={[styles.title, { color: colors.textPrimary }]}>⌚ {brand} {model}</Text>
+          {!!(year) && <Text style={[styles.specs, { color: colors.textSecondary }]}>📅 Year: {year}</Text>}
           {isNew !== undefined && (
-            <Text style={styles.specs}>🏷️ Condition: {isNew ? 'New' : 'Used'}</Text>
+            <Text style={[styles.specs, { color: colors.textSecondary }]}>🏷️ Condition: {isNew ? 'New' : 'Used'}</Text>
           )}
-          <Text style={styles.price}>💰 ${price}</Text>
+          <Text style={[styles.price, { color: theme === 'dark' ? '#4A9EFF' : '#0077cc' }]}>💰 ${price}</Text>
         </View>
 
         {/* Middle Section: Images */}
@@ -224,16 +226,16 @@ const WatchListingCard = ({
 
             {/* Add More Button - Outside the map */}
             {imageUris.length < 5 && (
-              <TouchableOpacity style={styles.addMoreImageCard} onPress={pickImage}>
-                <Ionicons name="add-circle-outline" size={48} color="#0077cc" />
-                <Text style={styles.addMoreCardText}>Add More</Text>
+              <TouchableOpacity style={[styles.addMoreImageCard, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC', borderColor: theme === 'dark' ? '#4A9EFF' : '#0077cc' }]} onPress={pickImage}>
+                <Ionicons name="add-circle-outline" size={48} color={theme === 'dark' ? '#4A9EFF' : '#0077cc'} />
+                <Text style={[styles.addMoreCardText, { color: theme === 'dark' ? '#4A9EFF' : '#0077cc' }]}>Add More</Text>
               </TouchableOpacity>
             )}
           </ScrollView>
         ) : (
-          <View style={styles.placeholderImage}>
-            <Ionicons name="camera-outline" size={60} color="#CBD5E0" />
-            <Text style={styles.placeholderText}>No photo uploaded yet</Text>
+          <View style={[styles.placeholderImage, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC' }]}>
+            <Ionicons name="camera-outline" size={60} color={theme === 'dark' ? '#666' : '#CBD5E0'} />
+            <Text style={[styles.placeholderText, { color: theme === 'dark' ? '#999' : '#A0AEC0' }]}>No photo uploaded yet</Text>
           </View>
         )}
 

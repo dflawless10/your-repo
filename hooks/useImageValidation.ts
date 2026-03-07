@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Image as RNImage } from 'react-native';
 
 export type ImageValidationResult = {
   isValid: boolean;
@@ -20,14 +21,36 @@ type ImageAsset = {
   type?: string;
 };
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-const MIN_WIDTH = 400;
-const MIN_HEIGHT = 400;
-const MAX_WIDTH = 4000;
-const MAX_HEIGHT = 4000;
-const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+// BidGoat Image Requirements
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MIN_DIMENSION = 500;
+const MAX_DIMENSION = 7000;
+const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+const ALLOWED_ASPECT_RATIOS = [
+  { ratio: 1, name: '1:1 (Square)', tolerance: 0.05 },
+  { ratio: 16 / 9, name: '16:9 (Landscape)', tolerance: 0.1 },
+];
 
-export function useImageValidation(imageUri: string | null): ImageValidationResult {
+// Correct expo-image dimension helper
+
+
+async function getDimensions(uri: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    RNImage.getSize(
+      uri,
+      (width, height) => resolve({ width, height }),
+      (err) => {
+        console.log("🐐 [Validation] RNImage.getSize failed:", err);
+        reject(new Error("Unable to read image dimensions"));
+      }
+    );
+  });
+}
+
+export function useImageValidation(
+  imageUri: string | null,
+  imageAsset?: ImageAsset
+): ImageValidationResult {
   const [result, setResult] = useState<ImageValidationResult>({
     isValid: false,
     errors: [],
@@ -56,10 +79,12 @@ export function useImageValidation(imageUri: string | null): ImageValidationResu
       return;
     }
 
-    validateImage(imageUri);
-  }, [imageUri]);
+    validateImage(imageUri, imageAsset);
+  }, [imageUri, imageAsset]);
 
-  const validateImage = async (uri: string) => {
+  const validateImage = async (uri: string, asset?: ImageAsset) => {
+    console.log("🐐 [Validation] Starting validation for:", uri);
+
     const errors: string[] = [];
     const warnings: string[] = [];
     const checks = {
@@ -70,48 +95,102 @@ export function useImageValidation(imageUri: string | null): ImageValidationResu
     };
 
     try {
-      // Guess file type from extension
+      // File type
       const ext = uri.split('.').pop()?.toLowerCase() || '';
-      const mimeType = guessMimeType(ext);
+      const mimeType = asset?.type || guessMimeType(ext);
 
-      // Validate file type
       if (!ALLOWED_TYPES.includes(mimeType)) {
         checks.fileType.passed = false;
-        checks.fileType.message = `File type ${mimeType} not supported`;
-        errors.push(`Unsupported file type: ${mimeType}. Use JPG, PNG, or WEBP.`);
+        checks.fileType.message = `Type: ${mimeType} not allowed`;
+        errors.push(`Only JPG, PNG, and WEBP images allowed.`);
+      } else {
+        checks.fileType.message = `${mimeType.split('/')[1].toUpperCase()} format`;
       }
 
-      // Get image dimensions (React Native Image.getSize)
-      const { width, height } = await getImageDimensions(uri);
+      // Dimensions
+      let width = asset?.width;
+      let height = asset?.height;
 
-      // Validate dimensions
-      if (width < MIN_WIDTH || height < MIN_HEIGHT) {
+      if (!width || !height) {
+        console.log("🐐 [Validation] Getting dimensions via expo-image…");
+        const dims = await getDimensions(uri);
+        width = dims.width;
+        height = dims.height;
+      }
+
+      console.log("🐐 [Validation] Dimensions:", width, "x", height);
+
+      const longestSide = Math.max(width, height);
+
+      if (longestSide < MIN_DIMENSION) {
         checks.dimensions.passed = false;
-        checks.dimensions.message = `Image too small: ${width}x${height}`;
-        errors.push(`Image must be at least ${MIN_WIDTH}x${MIN_HEIGHT}px`);
+        checks.dimensions.message = `${width}×${height}px (too small)`;
+        errors.push(`Image must be at least ${MIN_DIMENSION}px on the longest side.`);
       }
 
-      if (width > MAX_WIDTH || height > MAX_HEIGHT) {
+      if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
         checks.dimensions.passed = false;
-        checks.dimensions.message = `Image too large: ${width}x${height}`;
-        warnings.push(`Image is very large (${width}x${height}). Consider resizing for faster uploads.`);
+        checks.dimensions.message = `${width}×${height}px (too large)`;
+        errors.push(`Image exceeds maximum ${MAX_DIMENSION}px.`);
       }
 
-      // Validate aspect ratio (reasonable range 1:3 to 3:1)
+      if (checks.dimensions.passed) {
+        checks.dimensions.message = `${width}×${height}px`;
+
+        if (longestSide > 4000) {
+          warnings.push(`Large image (${width}×${height}px) may take longer to upload.`);
+        }
+      }
+
+      // Aspect ratio
       const aspectRatio = width / height;
-      if (aspectRatio < 0.33 || aspectRatio > 3) {
-        checks.aspectRatio.passed = false;
-        checks.aspectRatio.message = `Unusual aspect ratio: ${aspectRatio.toFixed(2)}`;
-        warnings.push(`Unusual aspect ratio. Square or landscape images work best.`);
+      let aspectRatioMatch = false;
+
+      for (const allowed of ALLOWED_ASPECT_RATIOS) {
+        const diff = Math.abs(aspectRatio - allowed.ratio);
+        if (diff <= allowed.tolerance) {
+          aspectRatioMatch = true;
+          checks.aspectRatio.message = allowed.name;
+          break;
+        }
       }
 
-      // File size check (we can't easily get this in React Native without native modules)
-      // So we'll mark it as passed with a note
-      checks.fileSize.message = 'File size check skipped (requires native module)';
+      if (!aspectRatioMatch) {
+        checks.aspectRatio.passed = false;
+        checks.aspectRatio.message = `${aspectRatio.toFixed(2)}:1 (invalid)`;
+        errors.push(`Image must be 1:1 or 16:9.`);
+      }
+
+      // File size
+      const fileSize = asset?.fileSize;
+
+      if (fileSize) {
+        const fileSizeMB = fileSize / (1024 * 1024);
+
+        if (fileSize > MAX_FILE_SIZE) {
+          checks.fileSize.passed = false;
+          checks.fileSize.message = `${fileSizeMB.toFixed(1)}MB (too large)`;
+          errors.push(`File size exceeds 10MB.`);
+        } else {
+          checks.fileSize.message = `${fileSizeMB.toFixed(1)}MB`;
+
+          if (fileSizeMB > 5) {
+            warnings.push(`File size is ${fileSizeMB.toFixed(1)}MB. Consider compressing.`);
+          }
+        }
+      } else {
+        // File size not available from picker - this is normal for some images
+        checks.fileSize.message = 'Size check skipped';
+        // Don't add a warning since this is expected behavior
+      }
 
     } catch (error) {
-      errors.push('Failed to validate image');
-      console.error('Image validation error:', error);
+      console.error("🐐 [Validation] ERROR:", error);
+      errors.push('Failed to validate image.');
+      checks.fileSize.passed = false;
+      checks.fileType.passed = false;
+      checks.dimensions.passed = false;
+      checks.aspectRatio.passed = false;
     }
 
     const isValid = errors.length === 0;
@@ -128,31 +207,11 @@ export function useImageValidation(imageUri: string | null): ImageValidationResu
 }
 
 function guessMimeType(ext: string): string {
-  switch (ext) {
+  switch (ext.toLowerCase()) {
     case 'png': return 'image/png';
     case 'webp': return 'image/webp';
-    case 'gif': return 'image/gif';
-    case 'heic': return 'image/heic';
-    case 'heif': return 'image/heif';
     case 'jpg':
     case 'jpeg':
     default: return 'image/jpeg';
   }
-}
-
-function getImageDimensions(uri: string): Promise<{ width: number; height: number }> {
-  return new Promise((resolve, reject) => {
-    if (typeof Image !== 'undefined') {
-      // React Native
-      const { Image: RNImage } = require('react-native');
-      RNImage.getSize(
-        uri,
-        (width: number, height: number) => resolve({ width, height }),
-        (error: Error) => reject(error)
-      );
-    } else {
-      // Fallback for web or if Image.getSize not available
-      resolve({ width: 800, height: 800 }); // Default safe values
-    }
-  });
 }

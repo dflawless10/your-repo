@@ -32,12 +32,14 @@ function OrderConfirmationScreen() {
   const passedItems = params.items ? JSON.parse(params.items as string) : [];
   const passedTotal = params.total ? parseFloat(params.total as string) : 0;
   const passedAddress = params.address ? params.address as string : '123 Pearl Street, Burr Ridge, IL';
-  const passedDeliveryDate = params.deliveryDate ? params.deliveryDate as string : format(new Date(Date.now() + 4 * 24 * 60 * 60 * 1000), 'PPP');
+  const passedBuyerName = params.buyerName ? params.buyerName as string : '';
+  const passedDeliveryDate = params.deliveryDate ? params.deliveryDate as string : format(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), 'PPP');
 
   // Use passed data from checkout instead of cartItems which may be cleared
   const cartItems = passedItems;
   const total = passedTotal;
   const address = passedAddress;
+  const buyerName = passedBuyerName;
   const deliveryDate = passedDeliveryDate;
 
   return (
@@ -88,6 +90,7 @@ function OrderConfirmationScreen() {
           address={address}
           total={total}
           deliveryDate={deliveryDate}
+          buyerName={buyerName}
         />
 
         {/* Action Buttons */}

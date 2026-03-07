@@ -140,9 +140,9 @@ const CarouselPreview: React.FC<Props> = ({ category, onFirstSwipe }) => {
 
     // Map category to endpoint
     const endpoints = {
-      'Just Listed': 'http://10.0.0.170:5000/api/just-listed',
-      'Create Auction': 'http://10.0.0.170:5000/api/just-listed',
-      'Sell Now': 'http://10.0.0.170:5000/api/shop/relisted-discounts',
+      'Just Listed': `${API_BASE_URL}/api/just-listed`,
+      'Create Auction': `${API_BASE_URL}/api/just-listed`,
+      'Sell Now': `${API_BASE_URL}/api/shop/relisted-discounts`,
     };
 
     const url = endpoints[category];
@@ -231,7 +231,7 @@ const CarouselPreview: React.FC<Props> = ({ category, onFirstSwipe }) => {
 
           try {
             // Fetch individual item to get seller info
-            const itemRes = await fetch(`http://10.0.0.170:5000/item/${item.id}`);
+            const itemRes = await fetch(`${API_BASE_URL}/item/${item.id}`);
             if (!itemRes.ok) return item;
 
             const itemData = await itemRes.json();
@@ -252,7 +252,7 @@ const CarouselPreview: React.FC<Props> = ({ category, onFirstSwipe }) => {
             let total_reviews = 0;
 
             try {
-              const sellerRes = await fetch(`http://10.0.0.170:5000/seller/${itemData.seller.id}`);
+              const sellerRes = await fetch(`${API_BASE_URL}/seller/${itemData.seller.id}`);
               if (sellerRes.ok) {
                 const sellerData = await sellerRes.json();
                 avg_rating = sellerData?.review_stats?.avg_rating || 0;
@@ -362,7 +362,7 @@ total_reviews = 0;
       // Sync with backend
       if (!isFavorited) {
         // Add to favorites
-        await fetch('http://10.0.0.170:5000/api/favorites', {
+        await fetch(`${API_BASE_URL}/api/favorites`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -376,7 +376,7 @@ total_reviews = 0;
         router.push('/JewelryBoxScreen');
       } else {
         // Remove from favorites
-        await fetch(`http://10.0.0.170:5000/api/favorites/${item.id}`, {
+        await fetch(`${API_BASE_URL}/api/favorites/${item.id}`, {
           method: 'DELETE',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -399,7 +399,7 @@ total_reviews = 0;
         return;
       }
 
-      const response = await fetch('http://10.0.0.170:5000/api/track-cts', {
+      const response = await fetch(`${API_BASE_URL}/api/track-cts`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -507,7 +507,7 @@ total_reviews = 0;
                   <Ionicons
                     name={favoritedItems[item.id] ? "heart" : "heart-outline"}
                     size={24}
-                    color={favoritedItems[item.id] ? "#FF6B6B" : "#FF6B6B"}
+                    color="#6A0DAD"
                   />
                 </TouchableOpacity>
 
@@ -610,14 +610,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 8,
     right: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
+    shadowColor: '#BB86FC',
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
     shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
+    elevation: 8,
   },
   bottomRow: {
     flexDirection: 'row',

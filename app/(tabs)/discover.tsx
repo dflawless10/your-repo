@@ -1,5 +1,3 @@
-import { API_BASE_URL } from '@/config';
-
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   FlatList, View, Text, Image, TouchableOpacity, RefreshControl,
@@ -8,10 +6,8 @@ import {
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import Animated from 'react-native-reanimated';
-
-import { playGoatSoundByName } from 'assets/sounds/officialGoatSoundsSoundtrack';
+import { playRandomGoatSound } from 'assets/sounds/officialGoatSoundsSoundtrack';
 import { useFocusEffect } from '@react-navigation/native';
-import {BlurView} from "expo-blur";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import {formatTimeWithSeconds} from "@/utils/time";
 import {useWishlist} from "app/wishlistContext"; // ✅ External header component
@@ -21,6 +17,7 @@ import GoatGenieBadge from 'app/GoatGenieBadge';
 import useThemeColor from '@/hooks/useThemeColor';
 import { useTheme } from '@/app/theme/ThemeContext';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
+import { API_BASE_URL } from '@/config';
 
 
 
@@ -121,7 +118,7 @@ export default function Discover() {
 const fetchItems = async () => {
   let data: AuctionItem[] = [];
   try {
-    const res = await fetch('http://10.0.0.170:5000/items/discover');
+    const res = await fetch(`${API_BASE_URL}/items/discover`);
     data = await res.json();
     console.log('🔍 Raw discover data:', data);
     console.log('🔍 First item buy_it_now:', data[0]?.buy_it_now);
@@ -154,8 +151,9 @@ const onRefresh = useCallback(async () => {
 
 
   const playBah = async () => {
-    await playGoatSoundByName('Stutter Baa');
-  };
+  await playRandomGoatSound();
+};
+
 
   const handleItemPress = async (item: AuctionItem) => {
   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -217,11 +215,17 @@ const backgroundColor = useThemeColor({}, 'background');
   const renderItem = ({ item }: { item: AuctionItem }) => {
     const isAuctionEnded = new Date(item.auction_ends_at).getTime() <= Date.now();
     const timeLeftMs = new Date(item.auction_ends_at).getTime() - Date.now();
-    const isUrgent = timeLeftMs > 1 && timeLeftMs <= 7200000; // Less than 2 hours
+    const hoursLeft = timeLeftMs / (1000 * 60 * 60);
 
-    // Debug: Log buy_it_now value for each item
+    // Color coding: red for ≤24h, orange for ≤48h, green for >48h
+    const isVeryUrgent = timeLeftMs > 1 && hoursLeft <= 24; // Red - 24 hours or less
+    const isUrgent = timeLeftMs > 1 && hoursLeft > 24 && hoursLeft <= 48; // Orange - between 24-48 hours
+
+    const timeColor = isVeryUrgent ? '#e53e3e' : isUrgent ? '#F57C00' : '#38a169';
+
+    // Debug: Log buy_it_now value and time info for each item
     if (item.buy_it_now) {
-      console.log(`🏷️ Item ${item.id} has buy_it_now:`, item.buy_it_now);
+      console.log(`🏷️ Buy Now Item ${item.id}: hoursLeft=${hoursLeft.toFixed(1)}h, timeColor=${timeColor}, isVeryUrgent=${isVeryUrgent}, isUrgent=${isUrgent}`);
     }
 
     return (
@@ -268,11 +272,14 @@ const backgroundColor = useThemeColor({}, 'background');
           </View>
 
             <View style={styles.statsContainer}>
-              <Text style={styles.statsText}>👀 {Math.floor(Math.random() * 20) + 5} watching</Text>
-              <MaterialCommunityIcons name="clock-outline" size={14} color={isUrgent ? '#c62828' : '#2e7d32'} style={{marginHorizontal: 4}}/>
-             <Text style={[styles.statsText, isUrgent ? styles.urgentText : styles.timeText]}>
+              <MaterialCommunityIcons name="clock-outline" size={14} color={timeColor} style={{marginRight: 4}}/>
+             <Text style={[styles.statsText, { color: timeColor, fontWeight: isVeryUrgent ? '700' : '600' }]}>
               {item.auction_ends_at ? formatTimeWithSeconds(item.auction_ends_at, now) : 'Not auctioned'}
              </Text>
+            </View>
+
+            <View style={styles.statsContainer}>
+              <Text style={styles.statsText}>👀 {Math.floor(Math.random() * 20) + 5} watching</Text>
             </View>
 
            {item.seller && (
@@ -326,10 +333,10 @@ const backgroundColor = useThemeColor({}, 'background');
         <View style={{ backgroundColor }}>
           <View style={{ padding: 16, paddingTop: 32, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme === 'dark' ? '#333' : '#eee', flexDirection: 'row', alignItems: 'center' }}>
             <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 12 }}>
-              <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+               <Ionicons name="arrow-back" size={28} color='#6A0DAD'  />
             </TouchableOpacity>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 24, fontWeight: '700', color: colors.textPrimary }}>Discover Treasures</Text>
+              <Text style={{ fontSize: 20, fontWeight: '700', color: colors.textPrimary }}>Discover Treasures</Text>
               <Text style={{ fontSize: 14, color: theme === 'dark' ? '#999' : '#666' }}>Find unique pieces from verified sellers</Text>
             </View>
           </View>
@@ -364,7 +371,7 @@ const styles = StyleSheet.create({
   list: {
     padding: 16,
     paddingTop: HEADER_MAX_HEIGHT + 16,
-    paddingBottom: 100,
+    paddingBottom: 120,
   },
   wishlistIconWrapper: {
     position: 'absolute',

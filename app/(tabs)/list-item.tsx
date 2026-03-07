@@ -311,7 +311,7 @@ function ItemScreen() {
       ]}>
         <View style={styles.titleWithArrow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
-            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+            <Ionicons name="arrow-back" size={28} color={colors.textPrimary} />
           </TouchableOpacity>
           <View>
             <Text style={[styles.headerTitleText, { color: colors.textPrimary }]}>{editItemId ? 'Edit Buy It Now' : 'Buy It Now'}</Text>
@@ -401,6 +401,7 @@ function ItemScreen() {
         }}
       />
 
+      <Text style={[styles.label, { color: colors.textPrimary }]}>Buy It Now Price</Text>
       <TextInput
         placeholder="Price ($)"
         placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
@@ -409,6 +410,9 @@ function ItemScreen() {
         keyboardType="numeric"
         style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: colors.textPrimary, borderColor: theme === 'dark' ? '#3C3C3E' : '#DDD' }]}
       />
+      <Text style={styles.helperText}>
+        💡 Set a fair price for instant purchase. Research similar items to stay competitive. Buyers love Buy It Now for convenience and speed.
+      </Text>
 
       <Text style={[styles.label, { color: colors.textPrimary }]}>⏰ Listing Duration</Text>
       <Picker
@@ -453,6 +457,7 @@ function ItemScreen() {
         <Picker.Item label="Extremely Rare" value="extremely_rare" />
       </Picker>
 
+      <Text style={[styles.label, { color: colors.textPrimary }]}>Shipping Weight</Text>
       <TextInput
         placeholder="Weight (lbs) - for shipping"
         placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
@@ -526,7 +531,7 @@ function ItemScreen() {
             <Picker.Item label="30-Day Returns" value="30_days" />
           </Picker>
           <Text style={[styles.overrideHelp, { color: theme === 'dark' ? '#999' : '#666' }]}>
-            💡 Tip: Use "No Returns" for custom or personalized items. Your other listings will still use your default policy.
+            💡 Tip: Use &#34;No Returns&#34; for custom or personalized items. Your other listings will still use your default policy.
           </Text>
         </View>
       )}
@@ -536,10 +541,18 @@ function ItemScreen() {
       </View>
 
       <TouchableOpacity
-        style={styles.submitButton}
+        style={[styles.submitButton, loading && styles.submitButtonDisabled]}
         onPress={handleSubmit}
+        disabled={loading}
       >
-        <Text style={styles.submitButtonText}>List Buy It Now</Text>
+        {loading ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={styles.submitButtonText}>Creating...</Text>
+            <Ionicons name="hourglass-outline" size={20} color="#FFF" />
+          </View>
+        ) : (
+          <Text style={styles.submitButtonText}>List Buy It Now</Text>
+        )}
       </TouchableOpacity>
       </Animated.ScrollView>
       <GlobalFooter />
@@ -574,13 +587,13 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   headerTitleText: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
     color: '#1A202C',
     marginBottom: 2,
   },
   headerSubtitle: {
-    fontSize: 14,
+    fontSize: 9,
     color: '#718096',
   },
   label: { marginBottom: 4, fontWeight: '500' },
@@ -679,6 +692,10 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
+  submitButtonDisabled: {
+    backgroundColor: '#CCCCCC',
+    opacity: 0.6,
+  },
 
   submitButtonText: {
     color: '#fff',
@@ -725,6 +742,15 @@ const styles = StyleSheet.create({
     color: '#718096',
     fontStyle: 'italic',
     marginTop: 8,
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontStyle: 'italic',
+    marginTop: 4,
+    marginBottom: 12,
+    paddingHorizontal: 4,
+    lineHeight: 16,
   },
 });
 export default ItemScreen;

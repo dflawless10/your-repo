@@ -16,6 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '@/config';
 import EnhancedHeader, {HEADER_MAX_HEIGHT} from './components/EnhancedHeader';
 import GlobalFooter from "@/app/components/GlobalFooter";
+import { useTheme } from '@/app/theme/ThemeContext';
 
 interface AdminStats {
   total_users: number;
@@ -28,6 +29,8 @@ interface AdminStats {
 
 export default function AdminOnDutyScreen() {
   const router = useRouter();
+  const { theme, colors } = useTheme();
+  const isDark = theme === 'dark';
   const scrollY = new Animated.Value(0);
   const headerOpacity = React.useRef(new Animated.Value(0)).current;
   const headerScale = React.useRef(new Animated.Value(1)).current;
@@ -192,16 +195,16 @@ export default function AdminOnDutyScreen() {
 
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <EnhancedHeader scrollY={scrollY} />
 
       {/* Title with Back Arrow */}
-      <Animated.View style={[styles.headerTitleContainer, { opacity: headerOpacity, transform: [{ scale: headerScale }] }]}>
+      <Animated.View style={[styles.headerTitleContainer, { backgroundColor: colors.background, borderBottomColor: isDark ? '#333' : '#E5E5E5', opacity: headerOpacity, transform: [{ scale: headerScale }] }]}>
         <View style={styles.titleWithArrow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
-            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+            <Ionicons name="arrow-back" size={28} color={isDark ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}></Text>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}></Text>
          <View style={styles.adminBadge}>
             <Text style={styles.adminBadgeText}>ADMIN</Text>
           </View>
@@ -231,72 +234,72 @@ export default function AdminOnDutyScreen() {
       >
         {/* Admin Stats Grid */}
         <View style={styles.statsGrid}>
-          <View style={[styles.statCard, { backgroundColor: '#E3F2FD' }]}>
+          <View style={[styles.statCard, { backgroundColor: isDark ? '#1E3A5F' : '#E3F2FD' }]}>
             <Ionicons name="people" size={32} color="#2196F3" />
-            <Text style={styles.statValue}>{stats.total_users}</Text>
-            <Text style={styles.statLabel}>Total Users</Text>
+            <Text style={[styles.statValue, { color: colors.textPrimary }]}>{stats.total_users}</Text>
+            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Total Users</Text>
           </View>
 
-          <View style={[styles.statCard, { backgroundColor: '#FFF3E0' }]}>
+          <View style={[styles.statCard, { backgroundColor: isDark ? '#3D2817' : '#FFF3E0' }]}>
             <Ionicons name="hammer" size={32} color="#FF9800" />
-            <Text style={styles.statValue}>{stats.active_auctions}</Text>
-            <Text style={styles.statLabel}>Active Auctions</Text>
+            <Text style={[styles.statValue, { color: colors.textPrimary }]}>{stats.active_auctions}</Text>
+            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Active Auctions</Text>
           </View>
 
-          <View style={[styles.statCard, { backgroundColor: '#FFEBEE' }]}>
+          <View style={[styles.statCard, { backgroundColor: isDark ? '#3D1F1F' : '#FFEBEE' }]}>
             <Ionicons name="flag" size={32} color="#F44336" />
-            <Text style={styles.statValue}>{stats.pending_reports}</Text>
-            <Text style={styles.statLabel}>Pending Reports</Text>
+            <Text style={[styles.statValue, { color: colors.textPrimary }]}>{stats.pending_reports}</Text>
+            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Pending Reports</Text>
           </View>
 
-          <View style={[styles.statCard, { backgroundColor: '#F3E5F5' }]}>
+          <View style={[styles.statCard, { backgroundColor: isDark ? '#2D1F3D' : '#F3E5F5' }]}>
             <Ionicons name="alert-circle" size={32} color="#9C27B0" />
-            <Text style={styles.statValue}>{stats.flagged_items}</Text>
-            <Text style={styles.statLabel}>Flagged Items</Text>
+            <Text style={[styles.statValue, { color: colors.textPrimary }]}>{stats.flagged_items}</Text>
+            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Flagged Items</Text>
           </View>
 
-          <View style={[styles.statCard, { backgroundColor: '#E8F5E9' }]}>
+          <View style={[styles.statCard, { backgroundColor: isDark ? '#1F3D28' : '#E8F5E9' }]}>
             <Ionicons name="cash" size={32} color="#4CAF50" />
-            <Text style={styles.statValue}>${stats.total_sales_today}</Text>
-            <Text style={styles.statLabel}>Sales Today</Text>
+            <Text style={[styles.statValue, { color: colors.textPrimary }]}>${stats.total_sales_today}</Text>
+            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Sales Today</Text>
           </View>
 
-          <View style={[styles.statCard, { backgroundColor: '#FFF9C4' }]}>
+          <View style={[styles.statCard, { backgroundColor: isDark ? '#3D3517' : '#FFF9C4' }]}>
             <Ionicons name="add-circle" size={32} color="#FBC02D" />
-            <Text style={styles.statValue}>{stats.new_listings_today}</Text>
-            <Text style={styles.statLabel}>New Listings</Text>
+            <Text style={[styles.statValue, { color: colors.textPrimary }]}>{stats.new_listings_today}</Text>
+            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>New Listings</Text>
           </View>
         </View>
 
         {/* Admin Actions */}
-        <Text style={styles.sectionTitle}>Admin Actions</Text>
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Admin Actions</Text>
         {adminActions.map((action, index) => (
           <TouchableOpacity
             key={index}
-            style={styles.actionCard}
+            style={[styles.actionCard, { backgroundColor: colors.surface }]}
             onPress={action.onPress}
             activeOpacity={0.7}
           >
-            <View style={[styles.actionIcon, { backgroundColor: action.color + '20' }]}>
+            <View style={[styles.actionIcon, { backgroundColor: action.color + (isDark ? '30' : '20') }]}>
               <Ionicons name={action.icon} size={24} color={action.color} />
             </View>
             <View style={styles.actionContent}>
-              <Text style={styles.actionTitle}>{action.title}</Text>
-              <Text style={styles.actionSubtitle}>{action.subtitle}</Text>
+              <Text style={[styles.actionTitle, { color: colors.textPrimary }]}>{action.title}</Text>
+              <Text style={[styles.actionSubtitle, { color: colors.textSecondary }]}>{action.subtitle}</Text>
             </View>
             {action.badge > 0 && (
               <View style={[styles.badge, { backgroundColor: action.color }]}>
                 <Text style={styles.badgeText}>{action.badge}</Text>
               </View>
             )}
-            <Ionicons name="chevron-forward" size={20} color="#CCC" />
+            <Ionicons name="chevron-forward" size={20} color={isDark ? '#666' : '#CCC'} />
           </TouchableOpacity>
         ))}
 
         {/* Warning */}
-        <View style={styles.warningCard}>
+        <View style={[styles.warningCard, { backgroundColor: isDark ? '#3D2817' : '#FFF3CD', borderLeftColor: '#F44336' }]}>
           <Ionicons name="warning" size={20} color="#F44336" />
-          <Text style={styles.warningText}>
+          <Text style={[styles.warningText, { color: isDark ? '#FFB84D' : '#856404' }]}>
             Admin privileges grant full access to platform data and settings. Use responsibly.
           </Text>
         </View>
@@ -325,9 +328,6 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: 16,
     paddingVertical: 16,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
     zIndex: 100,
   },
  backArrow: {

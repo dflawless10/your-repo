@@ -145,7 +145,7 @@ export default function ModerationPanel() {
         {/* Page Header */}
         <View style={styles.pageHeader}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#333" />
+            <Ionicons name="arrow-back" size={28} color="#333" />
           </TouchableOpacity>
           <Text style={styles.pageTitle}>Content Moderation</Text>
         </View>
@@ -275,7 +275,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   pageTitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
     color: '#1A202C',
   },

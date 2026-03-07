@@ -134,7 +134,7 @@ export default function SystemSettingsScreen() {
       >
         <Animated.View style={[styles.pageHeader, { backgroundColor: colors.surface, opacity: headerOpacity, transform: [{ scale: headerScale }] }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={isDark ? '#B794F4' : '#6A0DAD'} />
+            <Ionicons name="arrow-back" size={28} color={isDark ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
           <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>System Settings</Text>
         </Animated.View>
@@ -267,15 +267,6 @@ export default function SystemSettingsScreen() {
 
           <TouchableOpacity
             style={[styles.dangerButton, { borderBottomColor: isDark ? '#331111' : '#FFEBEE' }]}
-            onPress={() => router.push('/cleanup-expired' as any)}
-          >
-            <Ionicons name="trash" size={20} color="#F44336" />
-            <Text style={styles.dangerButtonText}>Clean Up Expired Data</Text>
-            <Ionicons name="chevron-forward" size={20} color="#F44336" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.dangerButton, { borderBottomColor: isDark ? '#331111' : '#FFEBEE' }]}
             onPress={() => Alert.alert('Coming Soon', 'Database backup feature')}
           >
             <Ionicons name="save" size={20} color="#F44336" />
@@ -302,7 +293,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8F9FA',
   },
   backButton: { marginRight: 12, padding: 4 },
-  pageTitle: { fontSize: 20, fontWeight: '700', color: '#1A1A1A' },
+  pageTitle: { fontSize: 16, fontWeight: '700', color: '#1A1A1A' },
   scrollView: { flex: 1 },
   scrollContent: {
     paddingTop: HEADER_MAX_HEIGHT + 20,

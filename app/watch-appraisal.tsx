@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, TouchableOpacity, Animated, Image, Alert } from 'react-native';
+import { View, Text, TextInput, StyleSheet, ScrollView, TouchableOpacity, Animated, Image, Alert, Keyboard, TouchableWithoutFeedback } from 'react-native';
 import {useLocalSearchParams, useRouter} from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -80,6 +80,7 @@ export default function WatchAppraisalScreen() {
   const scrollY = useRef(new Animated.Value(0)).current;
   const headerOpacity = useRef(new Animated.Value(0)).current;
   const headerScale = useRef(new Animated.Value(1)).current;
+  const scrollViewRef = useRef<ScrollView>(null);
 
   const styles = themedStyles(theme);
 
@@ -287,6 +288,13 @@ const warrantyField = useAutocompleteField<Warranty>(
     );
     setFilteredBrands(filtered);
     setSelectedBrandIndex(0);
+
+    // Auto-scroll when brand is selected
+    if (text.length > 2) {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollTo({ y: 300, animated: true });
+      }, 300);
+    }
   };
 
   const handleModelChange = (text: string) => {
@@ -296,6 +304,13 @@ const warrantyField = useAutocompleteField<Warranty>(
     );
     setFilteredModels(filtered);
     setSelectedModelIndex(0);
+
+    // Auto-scroll when model is selected
+    if (text.length > 2) {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollTo({ y: 500, animated: true });
+      }, 300);
+    }
   };
 
   const handleAppraiseAndList = async () => {
@@ -662,7 +677,7 @@ const toggleFeature = (feature: string) => {
       <Animated.View style={[styles.headerTitleContainer, { opacity: headerOpacity, transform: [{ scale: headerScale }] }]}>
         <View style={styles.titleWithArrow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
-            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+            <Ionicons name="arrow-back" size={28} color="#6A0DAD" />
           </TouchableOpacity>
           <View>
             <Text style={[styles.headerTitleText, { color: colors.textPrimary }]}>Watch Price Calculator</Text>
@@ -672,9 +687,12 @@ const toggleFeature = (feature: string) => {
       </Animated.View>
 
       <Animated.ScrollView
+        ref={scrollViewRef}
         style={[styles.container, { backgroundColor: colors.background }]}
         contentContainerStyle={styles.contentContainer}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        onScrollBeginDrag={() => Keyboard.dismiss()}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
@@ -701,6 +719,7 @@ const toggleFeature = (feature: string) => {
   onValueChange={(v: string) => warrantyField.setValue(v as Warranty)}
   options={warrantyField.options}
   allowCustom={true}
+  editable={false}
   fieldName="warranty"
   onAddCustom={(value, label) =>
     warrantyField.addCustomOption('warranty', value as Warranty, label)
@@ -864,6 +883,7 @@ const toggleFeature = (feature: string) => {
           value={condition}
           onValueChange={(v) => setCondition(v as Condition)}
           fieldName="condition"
+          editable={false}
           options={[
             {label: 'Poor', value: 'poor'},
             {label: 'Fair', value: 'fair'},
@@ -902,6 +922,7 @@ const toggleFeature = (feature: string) => {
             label="Case Metal"
             value={caseMetal}
             onValueChange={(v) => setCaseMetal(v as CaseMetal)}
+            editable={false}
             fieldName="caseMetal"
             options={[
               {label: 'Select case metal', value: ''},
@@ -919,6 +940,7 @@ const toggleFeature = (feature: string) => {
               label="Gold Karat"
               value={caseGoldKarat}
               onValueChange={(v) => setCaseGoldKarat(v as CaseGoldKarat)}
+              editable={false}
               fieldName="caseGoldKarat"
               options={[
                 {label: 'Select karat', value: ''},
@@ -936,6 +958,7 @@ const toggleFeature = (feature: string) => {
             label="Case Material Finish"
             value={caseMaterial}
             onValueChange={(v) => setCaseMaterial(v as CaseMaterial)}
+            editable={false}
             fieldName="caseMaterial"
             options={[
               {label: 'Select finish/material', value: ''},
@@ -963,6 +986,7 @@ const toggleFeature = (feature: string) => {
       setBandLeatherType('');
     }
   }}
+  editable={false}
   fieldName="bandMetal"
   options={[
     { label: 'Select band material', value: '' },
@@ -994,6 +1018,7 @@ const toggleFeature = (feature: string) => {
         // Reset karat when color changes
         if (!v) setBandGoldKarat('');
       }}
+      editable={false}
       fieldName="bandGoldColor"
       options={[
         { label: 'Select gold color', value: '' },
@@ -1011,6 +1036,7 @@ const toggleFeature = (feature: string) => {
         label="Gold Karat"
         value={bandGoldKarat}
         onValueChange={(v) => setBandGoldKarat(v as BandGoldKarat)}
+        editable={false}
         fieldName="bandGoldKarat"
         options={[
           { label: 'Select karat', value: '' },
@@ -1032,6 +1058,7 @@ const toggleFeature = (feature: string) => {
     label="Leather Type"
     value={bandLeatherType}
     onValueChange={(v) => setBandLeatherType(v as BandLeatherType)}
+    editable={false}
     fieldName="bandLeatherType"
     options={[
       { label: 'Select leather type', value: '' },
@@ -1142,7 +1169,8 @@ const toggleFeature = (feature: string) => {
     label="Case Back Material"
     value={caseBackMaterial}
     onValueChange={(v) => setCaseBackMaterial(v as CaseBackMaterial)}
-    fieldName="caseBackMaterial"
+    editable={false}
+  fieldName="caseBackMaterial"
     options={[
       { label: 'Select case back material', value: '' },
       { label: 'Stainless Steel', value: 'stainlessSteel' },
@@ -1180,7 +1208,8 @@ const toggleFeature = (feature: string) => {
     label="Movement Type"
     value={movementType}
     onValueChange={(v) => setMovementType(v as MovementType)}
-    fieldName="movementType"
+    editable={false}
+  fieldName="movementType"
     options={[
       { label: 'Select movement type', value: '' },
       { label: 'Automatic', value: 'automatic' },
@@ -1211,7 +1240,7 @@ const toggleFeature = (feature: string) => {
         value={selectedFeatures.includes(feature)}
         onValueChange={() => toggleFeature(feature)}
       />
-      <Text>{feature}</Text>
+      <Text style={[styles.checkboxLabel, { color: colors.textPrimary }]}>{feature}</Text>
     </View>
   ))}
 
@@ -1297,7 +1326,8 @@ const toggleFeature = (feature: string) => {
     label="Water Resistance"
     value={waterResistance}
     onValueChange={(v) => setWaterResistance(v as WaterResistance)}
-    fieldName="waterResistance"
+    editable={false}
+  fieldName="waterResistance"
     options={[
       { label: 'Select water resistance', value: '' },
       { label: 'None', value: 'none' },
@@ -1311,7 +1341,8 @@ const toggleFeature = (feature: string) => {
     label="Rarity"
     value={rarity}
     onValueChange={(v) => setRarity(v as Rarity)}
-    fieldName="rarity"
+    editable={false}
+  fieldName="rarity"
     options={[
       { label: 'Select rarity', value: '' },
       { label: 'Common', value: 'common' },
@@ -1513,38 +1544,9 @@ const toggleFeature = (feature: string) => {
       *Estimated based on materials, condition, and features. Actual market value may vary.
     </Text>
 
-    {/* Price History Chart */}
-    {priceHistory.length > 0 && (
-      <View style={styles.historySection}>
-        <Text style={styles.historyTitle}>📈 Historical Market Prices</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.historyScroll}>
-          {priceHistory.map(({ year, price: histPrice }) => (
-            <View key={year} style={styles.historyItem}>
-              <Text style={styles.historyPrice}>${histPrice.toLocaleString()}</Text>
-              <Text style={styles.historyYear}>{year}</Text>
-            </View>
-          ))}
-        </ScrollView>
-        <Text style={styles.historyNote}>
-          💡 Prices shown are base market values before condition/material adjustments
-        </Text>
-      </View>
-    )}
 
-    <View style={styles.buyItNowSection}>
-      <Text style={[styles.buyItNowLabel, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>🏷️ Buy It Now Price (Optional)</Text>
-      <TextInput
-        style={[styles.buyItNowInput, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: theme === 'dark' ? '#ddd' : '#1A202C', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
-        placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
-        placeholder="Enter Buy It Now price"
-        keyboardType="decimal-pad"
-        value={buyItNowPrice}
-        onChangeText={setBuyItNowPrice}
-      />
-      <Text style={styles.buyItNowHint}>
-        Set a Buy It Now price to allow instant purchases
-      </Text>
-    </View>
+
+
   </View>
 
 )}
@@ -1856,7 +1858,7 @@ export const themedStyles = (scheme: 'light' | 'dark') => {
     priceValue: {
       fontSize: 36,
       fontWeight: '700',
-      color: '#FF6B35',
+      color: '#6A0DAD',
       marginBottom: 12,
     },
     disclaimer: {

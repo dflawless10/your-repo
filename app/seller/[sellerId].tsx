@@ -25,6 +25,7 @@ import GlobalFooter from "@/app/components/GlobalFooter";
 import { API_BASE_URL } from '@/config';
 import { SellerPoliciesCard } from '@/app/components/SellerPoliciesCard';
 import { useTheme } from '@/app/theme/ThemeContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
 type Review = {
@@ -72,12 +73,13 @@ type Seller = {
 const API_URL = API_BASE_URL;
 
 export default function SellerProfileScreen() {
-  const { sellerId, from, itemId } = useLocalSearchParams();
-  console.log('🐐 SellerProfileScreen params:', { sellerId, from, itemId });
+  const { sellerId, from, itemId, orderId } = useLocalSearchParams();
+  console.log('🐐 SellerProfileScreen params:', { sellerId, from, itemId, orderId });
   const router = useRouter();
   const { theme, colors } = useTheme();
   const [seller, setSeller] = useState<Seller | null>(null);
   const [loading, setLoading] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [ctsStats, setCtsStats] = useState({ watchers: 0, ctsRate: 0, rewardPoints: 0 });
   const skeletonOpacity = useRef(new Animated.Value(1)).current;
   const contentOpacity = useRef(new Animated.Value(0)).current;
@@ -110,6 +112,17 @@ export default function SellerProfileScreen() {
   useEffect(() => {
     let isMounted = true;
 
+    const fetchCurrentUser = async () => {
+      try {
+        const userIdStr = await AsyncStorage.getItem('userId');
+        if (userIdStr) {
+          if (isMounted) setCurrentUserId(parseInt(userIdStr));
+        }
+      } catch (error) {
+        console.warn('🐐 Failed to get current user ID:', error);
+      }
+    };
+
     const fetchSeller = async (id: string) => {
       try {
         console.log('🐐 Fetching seller with ID:', id, 'URL:', `${API_URL}/seller/${id}`);
@@ -139,6 +152,8 @@ export default function SellerProfileScreen() {
         console.warn('🐐 CTS stats fetch error:', error);
       }
     };
+
+    fetchCurrentUser();
 
     const idStr = Array.isArray(sellerId) ? sellerId[0] : sellerId;
     if (idStr && idStr.length > 0) {
@@ -213,20 +228,64 @@ export default function SellerProfileScreen() {
       return <Text style={[styles.placeholder, { color: theme === 'dark' ? '#999' : '#718096' }]}>No reviews yet for this seller 🐐</Text>;
     }
 
-    return reviewsToRender.map((r, index) => (
+    return reviewsToRender.map((r: any, index: number) => (
       <View key={`${r.reviewer_name}-${index}`} style={[styles.reviewBlock, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#edf2f7' }]}>
-        <Text style={[styles.label, { color: colors.textPrimary }]}>
-          {r.reviewer_name || 'Anonymous'} ({r.feedback_level || 'Buyer'})
-        </Text>
-        <Text style={[styles.subLabel, { color: colors.textPrimary }]}>
-          Rating: {r.rating || 0} ⭐
-        </Text>
-        <Text style={[styles.subLabel, { color: colors.textPrimary }]}>
-          Mood: {r.mascot_mood || '🐐'}
-        </Text>
+        {/* Review Header with Source Badge */}
+        <View style={styles.reviewHeader}>
+          <View style={styles.reviewerInfo}>
+            <Text style={[styles.label, { color: colors.textPrimary }]}>
+              {r.reviewer_name || 'Anonymous'}
+            </Text>
+            <Text style={[styles.feedbackLevel, { color: colors.textSecondary }]}>
+              ({r.feedback_level || 'Buyer'})
+            </Text>
+          </View>
+
+          {/* Source Badge (BidGoat or imported platform) */}
+          <View style={[
+            styles.sourceBadge,
+            { backgroundColor: r.is_imported ? '#10B981' : '#6B46C1' }
+          ]}>
+            <Text style={styles.sourceBadgeText}>
+              {r.source_icon} {r.source || 'BidGoat'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Rating */}
+        <View style={styles.ratingRow}>
+          <Text style={[styles.subLabel, { color: colors.textPrimary }]}>
+            {'⭐'.repeat(r.rating || 0)} {r.rating}/5
+          </Text>
+          {r.is_imported && r.helpful_count > 0 && (
+            <Text style={[styles.helpfulCount, { color: colors.textSecondary }]}>
+              👍 {r.helpful_count} found helpful
+            </Text>
+          )}
+        </View>
+
+        {/* Mood (only for BidGoat reviews) */}
+        {!r.is_imported && r.mascot_mood && (
+          <Text style={[styles.subLabel, { color: colors.textPrimary }]}>
+            Mood: {r.mascot_mood || '🐐'}
+          </Text>
+        )}
+
+        {/* Review Text */}
         <Text style={[styles.comment, { color: theme === 'dark' ? '#CCC' : '#4a5568' }]}>
           {r.comment || 'No comment provided'}
         </Text>
+
+        {/* Date */}
+        {r.created_at && (
+          <Text style={[styles.reviewDate, { color: colors.textSecondary }]}>
+            {new Date(r.created_at).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric'
+            })}
+          </Text>
+        )}
       </View>
     ));
   };
@@ -235,7 +294,7 @@ export default function SellerProfileScreen() {
     return (
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.subLabel}>Loading seller profile…</Text>
-        <ReviewSkeleton count={3} />
+        <ReviewSkeleton  />
 
 
       </ScrollView>
@@ -262,7 +321,7 @@ export default function SellerProfileScreen() {
       >
         <Animated.View style={[styles.pageHeader, { opacity: headerOpacity, transform: [{ scale: headerScale }], backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E5E5E5' }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+             <Ionicons name="arrow-back" size={28} color="#B794F4"  />
           </TouchableOpacity>
           <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Seller Profile</Text>
         </Animated.View>
@@ -357,13 +416,15 @@ export default function SellerProfileScreen() {
        <Text style={[styles.title, styles.reviewsTitle, { color: colors.textPrimary }]}>📝 Reviews</Text>
       {loading ? (
         <Animated.View style={{ opacity: skeletonOpacity }}>
-          <ReviewSkeleton count={3} />
+          <ReviewSkeleton />
         </Animated.View>
       ) : (
         <Animated.View style={{ opacity: contentOpacity }}>{renderReviews()}</Animated.View>
       )}
-      {/* Add Review */}
-      <BuyerReviewForm seller={seller} />
+      {/* Add Review - Only show if not viewing own profile */}
+      {seller && currentUserId !== seller.id && (
+        <BuyerReviewForm seller={seller} orderId={orderId ? parseInt(Array.isArray(orderId) ? orderId[0] : orderId) : undefined} />
+      )}
       </Animated.ScrollView>
       <GlobalFooter />
     </View>
@@ -390,7 +451,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   pageTitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
     color: '#1A202C',
   },
@@ -460,14 +521,61 @@ const styles = StyleSheet.create({
     marginVertical: 20,
   },
   reviewBlock: {
-    marginBottom: 12,
-    padding: 10,
+    marginBottom: 16,
+    padding: 14,
     backgroundColor: '#edf2f7',
-    borderRadius: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  reviewerInfo: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+    flex: 1,
+  },
+  feedbackLevel: {
+    fontSize: 12,
+    fontStyle: 'italic',
+  },
+  sourceBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    flexShrink: 0,
+  },
+  sourceBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  helpfulCount: {
+    fontSize: 11,
+    fontStyle: 'italic',
   },
   comment: {
     fontStyle: 'italic',
     color: '#4a5568',
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  reviewDate: {
+    fontSize: 11,
+    marginTop: 4,
+    fontStyle: 'italic',
   },
   placeholder: {
     fontSize: 14,

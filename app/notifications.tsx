@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  Platform,
+  Platform, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -26,6 +26,7 @@ interface Notification {
   message: string;
   data?: any;
   is_read: boolean;
+  is_saved: boolean;
   created_at: string;
 }
 
@@ -37,6 +38,8 @@ export default function NotificationsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [deletingIds, setDeletingIds] = useState<Set<number>>(new Set());
+  const [filter, setFilter] = useState<'all' | 'saved'>('all');
 
   useEffect(() => {
     fetchNotifications();
@@ -91,36 +94,189 @@ export default function NotificationsScreen() {
     }
   };
 
-  const handleNotificationPress = (notification: Notification) => {
-    if (!notification.is_read) {
-      markAsRead(notification.id);
+  const markAllAsRead = async () => {
+    try {
+      const token = await AsyncStorage.getItem('jwtToken');
+      await fetch(`${API_BASE_URL}/api/notifications/read-all`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      // Update local state
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      setUnreadCount(0);
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+    }
+  };
+
+  const deleteNotification = async (notificationId: number) => {
+    // Prevent double-tap deletions
+    if (deletingIds.has(notificationId)) {
+      return;
     }
 
-    // Navigate based on a notification type
-    const data = notification.data || {};
-    switch (notification.type) {
-      case 'bid_received':
-      case 'outbid':
-      case 'auction_won':
-      case 'auction_ending':
-        if (data.item_id) {
-          router.push(`/item/${data.item_id}` as any);
-        }
-        break;
-      case 'offer_received':
-        router.push('/seller/received-offers' as any);
-        break;
-      case 'sale_completed':
-        router.push('/seller/orders' as any);
-        break;
-      case 'relist_available':
-        if (data.item_id) {
-          router.push(`/item/${data.item_id}` as any);
-        }
-        break;
-      default:
-        break;
+    try {
+      // Mark as deleting
+      setDeletingIds(prev => new Set(prev).add(notificationId));
+
+      const token = await AsyncStorage.getItem('jwtToken');
+      await fetch(`${API_BASE_URL}/api/notifications/${notificationId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      // Remove from local state
+      setNotifications(prev => prev.filter(n => n.id !== notificationId));
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+    } finally {
+      // Remove from deleting set after a delay
+      setTimeout(() => {
+        setDeletingIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(notificationId);
+          return newSet;
+        });
+      }, 500);
     }
+  };
+
+  const deleteAllNotifications = async () => {
+    try {
+      const token = await AsyncStorage.getItem('jwtToken');
+      const response = await fetch(`${API_BASE_URL}/api/notifications/delete-all`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        // Remove all read notifications from local state
+        setNotifications(prev => prev.filter(n => !n.is_read));
+      }
+    } catch (error) {
+      console.error('Error deleting all notifications:', error);
+    }
+  };
+
+  const toggleSaveNotification = async (notificationId: number) => {
+    try {
+      const token = await AsyncStorage.getItem('jwtToken');
+      const response = await fetch(`${API_BASE_URL}/api/notifications/${notificationId}/save`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Update local state
+        setNotifications(prev =>
+          prev.map(n => (n.id === notificationId ? { ...n, is_saved: data.is_saved } : n))
+        );
+      }
+    } catch (error) {
+      console.error('Error saving notification:', error);
+    }
+  };
+
+  const handleNotificationPress = (notification: Notification) => {
+    try {
+      if (!notification) {
+        Alert.alert(
+          '🐐 Slow down my goat friend!',
+          'This notification no longer exists.',
+          [{ text: 'Return to Notifications', onPress: () => {} }]
+        );
+        return;
+      }
+
+      // Prevent tapping on notifications being deleted
+      if (deletingIds.has(notification.id)) {
+        return;
+      }
+
+      if (!notification.is_read) {
+        markAsRead(notification.id);
+      }
+
+      // Navigate based on a notification type
+      const data = notification.data || {};
+      switch (notification.type) {
+        case 'bid_received':
+        case 'outbid':
+        case 'auction_won':
+        case 'auction_ending':
+          if (data.item_id) {
+            router.push(`/item/${data.item_id}` as any);
+          }
+          break;
+        case 'offer_received':
+          router.push('/seller/received-offers' as any);
+          break;
+        case 'sale_completed':
+          router.push('/seller/orders' as any);
+          break;
+        case 'item_shipped':
+          router.push('/orders' as any);
+          break;
+        case 'delivery_confirmed':
+          router.push('/seller/orders' as any);
+          break;
+        case 'ship_reminder':
+        case 'overdue_shipment':
+          router.push('/seller/orders' as any);
+          break;
+        case 'order_cancelled':
+          router.push('/orders' as any);
+          break;
+        case 'return_requested':
+        case 'return_approved':
+        case 'return_rejected':
+          router.push('/orders' as any);
+          break;
+        case 'review_received':
+          if (data.seller_id) {
+            router.push(`/seller/${data.seller_id}` as any);
+          }
+          break;
+        case 'relist_available':
+          if (data.item_id) {
+            router.push(`/item/${data.item_id}` as any);
+          }
+          break;
+        default:
+          break;
+      }
+    } catch (error) {
+      Alert.alert(
+        '🐐 Slow down my goat friend!',
+        'This notification no longer exists.',
+        [{ text: 'Return to Notifications', onPress: () => {} }]
+      );
+    }
+  };
+
+  const handleDeleteNotification = (notificationId: number) => {
+    Alert.alert(
+      'Delete Notification',
+      'Are you sure you want to delete this notification?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => deleteNotification(notificationId),
+        },
+      ]
+    );
   };
 
   const getNotificationIcon = (type: string): keyof typeof Ionicons.glyphMap => {
@@ -131,6 +287,15 @@ export default function NotificationsScreen() {
       auction_ending: 'time',
       offer_received: 'mail',
       sale_completed: 'checkmark-circle',
+      item_shipped: 'airplane',
+      delivery_confirmed: 'checkmark-done-circle',
+      ship_reminder: 'time',
+      overdue_shipment: 'warning',
+      order_cancelled: 'close-circle',
+      return_requested: 'return-up-back',
+      return_approved: 'checkmark-circle',
+      return_rejected: 'close-circle',
+      review_received: 'star',
       relist_available: 'refresh-circle',
       system: 'notifications',
     };
@@ -145,6 +310,15 @@ export default function NotificationsScreen() {
       auction_ending: '#FF9800',
       offer_received: '#2196F3',
       sale_completed: '#4CAF50',
+      item_shipped: '#2196F3',
+      delivery_confirmed: '#4CAF50',
+      ship_reminder: '#FF9800',
+      overdue_shipment: '#E53E3E',
+      order_cancelled: '#E53E3E',
+      return_requested: '#FF9800',
+      return_approved: '#4CAF50',
+      return_rejected: '#E53E3E',
+      review_received: '#FFD700',
       relist_available: '#9C27B0',
       system: '#666',
     };
@@ -172,43 +346,70 @@ export default function NotificationsScreen() {
   };
 
   const renderNotification = ({ item }: { item: Notification }) => (
-    <TouchableOpacity
-      style={[
-        styles.notificationCard,
-        { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' },
-        !item.is_read && [styles.unreadCard, { backgroundColor: theme === 'dark' ? '#2C2C3E' : '#F5F3FF' }]
-      ]}
-      onPress={() => handleNotificationPress(item)}
-      activeOpacity={0.7}
-    >
-      <View
+    <View style={styles.notificationWrapper}>
+      <TouchableOpacity
         style={[
-          styles.iconContainer,
-          { backgroundColor: getNotificationColor(item.type) + '20' },
+          styles.notificationCard,
+          { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' },
+          !item.is_read && [styles.unreadCard, { backgroundColor: theme === 'dark' ? '#2C2C3E' : '#F5F3FF' }]
         ]}
+        onPress={() => handleNotificationPress(item)}
+        activeOpacity={0.7}
       >
-        <Ionicons
-          name={getNotificationIcon(item.type)}
-          size={24}
-          color={getNotificationColor(item.type)}
-        />
-      </View>
-
-      <View style={styles.contentContainer}>
-        <View style={styles.headerRow}>
-          <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
-            {item.title}
-          </Text>
-          {!item.is_read && <View style={styles.unreadDot} />}
+        <View
+          style={[
+            styles.iconContainer,
+            { backgroundColor: getNotificationColor(item.type) + '20' },
+          ]}
+        >
+          <Ionicons
+            name={getNotificationIcon(item.type)}
+            size={24}
+            color={getNotificationColor(item.type)}
+          />
         </View>
-        <Text style={[styles.message, { color: theme === 'dark' ? '#9CA3AF' : '#666' }]} numberOfLines={2}>
-          {item.message}
-        </Text>
-        <Text style={[styles.timestamp, { color: theme === 'dark' ? '#666' : '#999' }]}>{formatTimestamp(item.created_at)}</Text>
-      </View>
 
-      <Ionicons name="chevron-forward" size={20} color={theme === 'dark' ? '#666' : '#CCC'} />
-    </TouchableOpacity>
+        <View style={styles.contentContainer}>
+          <View style={styles.headerRow}>
+            <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
+              {item.title}
+            </Text>
+            {!item.is_read && <View style={styles.unreadDot} />}
+          </View>
+          <Text style={[styles.message, { color: theme === 'dark' ? '#9CA3AF' : '#666' }]} numberOfLines={2}>
+            {item.message}
+          </Text>
+          <Text style={[styles.timestamp, { color: theme === 'dark' ? '#666' : '#999' }]}>{formatTimestamp(item.created_at)}</Text>
+        </View>
+
+        <View style={styles.notificationActions}>
+          <TouchableOpacity
+            onPress={(e) => {
+              e.stopPropagation();
+              toggleSaveNotification(item.id);
+            }}
+            style={styles.saveButton}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons
+              name={item.is_saved ? "bookmark" : "bookmark-outline"}
+              size={20}
+              color={theme === 'dark' ? '#B794F4' : '#6A0DAD'}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={(e) => {
+              e.stopPropagation();
+              handleDeleteNotification(item.id);
+            }}
+            style={styles.deleteButton}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="trash-outline" size={20} color="#FF6B35" />
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    </View>
   );
 
   if (loading) {
@@ -238,17 +439,82 @@ export default function NotificationsScreen() {
       </Animated.View>
 
       <View style={[styles.content, { backgroundColor: colors.background }]}>
+        {/* Filter Toggle */}
+        <View style={[styles.filterContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
+          <TouchableOpacity
+            onPress={() => setFilter('all')}
+            style={[
+              styles.filterButton,
+              filter === 'all' && { backgroundColor: theme === 'dark' ? '#3730A3' : '#6A0DAD' }
+            ]}
+          >
+            <Text style={[
+              styles.filterButtonText,
+              filter === 'all' ? { color: '#FFF' } : { color: theme === 'dark' ? '#9CA3AF' : '#666' }
+            ]}>
+              All
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setFilter('saved')}
+            style={[
+              styles.filterButton,
+              filter === 'saved' && { backgroundColor: theme === 'dark' ? '#3730A3' : '#6A0DAD' }
+            ]}
+          >
+            <Text style={[
+              styles.filterButtonText,
+              filter === 'saved' ? { color: '#FFF' } : { color: theme === 'dark' ? '#9CA3AF' : '#666' }
+            ]}>
+              Saved
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Header Stats */}
-        {unreadCount > 0 && (
+        {unreadCount > 0 ? (
           <View style={[styles.statsHeader, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F9FAFB' }]}>
             <View style={[styles.unreadBadge, { backgroundColor: theme === 'dark' ? '#3730A3' : '#6A0DAD' }]}>
               <Text style={styles.unreadBadgeText}>{unreadCount} unread</Text>
             </View>
+            <TouchableOpacity
+              onPress={markAllAsRead}
+              style={[styles.markAllButton, { backgroundColor: theme === 'dark' ? '#3730A3' : '#6A0DAD' }]}
+            >
+              <Ionicons name="checkmark-done" size={16} color="#FFF" />
+              <Text style={styles.markAllButtonText}>Mark All Read</Text>
+            </TouchableOpacity>
+          </View>
+        ) : notifications.length > 0 && filter === 'all' && (
+          <View style={[styles.statsHeader, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F9FAFB' }]}>
+            <Text style={[styles.allReadText, { color: theme === 'dark' ? '#9CA3AF' : '#666' }]}>
+              All caught up! 🎉
+            </Text>
+            <TouchableOpacity
+              onPress={() => {
+                Alert.alert(
+                  'Delete All Notifications',
+                  'Are you sure you want to delete all read notifications?',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Delete All',
+                      style: 'destructive',
+                      onPress: deleteAllNotifications,
+                    },
+                  ]
+                );
+              }}
+              style={[styles.deleteAllButton, { backgroundColor: '#FF6B35' }]}
+            >
+              <Ionicons name="trash-outline" size={16} color="#FFF" />
+              <Text style={styles.deleteAllButtonText}>Delete All</Text>
+            </TouchableOpacity>
           </View>
         )}
 
         <FlatList
-          data={notifications}
+          data={filter === 'saved' ? notifications.filter(n => n.is_saved) : notifications}
           renderItem={renderNotification}
           keyExtractor={item => item.id.toString()}
           contentContainerStyle={styles.listContainer}
@@ -285,17 +551,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   pageHeader: {
-    position: 'absolute',
-    top: HEADER_MAX_HEIGHT,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    zIndex: 10,
-  },
+  position: 'absolute',
+  top: HEADER_MAX_HEIGHT,
+  left: 0,
+  right: 0,
+  flexDirection: 'row',
+  alignItems: 'center',
+  paddingHorizontal: 16,
+  paddingVertical: 12,
+  borderBottomWidth: 0,
+  zIndex: 10,
+},
   backButton: {
     marginRight: 12,
   },
@@ -305,7 +571,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    marginTop: HEADER_MAX_HEIGHT + 50,
+    marginTop: HEADER_MAX_HEIGHT + 48,
   },
   loadingContainer: {
     flex: 1,
@@ -320,7 +586,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     backgroundColor: '#FFF',
-    borderBottomWidth: 1,
+    borderBottomWidth: 0,
     borderBottomColor: '#E0E0E0',
     marginBottom: 2,
   },
@@ -340,8 +606,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
+  markAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
+  },
+  markAllButtonText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   listContainer: {
     padding: 16,
+  },
+  notificationWrapper: {
+    marginBottom: 12,
   },
   notificationCard: {
     flexDirection: 'row',
@@ -398,6 +680,53 @@ const styles = StyleSheet.create({
   timestamp: {
     fontSize: 12,
     color: '#999',
+  },
+  notificationActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginLeft: 8,
+  },
+  saveButton: {
+    padding: 4,
+  },
+  deleteButton: {
+    padding: 4,
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  filterButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'transparent',
+  },
+  filterButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  allReadText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  deleteAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
+  },
+  deleteAllButtonText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '600',
   },
   emptyContainer: {
     alignItems: 'center',

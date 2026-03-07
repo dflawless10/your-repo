@@ -55,6 +55,35 @@ export default function ReportsAnalyticsScreen() {
     loadAnalytics();
   }, []);
 
+  const handleMetricTap = (metricType: string) => {
+    console.log('🐐 [Reports] handleMetricTap called with:', metricType);
+    switch (metricType) {
+      case 'total_users':
+        console.log('🐐 [Reports] Navigating to users-list with filter=all');
+        router.push('/admin/users-list?filter=all' as any);
+        break;
+      case 'new_today':
+        console.log('🐐 [Reports] Navigating to users-list with filter=today');
+        router.push('/admin/users-list?filter=today' as any);
+        break;
+      case 'new_this_week':
+        router.push('/admin/users-list?filter=week' as any);
+        break;
+      case 'new_this_month':
+        router.push('/admin/users-list?filter=month' as any);
+        break;
+      case 'total_items':
+        router.push('/admin/items-list?filter=all' as any);
+        break;
+      case 'sold_items':
+        router.push('/admin/items-list?filter=sold' as any);
+        break;
+      default:
+        // For metrics that don't have detail screens yet
+        console.log(`No detail screen for ${metricType}`);
+    }
+  };
+
   useEffect(() => {
     // Fade in header title and arrow
     setTimeout(() => {
@@ -97,16 +126,28 @@ export default function ReportsAnalyticsScreen() {
     }
   };
 
-  const MetricCard = ({ title, value, subtitle, icon, colors }: any) => (
-    <View style={styles.metricCard}>
-      <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.metricGradient}>
-        <Ionicons name={icon} size={32} color="#FFF" />
-        <Text style={styles.metricValue}>{value}</Text>
-        <Text style={styles.metricTitle}>{title}</Text>
-        {subtitle && <Text style={styles.metricSubtitle}>{subtitle}</Text>}
-      </LinearGradient>
-    </View>
-  );
+  const MetricCard = ({ title, value, subtitle, icon, colors, onPress }: any) => {
+    const CardContent = (
+      <View style={styles.metricCard}>
+        <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.metricGradient}>
+          <Ionicons name={icon} size={32} color="#FFF" />
+          <Text style={styles.metricValue}>{value}</Text>
+          <Text style={styles.metricTitle}>{title}</Text>
+          {subtitle && <Text style={styles.metricSubtitle}>{subtitle}</Text>}
+        </LinearGradient>
+      </View>
+    );
+
+    if (onPress) {
+      return (
+        <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={{ flex: 1 }}>
+          {CardContent}
+        </TouchableOpacity>
+      );
+    }
+
+    return CardContent;
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -120,9 +161,9 @@ export default function ReportsAnalyticsScreen() {
         scrollEventThrottle={16}
       >
         {/* Page Header with Back Arrow */}
-        <Animated.View style={[styles.pageHeader, { backgroundColor: colors.surface, opacity: headerOpacity, transform: [{ scale: headerScale }] }]}>
+        <Animated.View style={[styles.pageHeader, { backgroundColor: colors.background, borderBottomColor: isDark ? '#333' : '#E5E5E5', opacity: headerOpacity, transform: [{ scale: headerScale }] }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={isDark ? '#B794F4' : '#6A0DAD'} />
+            <Ionicons name="arrow-back" size={28} color={isDark ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
           <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Reports & Analytics</Text>
         </Animated.View>
@@ -135,12 +176,14 @@ export default function ReportsAnalyticsScreen() {
             value={analytics.users.total}
             icon="people"
             colors={['#2196F3', '#1976D2']}
+            onPress={() => handleMetricTap('total_users')}
           />
           <MetricCard
             title="New Today"
             value={analytics.users.new_today}
             icon="person-add"
             colors={['#4CAF50', '#388E3C']}
+            onPress={() => handleMetricTap('new_today')}
           />
         </View>
         <View style={styles.metricsRow}>
@@ -150,6 +193,7 @@ export default function ReportsAnalyticsScreen() {
             subtitle="New Users"
             icon="trending-up"
             colors={['#FF9800', '#F57C00']}
+            onPress={() => handleMetricTap('new_this_week')}
           />
           <MetricCard
             title="This Month"
@@ -157,6 +201,7 @@ export default function ReportsAnalyticsScreen() {
             subtitle="New Users"
             icon="calendar"
             colors={['#9C27B0', '#7B1FA2']}
+            onPress={() => handleMetricTap('new_this_month')}
           />
         </View>
 
@@ -168,6 +213,7 @@ export default function ReportsAnalyticsScreen() {
             value={analytics.items.total}
             icon="cube"
             colors={['#6A0DAD', '#8B5CF6']}
+            onPress={() => handleMetricTap('total_items')}
           />
           <MetricCard
             title="Active Listings"
@@ -182,6 +228,7 @@ export default function ReportsAnalyticsScreen() {
             value={analytics.items.sold}
             icon="checkmark-circle"
             colors={['#4CAF50', '#388E3C']}
+            onPress={() => handleMetricTap('sold_items')}
           />
           <MetricCard
             title="Avg Price"
@@ -233,6 +280,7 @@ export default function ReportsAnalyticsScreen() {
                 subtitle="All Time"
                 icon="cash-outline"
                 colors={['#10B981', '#059669']}
+                onPress={() => handleMetricTap('total_commission')}
               />
               <MetricCard
                 title="Today"
@@ -240,6 +288,7 @@ export default function ReportsAnalyticsScreen() {
                 subtitle="Commission"
                 icon="today-outline"
                 colors={['#8B5CF6', '#7C3AED']}
+                onPress={() => handleMetricTap('commission_today')}
               />
             </View>
             <View style={styles.metricsRow}>
@@ -249,6 +298,7 @@ export default function ReportsAnalyticsScreen() {
                 subtitle="Commission"
                 icon="calendar-outline"
                 colors={['#F59E0B', '#D97706']}
+                onPress={() => handleMetricTap('commission_this_week')}
               />
               <MetricCard
                 title="This Month"
@@ -256,6 +306,7 @@ export default function ReportsAnalyticsScreen() {
                 subtitle="Commission"
                 icon="trending-up-outline"
                 colors={['#EF4444', '#DC2626']}
+                onPress={() => handleMetricTap('commission_this_month')}
               />
             </View>
             <View style={styles.metricsRow}>
@@ -265,6 +316,7 @@ export default function ReportsAnalyticsScreen() {
                 subtitle="Fees Collected"
                 icon="card-outline"
                 colors={['#06B6D4', '#0891B2']}
+                onPress={() => handleMetricTap('payment_processing_fees')}
               />
               <MetricCard
                 title="Premium Subs"
@@ -272,6 +324,7 @@ export default function ReportsAnalyticsScreen() {
                 subtitle="$19.99/mo"
                 icon="star-outline"
                 colors={['#6366F1', '#4F46E5']}
+                onPress={() => handleMetricTap('premium_subscriptions')}
               />
             </View>
             <View style={styles.metricsRow}>
@@ -281,6 +334,7 @@ export default function ReportsAnalyticsScreen() {
                 subtitle="$10 per listing"
                 icon="flash-outline"
                 colors={['#EC4899', '#DB2777']}
+                onPress={() => handleMetricTap('featured_listing_fees')}
               />
               <MetricCard
                 title="Total Profit"
@@ -293,12 +347,13 @@ export default function ReportsAnalyticsScreen() {
                 subtitle="All Revenue Streams"
                 icon="trophy-outline"
                 colors={['#14B8A6', '#0D9488']}
+                onPress={() => handleMetricTap('total_profit')}
               />
             </View>
           </>
         ) : (
           <Text style={[styles.sectionTitle, { color: colors.textSecondary, fontSize: 14 }]}>
-            Platform earnings data not available
+            No platform earnings data available yet
           </Text>
         )}
 
@@ -334,10 +389,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 40,
     paddingBottom: 8,
-    backgroundColor: '#F8F9FA',
   },
   backButton: { marginRight: 12, padding: 4 },
-  pageTitle: { fontSize: 20, fontWeight: '700', color: '#1A1A1A' },
+  pageTitle: { fontSize: 16, fontWeight: '700', color: '#1A1A1A' },
   scrollView: { flex: 1 },
   sectionTitle: {
     fontSize: 18,

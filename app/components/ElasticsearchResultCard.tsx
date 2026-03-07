@@ -1,4 +1,4 @@
-import React from 'react';
+ import React, { useState } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -12,7 +12,7 @@ const CARD_WIDTH = width - 32;
 
 type SearchResultItem = {
   item_id: number;
-  name: string;
+  name?: string;
   description?: string;
   photo_url?: string;
   price: number;
@@ -35,8 +35,6 @@ type Props = {
   showRelevanceScore?: boolean;
 };
 
-const API_URL = API_BASE_URL;
-
 export const ElasticsearchResultCard: React.FC<Props> = ({
   item,
   onPress,
@@ -47,54 +45,89 @@ export const ElasticsearchResultCard: React.FC<Props> = ({
   const router = useRouter();
   const placeholder = require('../../assets/goat-icon.png');
 
-  // Calculate display price
-  const displayPrice = item.highest_bid ?? item.price ?? 0;
-  const isMustSell = item.selling_strategy === 'must_sell' || item.is_must_sell === 1;
+  // Track favorite state internally
+  const [isLocalFavorited, setIsLocalFavorited] = useState(isFavorited);
+
+  const displayName =
+    item.name?.trim() ||
+    (item as any).title?.trim() ||
+    `Item #${item.item_id}`;
+
+  const isMustSell = item.selling_strategy === 'must_sell' || Number(item.is_must_sell) === 1;
   const hasBuyNow = Boolean(item.buy_it_now);
+  const isBuyNow = item.selling_strategy === 'buy_it_now';
+
+  // Calculate display price based on selling strategy
+  let displayPrice = 0;
+  let priceLabel = 'CURRENT';
+
+  if (isBuyNow && item.buy_it_now) {
+    // Buy It Now items: show buy_it_now price
+    displayPrice = item.buy_it_now;
+    priceLabel = 'BUY NOW';
+  } else if (isMustSell) {
+    // Must Sell items: show highest bid if available, otherwise "BEST OFFER"
+    if (item.highest_bid && item.highest_bid > 0) {
+      displayPrice = item.highest_bid;
+      priceLabel = 'CURRENT BID';
+    } else if (item.price && item.price > 0) {
+      displayPrice = item.price;
+      priceLabel = 'STARTING BID';
+    } else {
+      displayPrice = 0;
+      priceLabel = 'BEST OFFER';
+    }
+  } else {
+    // Regular auctions: show the highest bid or starting price
+    displayPrice = item.highest_bid ?? item.price ?? 0;
+    priceLabel = item.highest_bid ? 'CURRENT BID' : 'STARTING BID';
+  }
 
   // Rarity configuration
- type RarityKey = 'legendary' | 'rare' | 'common';
+  type RarityKey = 'legendary' | 'rare' | 'common';
 
-interface RarityConfigEntry {
-  gradient: readonly [string, string]; // <-- EXACTLY two colors
-  borderColor: string;
-  shadowColor: string;
-  icon: string;
-  label: string;
-  glowColor: string;
-}
+  interface RarityConfigEntry {
+    gradient: readonly [string, string];
+    borderColor: string;
+    shadowColor: string;
+    icon: string;
+    label: string;
+    glowColor: string;
+  }
 
-const rarityConfig: Record<RarityKey, RarityConfigEntry> = {
-  legendary: {
-    gradient: ['#FFD700', '#FFA500'],
-    borderColor: '#FFD700',
-    shadowColor: '#FFD700',
-    icon: '💎',
-    label: 'Legendary',
-    glowColor: 'rgba(255, 215, 0, 0.3)',
-  },
-  rare: {
-    gradient: ['#9B59B6', '#8E44AD'],
-    borderColor: '#9B59B6',
-    shadowColor: '#9B59B6',
-    icon: '✨',
-    label: 'Rare',
-    glowColor: 'rgba(155, 89, 182, 0.3)',
-  },
-  common: {
-    gradient: ['#95a5a6', '#7f8c8d'],
-    borderColor: '#95a5a6',
-    shadowColor: '#000',
-    icon: '🌾',
-    label: 'Common',
-    glowColor: 'rgba(149, 165, 166, 0.2)',
-  },
-};
+  const rarityConfig: Record<RarityKey, RarityConfigEntry> = {
+    legendary: {
+      gradient: ['#FFD700', '#FFA500'],
+      borderColor: '#FFD700',
+      shadowColor: '#FFD700',
+      icon: '💎',
+      label: 'Legendary',
+      glowColor: 'rgba(255, 215, 0, 0.3)',
+    },
+    rare: {
+      gradient: ['#9B59B6', '#8E44AD'],
+      borderColor: '#9B59B6',
+      shadowColor: '#9B59B6',
+      icon: '✨',
+      label: 'Rare',
+      glowColor: 'rgba(155, 89, 182, 0.3)',
+    },
+    common: {
+      gradient: ['#95a5a6', '#7f8c8d'],
+      borderColor: '#95a5a6',
+      shadowColor: '#000',
+      icon: '🌾',
+      label: 'Common',
+      glowColor: 'rgba(149, 165, 166, 0.2)',
+    },
+  };
 
+  const normalizeRarity = (value: unknown): RarityKey => {
+    return value === 'legendary' || value === 'rare' || value === 'common' ? value : 'common';
+  };
 
-
-  const rarity = (item.rarity as RarityKey) || 'common';
-  const config = rarityConfig[rarity] || rarityConfig['common'];
+  const rarity = normalizeRarity(item.rarity);
+  const config = rarityConfig[rarity];
 
   // Time urgency color
   const getTimeColor = (): { color: string; fontWeight: '600' | 'bold' } => {
@@ -136,33 +169,27 @@ const rarityConfig: Record<RarityKey, RarityConfigEntry> = {
       }
 
       // Toggle favorite in backend
-      if (!isFavorited) {
-        // Add to favorites
-        await fetch('http://10.0.0.170:5000/api/favorites', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ item_id: item.item_id }),
-        });
-        console.log(`🐐 ElasticsearchCard: Item ${item.item_id} added to favorites`);
+      const newFavoriteStatus = !isLocalFavorited;
 
-        // Navigate to JewelryBoxScreen (consistent with other screens)
-        router.push('/(tabs)/JewelryBoxScreen');
-      } else {
-        // Remove from favorites
-        await fetch(`http://10.0.0.170:5000/api/favorites/${item.item_id}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-        console.log(`🐐 ElasticsearchCard: Item ${item.item_id} removed from favorites`);
-      }
+      // Add or Remove from favorites
+      const fetchUrl = newFavoriteStatus
+        ? `${API_BASE_URL}/api/favorites`
+        : `${API_BASE_URL}/api/favorites/${item.item_id}`;
+      const fetchMethod = newFavoriteStatus ? 'POST' : 'DELETE';
 
-      // Call parent handler to update state
+      await fetch(fetchUrl, {
+        method: fetchMethod,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: newFavoriteStatus ? JSON.stringify({ item_id: item.item_id }) : null,
+      });
+
+      console.log(`🐐 ElasticsearchCard: Item ${item.item_id} ${newFavoriteStatus ? 'added to' : 'removed from'} favorites`);
+
+      // Call parent handler to update state and local state
+      setIsLocalFavorited(newFavoriteStatus);
       if (onHeartPress) {
         onHeartPress(item.item_id);
       }
@@ -171,15 +198,13 @@ const rarityConfig: Record<RarityKey, RarityConfigEntry> = {
     }
   };
 
-
-
   return (
     <TouchableOpacity
       onPress={handlePress}
       activeOpacity={0.95}
       style={[
         styles.cardContainer,
-        item.rarity && item.rarity !== 'common' && {
+        rarity !== 'common' && {
           borderColor: config.borderColor,
           borderWidth: 2,
           shadowColor: config.shadowColor,
@@ -187,13 +212,8 @@ const rarityConfig: Record<RarityKey, RarityConfigEntry> = {
       ]}
     >
       {/* Rarity Glow Effect */}
-      {item.rarity && item.rarity !== 'common' && (
-        <View
-          style={[
-            styles.glowEffect,
-            { backgroundColor: config.glowColor },
-          ]}
-        />
+      {rarity !== 'common' && (
+        <View style={[styles.glowEffect, { backgroundColor: config.glowColor }]} />
       )}
 
       {/* Image Container */}
@@ -205,23 +225,18 @@ const rarityConfig: Record<RarityKey, RarityConfigEntry> = {
         />
 
         {/* Image Overlay Gradient */}
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.7)']}
-          style={styles.imageGradient}
-        />
+        <LinearGradient colors={['transparent', 'rgba(0,0,0,0.7)']} style={styles.imageGradient} />
 
         {/* Top Badges Row */}
         <View style={styles.topBadgesRow}>
           {/* Rarity Badge */}
-          {item.rarity && (
-           <LinearGradient
-  colors={['#FF6B35', '#FFB347']}
-
-  start={{ x: 0, y: 0 }}
-  end={{ x: 1, y: 1 }}
-  style={styles.rarityBadge}
->
-
+          {rarity !== 'common' && (
+            <LinearGradient
+              colors={['#FF6B35', '#FFB347']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.rarityBadge}
+            >
               <Text style={styles.rarityIcon}>{config.icon}</Text>
               <Text style={styles.rarityText}>{config.label}</Text>
             </LinearGradient>
@@ -253,9 +268,9 @@ const rarityConfig: Record<RarityKey, RarityConfigEntry> = {
           >
             <View style={styles.heartBackground}>
               <Ionicons
-                name={isFavorited ? 'heart' : 'heart-outline'}
+                name={isLocalFavorited ? 'heart' : 'heart-outline'}
                 size={22}
-                color={isFavorited ? '#E53E3E' : '#E53E3E'}
+                color={isLocalFavorited ? '#FF6B6B' : '#666'}
               />
             </View>
           </TouchableOpacity>
@@ -272,17 +287,23 @@ const rarityConfig: Record<RarityKey, RarityConfigEntry> = {
         {/* Price Overlay on Image */}
         <View style={styles.priceOverlay}>
           <LinearGradient
-            colors={['rgba(106, 13, 173, 0.95)', 'rgba(88, 10, 143, 0.95)']}
+            colors={
+              isBuyNow
+                ? ['rgba(16, 185, 129, 0.95)', 'rgba(5, 150, 105, 0.95)']
+                : isMustSell
+                ? ['rgba(239, 68, 68, 0.95)', 'rgba(220, 38, 38, 0.95)']
+                : ['rgba(106, 13, 173, 0.95)', 'rgba(88, 10, 143, 0.95)']
+            }
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.priceGradient}
           >
-            <Text style={styles.priceLabel}>
-              {isMustSell && displayPrice === 0 ? 'BEST OFFER' : 'CURRENT'}
-            </Text>
-            <Text style={styles.priceAmount}>
-              {isMustSell && displayPrice === 0 ? '' : `$${displayPrice.toFixed(2)}`}
-            </Text>
+            <Text style={styles.priceLabel}>{priceLabel}</Text>
+            {displayPrice > 0 ? (
+              <Text style={styles.priceAmount}>${displayPrice.toFixed(2)}</Text>
+            ) : (
+              <Text style={[styles.priceAmount, { fontSize: 16 }]}>Send Offer</Text>
+            )}
           </LinearGradient>
         </View>
       </View>
@@ -291,7 +312,7 @@ const rarityConfig: Record<RarityKey, RarityConfigEntry> = {
       <View style={styles.contentContainer}>
         {/* Title */}
         <Text style={styles.title} numberOfLines={2} ellipsizeMode="tail">
-          {item.name}
+          {displayName}
         </Text>
 
         {/* Description */}

@@ -266,7 +266,7 @@ export default function JewelryBoxScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#1A202C" />
+          <Ionicons name="arrow-back" size={28} color="#1A202C" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>My Favorites</Text>
         <View style={{ width: 24 }} />

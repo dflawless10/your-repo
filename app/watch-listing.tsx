@@ -26,6 +26,14 @@ import ImageValidationFeedback from '@/app/components/ImageValidationFeedback';
 import { useTheme } from '@/app/theme/ThemeContext';
 
 
+type Props = {
+  visible: boolean;
+  title: string;
+  appraisedValue: string; // e.g. "12500"
+  condition?: string;     // e.g. "New" / "Used" / "Excellent"
+  onClose: () => void;
+  onPickPhotos: () => void;
+};
 
 export default function WatchListingScreen() {
   const { theme, colors } = useTheme();
@@ -265,7 +273,7 @@ try {
       duration,
     });
 
-    const response = await fetch('http://10.0.0.170:5000/create_item', {
+    const response = await fetch(`${API_BASE_URL}/create_item`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       body: formData,
@@ -318,7 +326,7 @@ try {
         {/* Page Title with Back Button */}
         <View style={[styles.pageHeader, { backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E5E5E5' }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+            <Ionicons name="arrow-back" size={28} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
           <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>List Your Watch</Text>
         </View>
@@ -449,7 +457,7 @@ try {
               <View style={[styles.checkbox, hasReserve && styles.checkboxActive, (isMustSell || hasBuyItNow) && styles.checkboxDisabled]}>
                 {hasReserve && <Ionicons name="checkmark" size={18} color="#fff" />}
               </View>
-              <Text style={[styles.optionLabel, (isMustSell || hasBuyItNow) && styles.optionLabelDisabled]}>Set Reserve Price</Text>
+              <Text style={[styles.optionLabel, { color: (isMustSell || hasBuyItNow) ? (theme === 'dark' ? '#666' : '#CBD5E0') : colors.textPrimary }]}>Set Reserve Price</Text>
             </View>
             <Ionicons name="shield-checkmark" size={20} color={(isMustSell || hasBuyItNow) ? "#CBD5E0" : "#6A0DAD"} />
           </TouchableOpacity>
@@ -517,7 +525,7 @@ try {
               <View style={[styles.checkbox, hasBuyItNow && styles.checkboxActive, isMustSell && styles.checkboxDisabled]}>
                 {hasBuyItNow && <Ionicons name="checkmark" size={18} color="#fff" />}
               </View>
-              <Text style={[styles.optionLabel, isMustSell && styles.optionLabelDisabled]}>Buy It Now Price</Text>
+              <Text style={[styles.optionLabel, { color: isMustSell ? (theme === 'dark' ? '#666' : '#CBD5E0') : colors.textPrimary }]}>Buy It Now Price</Text>
             </View>
             <Ionicons name="flash" size={20} color={isMustSell ? "#CBD5E0" : "#FF6B35"} />
           </TouchableOpacity>
@@ -564,7 +572,7 @@ try {
               <View style={[styles.checkbox, isMustSell && styles.checkboxActive]}>
                 {isMustSell && <Ionicons name="checkmark" size={18} color="#fff" />}
               </View>
-              <Text style={styles.optionLabel}>Must Sell Mode 🔥</Text>
+              <Text style={[styles.optionLabel, { color: colors.textPrimary }]}>Must Sell Mode 🔥</Text>
             </View>
             <Ionicons name="flame" size={20} color="#D97706" />
           </TouchableOpacity>

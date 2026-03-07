@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { API_BASE_URL } from '@/config';
 import {
   View,
   Text,
@@ -108,7 +109,7 @@ export default function SellerPoliciesScreen() {
       setLoading(true);
       const token = await AsyncStorage.getItem('jwtToken');
       
-      const response = await fetch('http://10.0.0.170:5000/api/seller/policies', {
+      const response = await fetch(`${API_BASE_URL}/api/seller/policies`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -136,7 +137,7 @@ export default function SellerPoliciesScreen() {
       setSaving(true);
       const token = await AsyncStorage.getItem('jwtToken');
 
-      const response = await fetch('http://10.0.0.170:5000/api/seller/policies', {
+      const response = await fetch(`${API_BASE_URL}/api/seller/policies`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -207,7 +208,7 @@ export default function SellerPoliciesScreen() {
             onPress={() => router.back()}
             style={styles.backButton}
           >
-            <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#8B5CF6'} />
+            <Ionicons name="arrow-back" size={28} color={theme === 'dark' ? '#B794F4' : '#8B5CF6'} />
           </TouchableOpacity>
           <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Seller Policies</Text>
         </Animated.View>

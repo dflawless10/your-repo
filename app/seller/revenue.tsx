@@ -134,7 +134,7 @@ export default function RevenueScreen() {
         <View style={styles.headerTitleContainer}>
           <View style={styles.titleWithArrow}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
-              <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+              <Ionicons name="arrow-back" size={28} color="#6A0DAD" />
             </TouchableOpacity>
             <View>
               <Text style={styles.headerTitleText}>Revenue</Text>
@@ -154,7 +154,7 @@ export default function RevenueScreen() {
         <View style={styles.headerTitleContainer}>
           <View style={styles.titleWithArrow}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
-              <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+              <Ionicons name="arrow-back" size={28} color="#6A0DAD" />
             </TouchableOpacity>
             <View>
               <Text style={styles.headerTitleText}>Revenue</Text>
@@ -179,7 +179,7 @@ export default function RevenueScreen() {
       <Animated.View style={[styles.headerTitleContainer, { opacity: headerOpacity, transform: [{ scale: headerScale }] }]}>
         <View style={styles.titleWithArrow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
-            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+            <Ionicons name="arrow-back" size={28} color="#6A0DAD" />
           </TouchableOpacity>
           <View>
             <Text style={styles.headerTitleText}>Revenue</Text>

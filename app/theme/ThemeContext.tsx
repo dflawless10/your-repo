@@ -18,6 +18,7 @@ export interface ThemeColors {
   surface: string;
   textPrimary: string;
   textSecondary: string;
+  textTertiary: string;
   brandPrimary: string;
   onBrandPrimary: string;
 }
@@ -37,6 +38,7 @@ const lightColors: ThemeColors = {
   surface: '#FFFFFF',
   textPrimary: '#11181C',
   textSecondary: '#4A5568',
+  textTertiary: '#9CA3AF',
   brandPrimary: '#007AFF',
   onBrandPrimary: '#FFFFFF',
 };
@@ -46,6 +48,7 @@ const darkColors: ThemeColors = {
   surface: '#1C1C1E',    // dark surface
   textPrimary: '#ECEDEE', // light text
   textSecondary: '#ddd',  // lighter gray for secondary text
+  textTertiary: '#999',   // even lighter gray for tertiary text
   brandPrimary: '#0A84FF',
   onBrandPrimary: '#FFFFFF',
 };

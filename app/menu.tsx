@@ -1,327 +1,118 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  SafeAreaView,
-  ActivityIndicator,
-  Alert,
-} from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useFocusEffect } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { jwtDecode } from 'jwt-decode';
+import { Animated } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { usePathname } from "expo-router";
+import { playGoatSoundByName } from "@/assets/sounds/officialGoatSoundsSoundtrack";
 
-function isTokenExpired(token: string): boolean {
-  try {
-    const { exp } = jwtDecode<{ exp: number }>(token);
-    return Date.now() >= exp * 1000;
-  } catch {
-    return true;
-  }
-}
+const DISMISS_KEY = "dismiss:get-app-card:until";
+const FIRST_SEEN_KEY = "goat:feedback:firstSeenAt";
+const FIVE_MINUTES_MS = 5 * 60 * 1000;
 
-export default function MenuScreen() {
+export default function FloatingGetAppCard() {
   const router = useRouter();
-  const [userEmail, setUserEmail] = useState<string>('');
-  const [isSeller, setIsSeller] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const pathname = usePathname();
+  const [visible, setVisible] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
-  // Reload user info when screen comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      loadUserInfo();
-    }, [])
-  );
+  const fade = useRef(new Animated.Value(0)).current;
+  const hasBaaedRef = useRef(false);
 
-  const loadUserInfo = async () => {
-    try {
-      setIsLoading(true);
-      const jwtToken = await AsyncStorage.getItem('jwtToken');
+  // ✅ timer ref type that matches RN/browser/Node correctly
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-      // If token is missing or expired, show guest state
-      if (!jwtToken || isTokenExpired(jwtToken)) {
-        setIsAuthenticated(false);
-        setUserEmail('Guest');
-        setIsSeller(false);
-        setIsLoading(false);
+  const blocked = useMemo(() => {
+    const blocks = ["/sign-in", "/login", "/register", "/checkout", "/buy"];
+    return blocks.some((p) => pathname?.startsWith(p));
+  }, [pathname]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    (async () => {
+      if (blocked) {
+        if (mounted) setVisible(false);
         return;
       }
 
-      const email = await AsyncStorage.getItem('userEmail');
-      const sellerStatus = await AsyncStorage.getItem('isSeller');
-      setUserEmail(email || 'Unknown User');
-      setIsSeller(sellerStatus === 'true');
-      setIsAuthenticated(true);
-    } catch (error) {
-      console.error('Error loading user info:', error);
-      setIsAuthenticated(false);
-      setUserEmail('Guest');
-    } finally {
-      setIsLoading(false);
-    }
+      // Ensure we have a "first seen" timestamp
+      const existing = await AsyncStorage.getItem(FIRST_SEEN_KEY);
+      const firstSeenAt = existing ? Number(existing) : Date.now();
+
+      if (!existing) {
+        await AsyncStorage.setItem(FIRST_SEEN_KEY, String(firstSeenAt));
+      }
+
+      // Respect dismissal
+      const until = await AsyncStorage.getItem(DISMISS_KEY);
+      const untilMs = until ? Number(until) : 0;
+      const dismissed = untilMs && Date.now() <= untilMs;
+
+      if (dismissed) {
+        if (mounted) setVisible(false);
+        return;
+      }
+
+      // Wait until 5 minutes have elapsed since firstSeenAt
+      const elapsed = Date.now() - firstSeenAt;
+      const remaining = Math.max(0, FIVE_MINUTES_MS - elapsed);
+
+      const showNow = () => {
+        if (!mounted) return;
+
+        setVisible(true);
+        Animated.timing(fade, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+
+        // Goat sound, once per app session
+        if (!hasBaaedRef.current) {
+          hasBaaedRef.current = true;
+          void playGoatSoundByName("Victory Baa");
+        }
+      };
+
+      if (remaining === 0) {
+        showNow();
+      } else {
+        refreshTimerRef.current = setTimeout(showNow, remaining);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    };
+  }, [blocked, fade]);
+
+  const dismiss = async () => {
+    await AsyncStorage.setItem(DISMISS_KEY, String(Date.now() + 7 * 24 * 60 * 60 * 1000));
+    Animated.timing(fade, { toValue: 0, duration: 150, useNativeDriver: true }).start(() => {
+      setVisible(false);
+    });
   };
 
-  const handleLogout = async () => {
-    Alert.alert(
-      'Log Out',
-      'Are you sure you want to log out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Log Out',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await AsyncStorage.multiRemove([
-                'authToken',
-                'jwtToken',
-                'userEmail',
-                'isSeller',
-                'userId',
-                'username',
-                'pushToken'
-              ]);
-              setIsAuthenticated(false);
-              setUserEmail('Guest');
-              router.replace('/sign-in');
-            } catch (error) {
-              console.error('Logout error:', error);
-              Alert.alert('Error', 'Failed to log out. Please try again.');
-            }
-          },
-        },
-      ]
-    );
-  };
 
-  const MenuItem = ({
-    icon,
-    label,
-    route,
-    color = '#444',
-  }: {
-    icon: keyof typeof Ionicons.glyphMap;
-    label: string;
-    route: string;
-    color?: string;
-  }) => (
-    <TouchableOpacity
-      style={styles.menuItem}
-      onPress={() => router.push(route as any)}
-    >
-      <Ionicons name={icon} size={24} color={color} />
-      <Text style={[styles.menuLabel, { color }]}>{label}</Text>
-      <Ionicons name="chevron-forward" size={20} color="#ccc" />
-    </TouchableOpacity>
-  );
-
-  if (isLoading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#FF6B35" />
-          <Text style={styles.loadingText}>Loading menu...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  if (!visible) return null;
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <Ionicons name="close" size={28} color="#444" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Menu</Text>
-          <View style={{ width: 28 }} />
-        </View>
-
-        {/* User Info */}
-        <View style={styles.userSection}>
-          <Ionicons
-            name={isAuthenticated ? "person-circle" : "person-circle-outline"}
-            size={60}
-            color={isAuthenticated ? "#FF6B35" : "#9ca3af"}
-          />
-          <Text style={styles.userEmail}>{userEmail}</Text>
-          {!isAuthenticated && (
-            <TouchableOpacity
-              style={styles.signInButton}
-              onPress={() => router.push('/sign-in')}
-            >
-              <Text style={styles.signInButtonText}>Sign In</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Main Navigation */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Shop</Text>
-          <MenuItem icon="search" label="Discover Items" route="/discover" />
-          <MenuItem icon="heart" label="Watchlist" route="/watchlist" />
-          <MenuItem icon="gift" label="Gift Finder" route="/GiftFinder" />
-          <MenuItem icon="cart" label="Shopping Cart" route="/cart" />
-        </View>
-
-        {/* Buying */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Buying</Text>
-          <MenuItem icon="receipt" label="My Orders" route="/orders" />
-          <MenuItem icon="time" label="Active Bids" route="/bids" />
-        </View>
-
-        {/* Selling */}
-        {isSeller && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Selling</Text>
-            <MenuItem icon="analytics" label="Seller Dashboard" route="/seller/dashboard" />
-            <MenuItem icon="cube" label="My Orders" route="/seller/orders" color="#FF6B35" />
-            <MenuItem icon="cash" label="Revenue" route="/seller/revenue" color="#FF6B35" />
-            <MenuItem icon="add-circle" label="List New Item" route="/list-item" />
+    <>
+      {/* <Animated.View style={{ opacity: fade, position: "absolute", bottom: 16, left: 16, right: 16, zIndex: 10, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84, elevation: 5, }}>
+        <View style={{ backgroundColor: "white", borderRadius: 8, padding: 16, alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
+          <View style={{ flex: 1, marginRight: 16 }}>
+            <Text style={{ fontSize: 16, fontWeight: "600", marginBottom: 4 }}>Download the app!</Text>
+            <Text style={{ color: "gray", fontSize: 14 }}>Get a better experience with our app!</Text>
           </View>
-        )}
 
-        {/* Account */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account</Text>
-          <MenuItem icon="person" label="Profile" route="/profile" />
-          <MenuItem icon="settings" label="Settings" route="/settings" />
-          {!isSeller && (
-            <MenuItem icon="storefront" label="Become a Seller" route="/seller/register" />
-          )}
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <TouchableOpacity onPress={shareBuildLink} style={{ marginRight: 8 }}>
+              <Ionicons name="share-outline" size={24} color="#444" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={dismiss} style={{ padding: 8, backgroundColor: "#FF6B35", borderRadius: 8 }}>
+              <Text style={{ color: "white", fontWeight: "600" }}>Get app</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-
-        {/* Logout - only show if authenticated */}
-        {isAuthenticated && (
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Ionicons name="log-out" size={24} color="#dc2626" />
-            <Text style={styles.logoutText}>Log Out</Text>
-          </TouchableOpacity>
-        )}
-
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>BidGoat v1.0</Text>
-          <Text style={styles.footerText}>Made with ❤️ for collectors</Text>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+      </Animated.View> */}
+    </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#2d3748',
-  },
-  userSection: {
-    backgroundColor: '#fff',
-    padding: 24,
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    marginBottom: 16,
-  },
-  userEmail: {
-    fontSize: 16,
-    color: '#2d3748',
-    fontWeight: '600',
-    marginTop: 12,
-  },
-  section: {
-    backgroundColor: '#fff',
-    marginBottom: 16,
-    paddingVertical: 8,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#9ca3af',
-    textTransform: 'uppercase',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    letterSpacing: 0.5,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-  },
-  menuLabel: {
-    flex: 1,
-    fontSize: 16,
-    marginLeft: 16,
-    fontWeight: '500',
-  },
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#fff',
-    paddingVertical: 14,
-    marginHorizontal: 16,
-    marginTop: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#fee2e2',
-  },
-  logoutText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#dc2626',
-    marginLeft: 8,
-  },
-  footer: {
-    alignItems: 'center',
-    paddingVertical: 24,
-  },
-  footerText: {
-    fontSize: 12,
-    color: '#9ca3af',
-    marginVertical: 2,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#666',
-  },
-  signInButton: {
-    marginTop: 12,
-    backgroundColor: '#FF6B35',
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  signInButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});

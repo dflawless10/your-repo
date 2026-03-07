@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { API_BASE_URL } from '@/config';
 import {
   View,
   Text,
@@ -20,6 +21,7 @@ import MascotOverlay from '@/app/components/MascotOverlay';
 import type { MascotMood } from '@/types/goatmoods';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
 import GlobalFooter from '@/app/components/GlobalFooter';
+import { useTheme } from '@/app/theme/ThemeContext';
 
 type JewelryItem = {
   id: number;
@@ -64,9 +66,12 @@ const RARITY_COLORS: { [key: string]: string } = {
 
 export default function JewelryBoxScreen() {
   const router = useRouter();
+  const { theme, colors } = useTheme();
   const scrollY = useRef(new Animated.Value(0)).current;
   const boxScale = useRef(new Animated.Value(0.8)).current;
   const boxOpacity = useRef(new Animated.Value(0)).current;
+  const headerOpacity = useRef(new Animated.Value(0)).current;
+  const headerScale = useRef(new Animated.Value(1)).current;
 
   const [username, setUsername] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -98,18 +103,51 @@ export default function JewelryBoxScreen() {
     };
     loadUsername();
     loadCollection();
-    checkFirstVisit();
   }, []);
+
+  // Check first visit after items are loaded
+  useEffect(() => {
+    if (!loading) {
+      checkFirstVisit();
+    }
+  }, [loading, items]);
 
   const checkFirstVisit = async () => {
     const hasVisited = await AsyncStorage.getItem('jewelry_box_visited');
-    if (!hasVisited) {
+    const hasPurchased = items.length > 0; // Only show if they have at least one item
+
+    if (!hasVisited && hasPurchased) {
       setTimeout(() => setShowOnboarding(true), 1500); // Show after box opens
       await AsyncStorage.setItem('jewelry_box_visited', 'true');
     }
   };
 
   useEffect(() => {
+    // Fade in header title and arrow - wait for screen to fully render first
+    setTimeout(() => {
+      Animated.timing(headerOpacity, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+      }).start(() => {
+        // After fade-in completes, start pulsing animation
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(headerScale, {
+              toValue: 1.05,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+            Animated.timing(headerScale, {
+              toValue: 1,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
+      });
+    }, 500);
+
     // Animate jewelry box opening
     Animated.parallel([
       Animated.spring(boxScale, {
@@ -137,7 +175,7 @@ export default function JewelryBoxScreen() {
         return;
       }
 
-      const response = await fetch('http://10.0.0.170:5000/api/buyer/purchases', {
+      const response = await fetch(`${API_BASE_URL}/api/buyer/purchases`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -242,7 +280,7 @@ export default function JewelryBoxScreen() {
       const token = await AsyncStorage.getItem('jwtToken');
       if (!token) return '';
 
-      const response = await fetch(`http://10.0.0.170:5000/api/items/${itemId}/notes`, {
+      const response = await fetch(`${API_BASE_URL}/api/items/${itemId}/notes`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -267,7 +305,7 @@ export default function JewelryBoxScreen() {
         return false;
       }
 
-      const response = await fetch(`http://10.0.0.170:5000/api/items/${itemId}/notes`, {
+      const response = await fetch(`${API_BASE_URL}/api/items/${itemId}/notes`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -297,7 +335,11 @@ export default function JewelryBoxScreen() {
     return (
       <TouchableOpacity
         key={category}
-        style={[styles.categoryButton, isSelected && styles.categoryButtonActive]}
+        style={[
+          styles.categoryButton,
+          { backgroundColor: colors.surface },
+          isSelected && styles.categoryButtonActive
+        ]}
         onPress={() => setSelectedCategory(category)}
       >
         <Ionicons
@@ -305,7 +347,11 @@ export default function JewelryBoxScreen() {
           size={24}
           color={isSelected ? '#fff' : '#6A0DAD'}
         />
-        <Text style={[styles.categoryButtonText, isSelected && styles.categoryButtonTextActive]}>
+        <Text style={[
+          styles.categoryButtonText,
+          { color: colors.textPrimary },
+          isSelected && styles.categoryButtonTextActive
+        ]}>
           {category}
         </Text>
         <View style={[styles.categoryCount, isSelected && styles.categoryCountActive]}>
@@ -319,18 +365,18 @@ export default function JewelryBoxScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color="#6A0DAD" />
-        <Text style={styles.loadingText}>Opening your jewelry box...</Text>
+        <Text style={[styles.loadingText, { color: colors.textPrimary }]}>Opening your jewelry box...</Text>
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#0A0118' }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <EnhancedHeader scrollY={scrollY} username={username} />
       <Animated.ScrollView
-        style={styles.container}
+        style={[styles.container, { backgroundColor: colors.background }]}
         contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20, paddingBottom: 20 }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -339,11 +385,17 @@ export default function JewelryBoxScreen() {
         scrollEventThrottle={16}
       >
         {/* Page Header */}
-        <View style={styles.pageHeader}>
+        <Animated.View style={[
+          styles.pageHeader,
+          {
+            opacity: headerOpacity,
+            transform: [{ scale: headerScale }],
+          }
+        ]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#fff" />
+            <Ionicons name="arrow-back" size={28} color='#9B4DCA'  />
           </TouchableOpacity>
-          <Text style={styles.pageTitle}>My Jewelry Box</Text>
+          <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>My Jewelry Box</Text>
           <TouchableOpacity
             onPress={() => {
               setOnboardingStep(0);
@@ -351,9 +403,9 @@ export default function JewelryBoxScreen() {
             }}
             style={styles.helpButton}
           >
-            <Ionicons name="help-circle" size={24} color="#FFD700" />
+            <Ionicons name="help-circle" size={24} color="#6A0DAD" />
           </TouchableOpacity>
-        </View>
+        </Animated.View>
 
         {/* Animated Jewelry Box Hero */}
         <Animated.View
@@ -385,50 +437,44 @@ export default function JewelryBoxScreen() {
 
         {/* Collection Stats */}
         {stats && (
-          <View style={styles.statsCard}>
-            <LinearGradient
-              colors={['#1a0033', '#2d1b4e']}
-              style={styles.statsGradient}
-            >
+          <View style={[styles.statsCard, { backgroundColor: colors.surface }]}>
+            <View style={styles.statsGradient}>
               <View style={styles.statsRow}>
                 <View style={styles.statItem}>
                   <Ionicons name="diamond" size={32} color="#FFD700" />
-                  <Text style={styles.statValue}>{stats.total_items}</Text>
-                  <Text style={styles.statLabel}>Pieces</Text>
+                  <Text style={[styles.statValue, { color: colors.textPrimary }]}>{stats.total_items}</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Pieces</Text>
                 </View>
-                <View style={styles.statDivider} />
+                <View style={[styles.statDivider, { backgroundColor: theme === 'dark' ? '#444' : '#ddd' }]} />
                 <View style={styles.statItem}>
                   <Ionicons name="cash" size={32} color="#4CAF50" />
-                  <Text style={styles.statValue}>${stats.total_value.toLocaleString()}</Text>
-                  <Text style={styles.statLabel}>Total Value</Text>
+                  <Text style={[styles.statValue, { color: colors.textPrimary }]}>${stats.total_value.toLocaleString()}</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Total Value</Text>
                 </View>
-                <View style={styles.statDivider} />
+                <View style={[styles.statDivider, { backgroundColor: theme === 'dark' ? '#444' : '#ddd' }]} />
                 <View style={styles.statItem}>
                   <Ionicons name="trophy" size={32} color="#FF6B35" />
-                  <Text style={styles.statValue}>
+                  <Text style={[styles.statValue, { color: colors.textPrimary }]}>
                     {stats.rarity_distribution.legendary || 0}
                   </Text>
-                  <Text style={styles.statLabel}>Legendary</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Legendary</Text>
                 </View>
               </View>
-            </LinearGradient>
+            </View>
           </View>
         )}
 
         {/* Achievements */}
         {achievements.length > 0 && (
           <View style={styles.achievementsSection}>
-            <Text style={styles.sectionTitle}>🏆 Achievements Unlocked</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>🏆 Achievements Unlocked</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.achievementsScroll}>
               {achievements.map((achievement, index) => (
-                <View key={index} style={styles.achievementBadge}>
-                  <LinearGradient
-                    colors={['#1a0033', '#2d1b4e']}
-                    style={styles.achievementGradient}
-                  >
+                <View key={index} style={[styles.achievementBadge, { backgroundColor: colors.surface }]}>
+                  <View style={styles.achievementGradient}>
                     <Ionicons name={achievement.icon as any} size={28} color={achievement.color} />
-                    <Text style={styles.achievementLabel}>{achievement.label}</Text>
-                  </LinearGradient>
+                    <Text style={[styles.achievementLabel, { color: colors.textPrimary }]}>{achievement.label}</Text>
+                  </View>
                 </View>
               ))}
             </ScrollView>
@@ -437,12 +483,12 @@ export default function JewelryBoxScreen() {
 
         {/* Search & Controls */}
         <View style={styles.controlsSection}>
-          <View style={styles.searchBar}>
+          <View style={[styles.searchBar, { backgroundColor: colors.surface }]}>
             <Ionicons name="search" size={20} color="#C77DFF" />
             <TextInput
-              style={styles.searchInput}
+              style={[styles.searchInput, { color: colors.textPrimary }]}
               placeholder="Search your collection..."
-              placeholderTextColor="#6A0DAD"
+              placeholderTextColor={colors.textSecondary}
               value={searchQuery}
               onChangeText={setSearchQuery}
             />
@@ -455,27 +501,27 @@ export default function JewelryBoxScreen() {
 
           <View style={styles.controlsRow}>
             <TouchableOpacity
-              style={styles.controlButton}
+              style={[styles.controlButton, { backgroundColor: colors.surface }]}
               onPress={() => setShowSortMenu(!showSortMenu)}
             >
               <Ionicons name="swap-vertical" size={18} color="#C77DFF" />
-              <Text style={styles.controlButtonText}>
+              <Text style={[styles.controlButtonText, { color: colors.textPrimary }]}>
                 {sortBy === 'recent' ? 'Recent' : sortBy === 'value-high' ? 'Highest' : sortBy === 'value-low' ? 'Lowest' : 'A-Z'}
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.controlButton}
+              style={[styles.controlButton, { backgroundColor: colors.surface }]}
               onPress={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
             >
               <Ionicons name={viewMode === 'grid' ? 'grid' : 'list'} size={18} color="#C77DFF" />
-              <Text style={styles.controlButtonText}>{viewMode === 'grid' ? 'Grid' : 'List'}</Text>
+              <Text style={[styles.controlButtonText, { color: colors.textPrimary }]}>{viewMode === 'grid' ? 'Grid' : 'List'}</Text>
             </TouchableOpacity>
           </View>
 
           {/* Sort Menu Dropdown */}
           {showSortMenu && (
-            <View style={styles.sortMenu}>
+            <View style={[styles.sortMenu, { backgroundColor: colors.surface }]}>
               {[
                 { key: 'recent', label: 'Most Recent', icon: 'time' },
                 { key: 'value-high', label: 'Highest Value', icon: 'trending-up' },
@@ -491,7 +537,7 @@ export default function JewelryBoxScreen() {
                   }}
                 >
                   <Ionicons name={option.icon as any} size={18} color={sortBy === option.key ? '#FFD700' : '#C77DFF'} />
-                  <Text style={[styles.sortOptionText, sortBy === option.key && styles.sortOptionTextActive]}>
+                  <Text style={[styles.sortOptionText, { color: colors.textPrimary }, sortBy === option.key && styles.sortOptionTextActive]}>
                     {option.label}
                   </Text>
                   {sortBy === option.key && <Ionicons name="checkmark" size={18} color="#FFD700" />}
@@ -503,7 +549,7 @@ export default function JewelryBoxScreen() {
 
         {/* Category Filter Compartments */}
         <View style={styles.categoriesSection}>
-          <Text style={styles.sectionTitle}>✨ Compartments</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>✨ Compartments</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesScroll}>
             {renderCategoryButton('All')}
             {Object.keys(stats?.categories || {}).map(category => renderCategoryButton(category))}
@@ -512,13 +558,13 @@ export default function JewelryBoxScreen() {
 
         {/* Items Grid/List */}
         <View style={styles.itemsSection}>
-          <Text style={styles.sectionTitle}>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
             💎 {selectedCategory === 'All' ? 'All Items' : selectedCategory} ({sortedItems.length})
           </Text>
           {sortedItems.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons name="diamond-outline" size={64} color="#6A0DAD" />
-              <Text style={styles.emptyText}>
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
                 {searchQuery ? 'No items match your search' : 'No items in this category yet'}
               </Text>
               {!searchQuery && (
@@ -545,10 +591,7 @@ export default function JewelryBoxScreen() {
                     setShowNotesModal(true);
                   }}
                 >
-                  <LinearGradient
-                    colors={['#1a0033', '#2d1b4e']}
-                    style={styles.itemCardGradient}
-                  >
+                  <View style={[styles.itemCardGradient, { backgroundColor: colors.surface }]}>
                     <Image
                       source={{ uri: item.photo_url }}
                       style={styles.itemImage}
@@ -572,10 +615,10 @@ export default function JewelryBoxScreen() {
                       <Ionicons name="document-text" size={16} color="#FFD700" />
                     </TouchableOpacity>
                     <View style={styles.itemInfo}>
-                      <Text style={styles.itemName} numberOfLines={2}>{item.name}</Text>
-                      <Text style={styles.itemPrice}>${item.sale_price.toLocaleString()}</Text>
+                      <Text style={[styles.itemName, { color: colors.textPrimary }]} numberOfLines={2}>{item.name}</Text>
+                      <Text style={[styles.itemPrice, { color: colors.textPrimary }]}>${item.sale_price.toLocaleString()}</Text>
                     </View>
-                  </LinearGradient>
+                  </View>
                 </TouchableOpacity>
               ))}
             </View>
@@ -789,7 +832,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 40,
     paddingBottom: 8,
     marginTop: 16,
   },
@@ -797,7 +840,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   pageTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '700',
     color: '#fff',
     flex: 1,

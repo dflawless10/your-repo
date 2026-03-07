@@ -11,7 +11,7 @@ export const useSellerItems = () => {
     const fetchItems = async () => {
       const token = await AsyncStorage.getItem('jwtToken');
       try {
-        const res = await fetch('http://10.0.0.170:5000/seller/items', {
+        const res = await fetch(`${API_BASE_URL}/seller/items`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json();

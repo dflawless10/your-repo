@@ -109,7 +109,7 @@ export default function HomeScreen() {
       } as const;
 
       const endpoint = endpoints[activeCategory];
-      const res = await fetch(`http://10.0.0.170:5000${endpoint}`, {
+      const res = await fetch(`${API_BASE_URL}${endpoint}`, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -238,7 +238,7 @@ export default function HomeScreen() {
     const endpoint = endpoints[activeCategory];
 
     try {
-      const res = await fetch(`http://10.0.0.170:5000${endpoint}`, {
+      const res = await fetch(`${API_BASE_URL}${endpoint}`, {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       });
 
@@ -280,7 +280,7 @@ export default function HomeScreen() {
       if (token) {
         if (updated[id]) {
           // Add to favorites
-          const response = await fetch('http://10.0.0.170:5000/api/favorites', {
+          const response = await fetch(`${API_BASE_URL}/api/favorites`, {
             method: 'POST',
             headers: {
               Authorization: `Bearer ${token}`,
@@ -295,7 +295,7 @@ export default function HomeScreen() {
           }
         } else {
           // Remove from favorites
-          const response = await fetch(`http://10.0.0.170:5000/api/favorites/${id}`, {
+          const response = await fetch(`${API_BASE_URL}/api/favorites/${id}`, {
             method: 'DELETE',
             headers: {
               Authorization: `Bearer ${token}`,
@@ -363,7 +363,7 @@ export default function HomeScreen() {
 
     const token = await AsyncStorage.getItem('jwtToken');
     if (token) {
-      await fetch('http://10.0.0.170:5000/api/wishlist', {
+      await fetch(`${API_BASE_URL}/api/wishlist`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,

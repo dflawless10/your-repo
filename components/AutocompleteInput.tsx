@@ -21,7 +21,11 @@ type Props = {
   editable?: boolean; // For select-only dropdowns
 };
 
-export default function AutocompleteInput({ label, value, onValueChange, options, placeholder, allowCustom = true, onAddCustom, fieldName, editable = true }: Props) {
+export default function AutocompleteInput({ label, value,
+                                            onValueChange, options, placeholder,
+                                            allowCustom = true, onAddCustom,
+                                            fieldName, editable = true }:
+                                          Readonly<Props>) {
   const { theme, colors } = useTheme();
   const isDark = theme === 'dark';
   const [searchText, setSearchText] = useState('');
@@ -278,7 +282,7 @@ export default function AutocompleteInput({ label, value, onValueChange, options
             >
               <Ionicons name="add-circle-outline" size={20} color="#FF6B35" />
               <Text style={themedStyles.addCustomText}>
-                Add "{searchText}"
+                Add &#34;{searchText}&#34;
               </Text>
             </TouchableOpacity>
           )}
@@ -288,6 +292,8 @@ export default function AutocompleteInput({ label, value, onValueChange, options
   );
 }
 
+// @ts-ignore
+// @ts-ignore
 const styles = StyleSheet.create({
   container: {
     marginTop: 12,
@@ -360,8 +366,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     color: '#2D3748',
-    numberOfLines: 1,
-    ellipsizeMode: 'tail',
     marginRight: 8,
   },
   highlightedItem: {

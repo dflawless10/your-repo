@@ -9,7 +9,7 @@ type GoatSound = {
 export const goatSounds: GoatSound[] = [
   {
     name: 'Stutter Baa',
-    file: require('../sound/goat-stutter-baa.wav'),
+    file: require('assets/sounds/bleat.mp3'),
     description: 'A quirky, stuttered bleat perfect for bid confirmations or goat popups.',
   },
   {
@@ -19,12 +19,12 @@ export const goatSounds: GoatSound[] = [
   },
   {
     name: 'Sneaky Snort',
-    file: require('assets/sound/goat-sneaky-snort.wav'),
+    file: require('assets/sound/goat-stutter-baa.wav'),
     description: 'A mischievous snort for playful interactions or errors.',
   },
   {
     name: 'Goat Bells',
-    file: require('assets/sound/goat-stutter-baa.wav'),
+    file: require('assets/sounds/goatScream.mp3'),
     description: 'Magical chime for auction entry, gifting, or mascot mood toggles.',
   },
 ];
@@ -32,10 +32,15 @@ export const goatSounds: GoatSound[] = [
 export async function playGoatSoundByIndex(index: number) {
   try {
     // Set audio mode for better compatibility
+    if (__DEV__) {
+  console.log(`🐐 Playing goat sound: ${goatSounds[index].name}`);
+}
+
     await Audio.setAudioModeAsync({
       playsInSilentModeIOS: true,
       staysActiveInBackground: false,
       shouldDuckAndroid: true,
+
     });
     
     const { sound } = await Audio.Sound.createAsync(
@@ -67,6 +72,10 @@ export async function playGoatSoundByName(name: string) {
     console.warn(`Goat sound "${name}" not found.`);
     return;
   }
+  if (__DEV__) {
+  console.log(`🐐 Playing goat sound by name: ${name}`);
+}
+
   try {
     // Set audio mode for better compatibility
     await Audio.setAudioModeAsync({

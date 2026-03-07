@@ -1,7 +1,7 @@
 import { format } from "date-fns";
 
 // utils/time.ts
-export function normalizeTimestamp(ts: string): string {
+export function normalizeTimestamp(ts: string | undefined): string {
   if (!ts) return '';
   const trimmed = ts.trim();
   const hasT = trimmed.includes('T');
@@ -12,7 +12,8 @@ export function normalizeTimestamp(ts: string): string {
   return trimmed.replace(' ', 'T') + 'Z'; // naive → ISO UTC
 }
 
-export function calculateTimeLeft(registrationTime: string): string {
+export function calculateTimeLeft(registrationTime: string | undefined): string {
+  if (!registrationTime) return 'Ended';
   const start = new Date(registrationTime);
   const end = new Date(start.getTime() + 60 * 60 * 1000);
   const now = new Date();
@@ -73,7 +74,7 @@ const end = new Date(safe);
   const totalSeconds = Math.floor((ms % 3600000) / 1000);
   return {
     timeText: `${totalHours}h ${minutes}m ${seconds}s`,
-    isUrgent: totalHours < 2,
+    isUrgent: totalHours <= 24, // Red when 24 hours or less
   };
 };
 
@@ -105,7 +106,7 @@ export function isLowStock(quantity?: number, threshold = 5): boolean {
   return typeof quantity === 'number' && quantity <= threshold;
 }
 
-export const formatTimeWithSeconds = (iso: string, now: number): string => {
+export const formatTimeWithSeconds = (iso: string | undefined, now: number): string => {
   if (!iso) return "Auction ended";
 
   const parsed = iso.endsWith('Z') || iso.includes('+')
@@ -122,18 +123,17 @@ export const formatTimeWithSeconds = (iso: string, now: number): string => {
   const minutes = Math.floor((diffMs % 3600000) / 60000);
   const seconds = Math.floor((diffMs % 60000) / 1000);
 
-  // Show days + hours when more than 2 days left
-  if (days >= 2) {
-    return `${days}d ${hours}h left`;
+  // Over 1 day: show just days and hours (clean)
+  if (days > 0) {
+    return `${days}d ${hours}h`;
   }
 
-  // Show hours/minutes/seconds ONLY when less than 48 hours
-  const totalHours = Math.floor(diffMs / 3600000);
-  return `${totalHours}h ${minutes}m ${seconds}s left`;
+  // Under 1 day: show full detail with hours, minutes, seconds (urgency!)
+  return `${hours}h ${minutes}m ${seconds}s`;
 };
 
 // Format time WITHOUT seconds (cleaner for card displays)
-export const formatTime = (iso: string, now: number): string => {
+export const formatTime = (iso: string | undefined, now: number): string => {
   if (!iso) return "Auction ended";
 
   const parsed = iso.endsWith('Z') || iso.includes('+')

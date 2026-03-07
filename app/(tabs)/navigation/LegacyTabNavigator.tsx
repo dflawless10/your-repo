@@ -46,27 +46,43 @@ function LegacyTabNavigator() {
         tabBarIcon: ({ focused, color, size }) => {
           switch (route.name) {
             case 'Wishlist':
+              const hasReminder = wishlistItems.some(item => item.reminder_active);
+              const hasPriceAlert = wishlistItems.some(item => item.price_alert_active);
+              const showBadge = hasReminder || hasPriceAlert;
+
               return (
-                <View>
+                <View style={{ position: 'relative' }}>
                   <Image
                     source={wishlistIcon}
                     style={{ width: size, height: size, resizeMode: 'contain' }}
                   />
-                  {wishlistItems.length > 0 && (
+                  {showBadge && (
                     <View
                       style={{
                         position: 'absolute',
-                        top: -4,
+                        top: -6,
                         right: -10,
-                        backgroundColor: 'red',
-                        borderRadius: 8,
-                        paddingHorizontal: 4,
-                        paddingVertical: 2,
+                        width: 14,
+                        height: 14,
+                        borderRadius: 7,
+                        borderWidth: 2,
+                        borderColor: '#FFF',
+                        overflow: 'hidden',
                       }}
                     >
-                      <Text style={{ color: 'white', fontSize: 10 }}>
-                        {wishlistItems.length}
-                      </Text>
+                      {hasReminder && hasPriceAlert ? (
+                        // Split circle: left blue, right green
+                        <View style={{ flexDirection: 'row', width: '100%', height: '100%' }}>
+                          <View style={{ width: '50%', height: '100%', backgroundColor: '#4A90E2' }} />
+                          <View style={{ width: '50%', height: '100%', backgroundColor: '#10B981' }} />
+                        </View>
+                      ) : hasReminder ? (
+                        // Blue only
+                        <View style={{ width: '100%', height: '100%', backgroundColor: '#4A90E2', borderRadius: 7 }} />
+                      ) : (
+                        // Green only
+                        <View style={{ width: '100%', height: '100%', backgroundColor: '#10B981', borderRadius: 7 }} />
+                      )}
                     </View>
                   )}
                 </View>

@@ -44,6 +44,8 @@ export default function HelpScreen() {
     { category: "Payment & Fees", question: "What payment methods are accepted?", answer: "BidGoat accepts all major credit/debit cards through Stripe. We do not accept cash, checks, or cryptocurrency at this time." },
     { category: "Payment & Fees", question: "What are the seller fees?", answer: "Standard sellers pay 8% commission + 3% payment processing. Premium sellers ($19.99/month) pay only 5% commission + 3% processing. Buyers pay shipping separately." },
     { category: "Payment & Fees", question: "Who pays for shipping?", answer: "Buyers pay shipping costs based on item weight:\n• Small (<1 lb): $7.99\n• Medium (1-5 lbs): $12.99\n• Large (5-10 lbs): $18.99\n• Oversized (10+ lbs): $29.99\n\nOptional shipping insurance is available." },
+    { category: "Payment & Fees", question: "What happens if my credit card was declined at checkout?", answer: "If your card is declined, no payment is processed and your order is not completed. Common reasons include insufficient funds, expired card, incorrect billing info, or bank security blocks. Try another card or contact your bank to approve the transaction." },
+    { category: "Payment & Fees", question: "Can I delete an item from my cart?", answer: "Yes! Open your cart and tap the trash icon next to the item you want to remove. This instantly clears it from your cart without affecting the seller or the listing." },
 
     // Selling
     { category: "Selling", question: "How do I set my shop's return policy?", answer: "Set your seller policies once and they apply to all your listings:\n\n1. Tap hamburger menu (☰)\n2. Go to 'Account Settings'\n3. Tap 'Seller Policies'\n4. Choose return policy:\n   • No Returns (Final Sale)\n   • 7-Day Returns\n   • 14-Day Returns ⭐ Recommended\n   • 30-Day Returns\n5. Set who pays return shipping\n6. Choose restocking fee (0-20%)\n7. Enable authenticity guarantee (optional)\n8. Set shipping handling time\n9. Tap 'Save Policies'\n\nYour policies appear on every listing automatically! Buyers can review them before bidding." },
@@ -54,11 +56,15 @@ export default function HelpScreen() {
     { category: "Selling", question: "What is a Featured Listing?", answer: "Featured Listings appear on the homepage for 7 days, giving your item maximum visibility. Featured listings cost $10 and typically attract 3-5x more bidders." },
     { category: "Selling", question: "Can I relist an expired item?", answer: "Yes! If your item didn't sell or the reserve wasn't met, you can relist it with one tap.\n\nWhen relisting, you can:\n• Keep the same selling strategy OR switch strategies\n• Change Must Sell to Buy It Now if you got no bids (BidGoat's smart recommendation)\n• Adjust the starting price or reserve\n• Choose auction duration (same options as original listing)\n\nBidGoat's selling strategy algorithm helps optimize your approach based on how the first listing performed!" },
     { category: "Selling", question: "When do I get paid as a seller?", answer: "Funds are released after the buyer confirms delivery or 7 days after shipment tracking shows delivered (whichever comes first). This protects both buyers and sellers." },
+    { category: "Selling", question: "How difficult is it to List My Diamond?", answer: "Enter your diamonds carat weight, color, clarity, and cut. Enter your diamonds certification number if certified. Enter yes or no if it was ethically sourced. Tap upload photo. Upload up to 5 photos, preview and tap List Diamond. Choose your selling strategy and tap List Diamond." },
+    { category: "Selling", question: "What happens if I made a mistake after I listed my item?", answer: "No problem! You have up to 1 hour to correct any mistakes or delete the item." },
+    { category: "Selling", question: "Where can I find items I listed for sale?", answer:"\n1. Tap hamburger menu (☰)\n2. Go to Selling section\n3. Tap Selling Dashboard.\n4. Open up My Listings." },
 
     // Shipping & Delivery
     { category: "Shipping", question: "How long do I have to ship an item?", answer: "Sellers must ship within 3 business days of receiving payment. Premium Rush items (marked with ⚡) must ship within 24 hours or face penalties." },
     { category: "Shipping", question: "Do I need to provide tracking?", answer: "Yes, tracking is required for all shipments. Upload tracking numbers to 'Orders to Ship' within 3 business days of payment. This protects both you and the buyer." },
     { category: "Shipping", question: "What if my item arrives damaged?", answer: "Buyers have 3 days after delivery to report damage. If you purchased shipping insurance, file a claim through your seller dashboard. Always photograph items before shipping." },
+    { category: "Shipping", question: "Where do I enter the shipping weight?", answer: "You can enter the shipping weight in your listing form." },
 
     // Returns & Disputes
     { category: "Returns", question: "What is BidGoat's return policy?", answer: "BidGoat uses a two-tier return system:\n\n🛡️ PLATFORM BASELINE (Always Protected):\nReturns are ALWAYS accepted if:\n• Item is counterfeit, fake, or replica\n• Item is significantly not as described\n• Item arrives damaged due to inadequate packaging\n• Item has undisclosed defects\n• Wrong item/size/color received\n\nSellers CANNOT override these protections.\n\n👔 SELLER POLICIES (Your Choice):\nEach seller chooses:\n• No Returns (Final Sale) - only baseline applies\n• 7-Day Returns - fast-moving inventory\n• 14-Day Returns - standard window (recommended)\n• 30-Day Returns - extended buyer confidence\n\nReturn policies are displayed on every listing page before you bid!" },
@@ -78,6 +84,17 @@ export default function HelpScreen() {
     { category: "Account", question: "How do I check my Premium status?", answer: "Premium members see '⭐ Premium Member' at the top of the Selling section and '✨ Premium Active' in the Account section of the menu. These badges remind you of your active status and savings on every sale." },
     { category: "Account", question: "How do I become a verified seller?", answer: "Complete 10 successful sales with 100% positive feedback to unlock verified seller status. Verified sellers get a badge and appear higher in search results." },
     { category: "Account", question: "Can I delete my account?", answer: "Yes, you can delete your account in Settings > Account > Delete Account. Note: You cannot delete your account if you have active auctions, pending payments, or open disputes." },
+    { category: "Account", question: "Can I shop as a Guest?", answer: "Yes! BidGoat welcomes guest browsing:\n\n✅ Guests CAN:\n• Browse items in Discover\n• View item details, photos, and descriptions\n• See current bids and prices\n• Search and filter by category\n• View seller profiles and ratings\n\n❌ Guests CANNOT:\n• Place bids on auctions\n• Buy It Now purchases\n• Add items to Jewelry Box/Wishlist\n• Make offers on items\n• View 'My Auctions' feed\n• Create listings\n• Check out or make purchases\n\n🐐 When does BidGoat ask you to register?\nWhen you tap 'Place Bid', 'Buy It Now', or try to add items to your Jewelry Box, you'll see a friendly prompt: 'Login Required - Please sign in to [action]'\n\nCreating an account is free and protects your purchases, order history, and seller reputation!" },
+    { category: "Account", question: "Where can I get help with my order?", answer: "\n1. Tap the hamburger menu (☰) in the top navigation.\n2. Go to the Buying Section. \n3. Open up My Purchases & Rewards. \n4. Select your item.\n5. Tap 'Get Help'. You can report issues, request returns, upload photos, or contact support directly from your order page." },
+    { category: "Account", question: "What is Import Reputation and how do I get 8% lifetime fee?", answer: "Import Reputation lets you bring your seller ratings from eBay, Etsy, Amazon, or other platforms to BidGoat and lock in an 8% lifetime fee (vs 12-15% standard)!\n\n🎁 How to Import:\n1. Tap hamburger menu (☰)\n2. Go to Account section\n3. Tap 'Import Reputation'\n4. Select your platform (eBay, Etsy, Amazon, etc.)\n5. Enter your username and stats (reviews, rating)\n6. Upload screenshot of your seller profile\n7. Submit for verification\n\n💰 Your Special Fee:\n• Standard sellers: 12-15% total\n• Imported sellers: 8% total (5% platform + 3% processing)\n• Fee locked in FOR LIFE once approved!\n\nWe'll verify your import within 24-48 hours and notify you when approved. Your existing reputation helps you sell faster on BidGoat!" },
+    { category: "Account", question: "How do I enable Dark Mode?", answer: "BidGoat supports both light and dark themes!\n\nTo enable Dark Mode:\n1. Tap hamburger menu (☰)\n2. Look for the theme toggle (sun/moon icon) in the header\n3. Tap to switch between light and dark mode\n\nYour theme preference is saved automatically and applies across the entire app including:\n• All screens and modals\n• Item cards and listings\n• Photo upload previews\n• Advanced options\n• Watch appraisal form\n\nDark mode is easier on your eyes at night and saves battery on OLED screens!" },
+    { category: "Account", question: "How do notifications work?", answer: "BidGoat keeps you updated on all your activity with smart notifications!\n\n🔔 To View Notifications:\n1. Tap the bell icon (🔔) in the top navigation\n2. See your notification feed\n3. Tap any notification to go directly to that item/order\n\n📱 Notification Types:\n• Outbid alerts - someone outbid you on an auction\n• Bid received - someone bid on your item\n• Item sold - your auction ended with winner\n• Order shipped - seller shipped your item\n• Delivery confirmed - buyer confirmed delivery\n• Payment received - buyer paid for your item\n• Ship reminder - time to ship an order\n• Overdue shipment - you missed shipping deadline\n• Return requested/approved/rejected\n• Order cancelled\n• New offer received\n• Offer accepted/rejected\n\n🎨 Priority Colors:\n• 🔴 Critical (red) - Overdue shipments, urgent actions\n• 🟠 High (orange) - Ship reminders, payment due\n• 🟣 Normal (purple) - General updates\n\nAll notifications are tappable and route you directly to the relevant page!" },
+
+    // Watches
+    { category: "Watches", question: "How do I list my watch for sale?", answer: "BidGoat has a powerful watch appraisal and listing system!\n\n📍 To List Your Watch:\n1. Tap hamburger menu (☰)\n2. Go to Selling section\n3. Tap 'List My Watch'\n4. Enter brand and model (e.g., Rolex Daytona)\n5. Tap 'Get Appraisal'\n6. System calculates market value from multiple sources\n7. Upload up to 5 photos\n8. Choose your selling strategy:\n   • Classic Auction (7-30 days)\n   • Buy It Now (instant sale)\n   • Must Sell (24-72 hours, no reserve)\n9. Add advanced options (Reserve Price, Buy It Now)\n10. List your watch!\n\n⌚ Watch Details Supported:\n• Brand, model, model number, serial number\n• Condition (poor/fair/good/excellent)\n• Case material, band material, movement type\n• Year of manufacture, country of origin\n• Water resistance, rarity, features\n• Original packaging, diamonds, warranty\n\nThe more details you provide, the more accurate the appraisal!" },
+    { category: "Watches", question: "How does watch appraisal work?", answer: "BidGoat's watch appraisal system pulls real-time pricing from multiple trusted sources:\n\n🔍 Pricing Sources:\n• Chrono24 (largest watch marketplace)\n• eBay Sold Listings (real transaction data)\n• Gray & Sons (authorized dealer)\n• Watchbox (pre-owned specialist)\n• Local watch database\n\n📊 You Get:\n• Estimated market value\n• Confidence level (high/medium/low)\n• Price range (min-max)\n• Source breakdown showing where data came from\n• Number of data points analyzed\n\n⏱️ The Process:\n1. Enter brand, model, and condition\n2. System queries multiple sources\n3. Weighted average calculated (Chrono24: 30%, eBay: 25%, etc.)\n4. Adjustments for condition, age, features, materials\n5. Final appraisal with confidence score\n\nIf one source times out (e.g., eBay), appraisal still completes using other sources!" },
+    { category: "Watches", question: "What are Advanced Auction Options for watches?", answer: "When listing a watch, you can choose advanced auction options:\n\n🔒 Reserve Price ($3 fee):\n• Set minimum price you'll accept\n• Hidden from bidders\n• If bidding doesn't reach reserve, item doesn't sell\n• Quick-select buttons: 70%, 80%, 90%, 95% of appraisal\n\n⚡ Buy It Now Price:\n• Let buyers purchase instantly at your price\n• Auction continues but buyer can end it immediately\n• Great for impatient buyers willing to pay premium\n\n🔥 Must Sell Mode:\n• NO reserve price - highest bidder wins\n• Shorter duration: 24, 48, or 72 hours only\n• Creates urgency for bidders\n• When enabled, Reserve and Buy It Now are disabled\n\nChoose the strategy that fits your timeline and price goals!" },
+
   ];
 
   useEffect(() => {
@@ -131,7 +148,7 @@ export default function HelpScreen() {
             onPress={() => router.back()}
             style={styles.backButton}
           >
-            <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+            <Ionicons name="arrow-back" size={28} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
           <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Help Center</Text>
         </Animated.View>
@@ -259,7 +276,7 @@ export default function HelpScreen() {
         <View style={styles.faqContainer}>
           <Text style={[styles.faqTitle, { color: colors.textPrimary }]}>❓ Frequently Asked Questions</Text>
 
-          {["Bidding", "Auction Rules", "Payment & Fees", "Selling", "Shipping", "Returns", "Account"].map((category) => (
+          {["Bidding", "Auction Rules", "Payment & Fees", "Selling", "Shipping", "Returns", "Account", "Watches"].map((category) => (
             <View key={category} style={styles.faqCategory}>
               <Text style={[styles.faqCategoryTitle, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>{category}</Text>
 
@@ -324,7 +341,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   pageTitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
     color: '#1A202C',
   },
@@ -332,7 +349,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '700',
     color: '#1A202C',
     marginBottom: 24,

@@ -25,6 +25,7 @@ import { useCartBackend } from 'hooks/usecartBackend';
 import GiftDiscoveryModal from '@/app/components/GiftDiscoveryModal';
 import { BidGoatMenuModal } from './BidGoatMenuModal';
 import { SharedValue } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import EnhancedNotificationBell from './EnhancedNotificationBell';
 import { EnhancedNotification, getNotificationBadgeConfig } from '@/types/notifications';
 import ElasticsearchResultCard from './ElasticsearchResultCard';
@@ -3685,17 +3686,12 @@ const EnhancedHeader: React.FC<HeaderProps> = ({
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState<EnhancedNotification[]>([]);
   const [favorites, setFavorites] = useState<Record<number, boolean>>({});
-  const [availableCategories, setAvailableCategories] = useState<string[]>([
-    'Bracelets',
-    'Brooches',
-    'Coins',
-    'Earrings',
-    'Engagement',
-    'Necklaces',
-    'Rings',
-    'Silverware',
-    'Watches',
-    'Women',
+  const [modalSearchText, setModalSearchText] = useState(''); // Separate state for modal search
+  const [availableStrategies] = useState<Array<{name: string, icon: string, description: string}>>([
+    { name: 'Buy It Now', icon: '🛒', description: 'Purchase instantly at fixed price' },
+    { name: 'Must Sell', icon: '🔥', description: 'Fast auctions with urgent sales' },
+    { name: 'Regular Auctions', icon: '⚡', description: 'Classic bidding wars' },
+    { name: 'Price Dropped', icon: '📉', description: 'Recently reduced listings' },
   ]);
 
 
@@ -3725,6 +3721,9 @@ const EnhancedHeader: React.FC<HeaderProps> = ({
           },
           body: JSON.stringify({ item_id: itemId }),
         });
+
+        // Navigate to favorites screen after adding
+        router.push('/JewelryBoxScreen');
       } else {
         await fetch(`${API_BASE_URL}/api/favorites/${itemId}`, {
           method: 'DELETE',
@@ -3756,59 +3755,28 @@ const EnhancedHeader: React.FC<HeaderProps> = ({
     Alert.alert(`💎 ${stone} Radiance`, `The Goat Oracle says: ${meaning} shines brightest in ${month}!`);
   };
 
-  // Search function using your Elasticsearch backend
+  // Search function - route to appropriate screen based on strategy
   const performElasticsearch = async (query: string) => {
-    if (!query.trim() || query.length < 2) {
-      setResults([]);
+    if (!query.trim()) {
       return;
     }
 
-    setIsSearching(true);
-    try {
-      const token = await AsyncStorage.getItem('jwtToken');
-
-      // Use your existing /api/search endpoint
-      const response = await fetch('http://10.0.0.170:5000/api/search', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-  query: query,
-  category: selectedCategory !== 'All Categories' ? selectedCategory : undefined,
-})
-
-      });
-
-      if (response.ok) {
-  const data = await response.json();
-
-  // Store raw Elasticsearch hits for ElasticsearchResultCard
-  if (data.hits && Array.isArray(data.hits)) {
-    setResults(data.hits); // Store raw hits directly
-
-    // Update favorites map with any is_favorite flags from results
-    const updatedFavorites = { ...favorites };
-    data.hits.forEach((hit: any) => {
-      if (hit.is_favorite !== undefined) {
-        updatedFavorites[hit.item_id] = Boolean(hit.is_favorite);
-      }
-    });
-    setFavorites(updatedFavorites);
-  } else {
-    setResults([]);
-  }
-} else {
-  console.warn('Search failed:', response.status);
-  setResults([]);
-}
-
-    } catch (error) {
-      console.error('Search error:', error);
-      setResults([]);
-    } finally {
-      setIsSearching(false);
+    // Route to different screens based on selected strategy
+    if (selectedCategory === 'Buy It Now') {
+      // Navigate to explore screen (Sell Now tab) with search query
+      router.push(`/(tabs)/explore?search=${encodeURIComponent(query)}`);
+    } else if (selectedCategory === 'Must Sell') {
+      // Navigate to home/index with search query (Just Listed shows must sell items)
+      router.push(`/(tabs)/?search=${encodeURIComponent(query)}`);
+    } else if (selectedCategory === 'Regular Auctions') {
+      // Navigate to home/index with search query for regular auctions
+      router.push(`/(tabs)/?search=${encodeURIComponent(query)}&type=auction`);
+    } else if (selectedCategory === 'Price Dropped') {
+      // Navigate to relisted discounts screen with search query
+      router.push(`/relisted-discounts?search=${encodeURIComponent(query)}`);
+    } else {
+      // All Categories - use generic search screen
+      router.push(`/search?q=${encodeURIComponent(query)}`);
     }
   };
 
@@ -3845,44 +3813,13 @@ const EnhancedHeader: React.FC<HeaderProps> = ({
       }
     };
 
-    const loadCategories = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/categories/available`, {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.categories && Array.isArray(data.categories) && data.categories.length > 0) {
-            setAvailableCategories(data.categories);
-            console.log('🐐 Loaded categories from API:', data.categories);
-          } else {
-            console.log('🐐 No categories from API, using defaults');
-          }
-        }
-      } catch (err) {
-        console.error('🐐 Failed to load categories, using defaults:', err);
-      }
-    };
+    // Removed loadCategories - now using hardcoded strategies instead of dynamic categories
+    // const loadCategories = async () => { ... };
 
     loadFavorites();
-    loadCategories();
   }, []);
 
-  // Debounced search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (searchText.trim()) {
-        performElasticsearch(searchText);
-      } else {
-        setResults([]);
-      }
-    }, 300); // 300ms debounce
-
-    return () => clearTimeout(timer);
-  }, [searchText]);
+  // No auto-search - user must press Enter or tap search button to search
 
   // Fetch unread notification count and notifications
   const fetchUnreadCount = async () => {
@@ -4220,67 +4157,92 @@ const EnhancedHeader: React.FC<HeaderProps> = ({
     <GiftDiscoveryModal visible={showGiftModal} onClose={() => setShowGiftModal(false)} />
 
 
-    {/* Category Selection Modal - eBay/Amazon Style */}
+    {/* Selling Strategy Modal - Redesigned */}
     <Modal visible={showCategoryModal} transparent animationType="slide" onRequestClose={() => setShowCategoryModal(false)}>
       <View style={styles.modalOverlay}>
         <Pressable style={styles.modalBackdrop} onPress={() => setShowCategoryModal(false)} />
         <View style={[styles.categoryModalContent, { backgroundColor: colors.background }]}>
-          <View style={styles.categoryModalHeaderRow}>
-            <Text style={[styles.modalHeader, { color: colors.textPrimary }]}>Shop by Category</Text>
-            {username ? (
-              <Text style={[styles.signInText, { color: theme === 'dark' ? '#86EFAC' : '#059669' }]}>✅ {username}</Text>
-            ) : (
-              <TouchableOpacity
-                onPress={() => {
-                  setShowCategoryModal(false);
-                  router.push('/sign-in');
-                }}
-                style={styles.signInButton}
-              >
-                <Ionicons name="person-circle-outline" size={18} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
-                <Text style={[styles.signInButtonText, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>Sign In</Text>
-              </TouchableOpacity>
-            )}
+          {/* Drag Handle */}
+          <View style={[styles.dragHandle, { backgroundColor: theme === 'dark' ? '#3C3C3E' : '#CBD5E0' }]} />
+
+          <View style={[styles.categoryModalHeaderRow, { paddingTop: 8, paddingHorizontal: 20 }]}>
+            <View>
+              <Text style={[styles.modalHeader, { color: colors.textPrimary }]}>Browse by Strategy</Text>
+              <Text style={[styles.modalSubheader, { color: colors.textSecondary }]}>Find deals your way</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setShowCategoryModal(false)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="close" size={28} color={colors.textPrimary} />
+            </TouchableOpacity>
           </View>
-          <ScrollView>
-            {['All Categories', ...availableCategories.sort()].map((category) => (
+
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 20, paddingHorizontal: 20, paddingTop: 16 }}>
+            {/* All Listings Option */}
+            <TouchableOpacity
+              style={[
+                styles.strategyCard,
+                {
+                  backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff',
+                  borderColor: theme === 'dark' ? '#2C2C2E' : '#E5E7EB',
+                }
+              ]}
+              onPress={() => {
+                setShowCategoryModal(false);
+                router.push('/(tabs)/');
+              }}
+            >
+              <View style={styles.strategyIconContainer}>
+                <Text style={styles.strategyIcon}>🐐</Text>
+              </View>
+              <View style={styles.strategyInfo}>
+                <Text style={[styles.strategyName, { color: colors.textPrimary }]}>All Listings</Text>
+                <Text style={[styles.strategyDescription, { color: colors.textSecondary }]}>Browse everything on BidGoat</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={24} color={theme === 'dark' ? '#666' : '#999'} />
+            </TouchableOpacity>
+
+            {/* Strategy Cards */}
+            {availableStrategies.map((strategy) => (
               <TouchableOpacity
-                key={category}
+                key={strategy.name}
                 style={[
-                  styles.categoryOption,
-                  { borderBottomColor: theme === 'dark' ? '#2C2C2E' : '#f0f0f0' },
-                  selectedCategory === category && {
-                    backgroundColor: theme === 'dark' ? '#2C2416' : '#f0f4ff'
+                  styles.strategyCard,
+                  {
+                    backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff',
+                    borderColor: theme === 'dark' ? '#2C2C2E' : '#E5E7EB',
                   }
                 ]}
                 onPress={() => {
-                  setSelectedCategory(category);
                   setShowCategoryModal(false);
-                  // Navigate to category screen if not "All Categories"
-                  if (category !== 'All Categories') {
-                    router.push(`/category/${encodeURIComponent(category)}`);
+                  // Navigate directly to the appropriate screen
+                  if (strategy.name === 'Buy It Now') {
+                    router.push('/(tabs)/explore');
+                  } else if (strategy.name === 'Must Sell') {
+                    router.push('/(tabs)/');
+                  } else if (strategy.name === 'Regular Auctions') {
+                    router.push('/(tabs)/?type=auction');
+                  } else if (strategy.name === 'Price Dropped') {
+                    router.push('/relisted-discounts');
                   }
                 }}
               >
-                <Text style={[
-                  styles.categoryOptionText,
-                  { color: colors.textPrimary },
-                  selectedCategory === category && { color: theme === 'dark' ? '#B794F4' : '#6A0DAD', fontWeight: '600' }
-                ]}>
-                  {category}
-                </Text>
-                {selectedCategory === category && (
-                  <Ionicons name="checkmark" size={20} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
-                )}
+                <View style={styles.strategyIconContainer}>
+                  <Text style={styles.strategyIcon}>{strategy.icon}</Text>
+                </View>
+                <View style={styles.strategyInfo}>
+                  <Text style={[styles.strategyName, { color: colors.textPrimary }]}>
+                    {strategy.name}
+                  </Text>
+                  <Text style={[styles.strategyDescription, { color: colors.textSecondary }]}>
+                    {strategy.description}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={24} color={theme === 'dark' ? '#666' : '#999'} />
               </TouchableOpacity>
             ))}
           </ScrollView>
-          <TouchableOpacity
-            style={styles.categoryCloseButton}
-            onPress={() => setShowCategoryModal(false)}
-          >
-            <Text style={[styles.categoryCloseText, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>Close</Text>
-          </TouchableOpacity>
         </View>
       </View>
     </Modal>
@@ -4416,7 +4378,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logoText: {
-    fontSize: 24,
+    fontSize: 30,
     fontWeight: '700',
     letterSpacing: 0.5,
   },
@@ -4796,15 +4758,15 @@ badgeText: {
   // Category Modal
   categoryModalContent: {
     backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: 20,
-    paddingHorizontal: 16,
-    paddingBottom: 32,
-    maxHeight: '70%',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 8,
+    maxHeight: '85%',
     width: '100%',
     position: 'absolute',
     bottom: 0,
+    display: 'flex',
+    flexDirection: 'column',
   },
   categoryOption: {
     flexDirection: 'row',
@@ -4856,11 +4818,107 @@ badgeText: {
   categoryModalHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 20,
+  },
+  dragHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#CBD5E0',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  modalSubheader: {
+    fontSize: 14,
+    marginTop: 4,
+  },
+  strategyCard: {
+    flexDirection: 'row',
     alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 12,
+    gap: 16,
+  },
+  strategyIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F7FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  strategyIcon: {
+    fontSize: 24,
+  },
+  strategyInfo: {
+    flex: 1,
+  },
+  strategyName: {
+    fontSize: 17,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  strategyDescription: {
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  strategySearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F7FAFC',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     marginBottom: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    borderWidth: 2,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  strategySearchInput: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  strategySearchButtonContainer: {
+    paddingTop: 16,
+    paddingBottom: 8,
+    borderTopWidth: 1,
+  },
+  strategySearchButtonWrapper: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#6A0DAD',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  strategySearchButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+    gap: 10,
+  },
+  strategySearchButtonDisabled: {
+    opacity: 0.5,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  strategySearchButtonText: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#FFF',
+    letterSpacing: 0.5,
   },
   signInButton: {
     flexDirection: 'row',

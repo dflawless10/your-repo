@@ -139,7 +139,7 @@ export default function EditProfileScreen() {
       <EnhancedHeader />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
+          <Ionicons name="arrow-back" size={28} color="#333" />
         </TouchableOpacity>
         <Text style={styles.title}>Edit Profile</Text>
         <View style={styles.placeholder} />

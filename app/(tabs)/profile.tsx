@@ -91,7 +91,7 @@ export default function ProfileScreen() {
     } as any);
 
     try {
-      const res = await fetch('http://10.0.0.170:5000/api/upload-avatar', {
+      const res = await fetch(`${API_BASE_URL}/api/upload-avatar`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -219,7 +219,7 @@ export default function ProfileScreen() {
             </View>
 
             <Link href="/seller/dashboard" style={themedStyles.linkContainer}>
-              <Text style={themedStyles.link}>Go to My Vault →</Text>
+              <Text style={themedStyles.link}>Go to My Seller Dashboard →</Text>
             </Link>
 
             <Text style={themedStyles.section}>🎨 Preferences</Text>

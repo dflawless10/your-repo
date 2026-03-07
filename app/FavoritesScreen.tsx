@@ -233,7 +233,7 @@ metaText: {
 },
 gridContent: {
   paddingHorizontal: 12,
-  paddingBottom: 80,
+  paddingBottom: 120,
 },
 
   emptySubtext: {

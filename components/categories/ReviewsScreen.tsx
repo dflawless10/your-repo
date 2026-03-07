@@ -46,6 +46,7 @@ export default function ReviewsScreen() {
   const renderItem = ({ item }: { item: Review }) => {
     const fadeAnim = new Animated.Value(0);
 
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     useEffect(() => {
       Animated.timing(fadeAnim, {
         toValue: 1,

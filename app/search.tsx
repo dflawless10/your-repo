@@ -65,7 +65,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 export default function SearchScreen() {
   const router = useRouter();
-  const { q } = useLocalSearchParams<{ q: string }>();
+  const { q, strategy } = useLocalSearchParams<{ q: string; strategy?: string }>();
   const { token } = useAuth();
   const { theme, colors } = useTheme();
   const [items, setItems] = useState<ElasticsearchItem[]>([]);
@@ -78,6 +78,34 @@ export default function SearchScreen() {
 
   // Scroll animation for EnhancedHeader
   const scrollY = useRef(new RNAnimated.Value(0)).current;
+  const headerOpacity = useRef(new RNAnimated.Value(0)).current;
+  const headerScale = useRef(new RNAnimated.Value(1)).current;
+
+  // Header animation - fade in and pulsate
+  useEffect(() => {
+    setTimeout(() => {
+      RNAnimated.timing(headerOpacity, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+      }).start(() => {
+        RNAnimated.loop(
+          RNAnimated.sequence([
+            RNAnimated.timing(headerScale, {
+              toValue: 1.05,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+            RNAnimated.timing(headerScale, {
+              toValue: 1,
+              duration: 1500,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
+      });
+    }, 500);
+  }, []);
 
   // Load user's favorites on mount
   useEffect(() => {
@@ -134,6 +162,7 @@ export default function SearchScreen() {
           },
           body: JSON.stringify({
             query: q,
+            strategy: strategy || undefined,
             size: 50,
           }),
         });
@@ -145,9 +174,12 @@ export default function SearchScreen() {
         const data = await response.json();
         console.log('🔍 Elasticsearch search results:', data);
 
-        // Filter out sold items
+        // Filter out sold items and items with missing critical fields
         const activeItems = (data.hits || []).filter((item: ElasticsearchItem) =>
-          !item.is_sold && item.status !== 'sold'
+          !item.is_sold &&
+          item.status !== 'sold' &&
+          item.name &&
+          item.item_id
         );
 
         // Update favorites map with any is_favorite flags from results
@@ -171,7 +203,7 @@ export default function SearchScreen() {
     };
 
     searchItems();
-  }, [q, token]);
+  }, [q, strategy, token]);
 
   const handleHeartPress = async (itemId: number) => {
     try {
@@ -307,7 +339,22 @@ export default function SearchScreen() {
           )}
           scrollEventThrottle={16}
             ListHeaderComponent={
-              <View style={{ paddingTop: HEADER_MAX_HEIGHT + 40 }}>
+              <View style={{ paddingTop: HEADER_MAX_HEIGHT }}>
+                {/* Page Header with Back Arrow */}
+                <RNAnimated.View style={[
+                  styles.pageHeader,
+                  {
+                    opacity: headerOpacity,
+                    transform: [{ scale: headerScale }],
+                    backgroundColor: colors.background,
+                  }
+                ]}>
+                  <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                    <Ionicons name="arrow-back" size={28} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+                  </TouchableOpacity>
+                  <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Search Results</Text>
+                </RNAnimated.View>
+
                 <Text style={[styles.resultCount, { color: colors.textPrimary }]}>
                   Found {total} result{total !== 1 ? 's' : ''} for &#34;{q}&#34;
                 </Text>
@@ -335,6 +382,22 @@ export default function SearchScreen() {
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  pageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 60,
+    paddingBottom: 12,
+  },
+  backButton: {
+    marginRight: 12,
+    padding: 4,
+  },
+  pageTitle: {
+    fontSize: 20,
+    fontWeight: '700',
     flex: 1,
   },
   centerContent: {
