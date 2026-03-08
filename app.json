@@ -54,6 +54,8 @@
       }
     },
     "plugins": [
+      "./plugins/withFirebaseInit.js",
+      "./plugins/withStripeVersion.js",
       "expo-router",
       [
         "expo-splash-screen",
@@ -71,32 +73,14 @@
       "expo-web-browser",
       "expo-asset",
       [
-        "@stripe/stripe-react-native",
-        {
-          "merchantIdentifier": "merchant.com.bidgoat",
-          "enableGooglePay": true
-        }
-      ],
-      [
         "expo-notifications",
         {
           "icon": "./assets/images/icon.png",
           "color": "#ffffff",
-          "sounds": []
+          "sounds": [],
+          "androidCollapsedTitle": "#{unread_notifications} new notifications"
         }
-      ],
-      [
-        "@react-native-firebase/app",
-        {
-          "android": {
-            "googleServicesFile": "./google-services.json"
-          },
-          "ios": {
-            "googleServicesFile": "./GoogleService-Info.plist"
-          }
-        }
-      ],
-      "@react-native-firebase/messaging"
+      ]
     ],
     "experiments": {
       "typedRoutes": true
