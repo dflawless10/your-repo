@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "302646990350",
+    "project_id": "bidgoat-4aa9f",
+    "storage_bucket": "bidgoat-4aa9f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:302646990350:android:001bed434e1d85cd0c4e5f",
+        "android_client_info": {
+          "package_name": "com.dflawless.BidGoatMobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "302646990350-auonb2o9cfgnhgapcu6ond5shh5k56fk.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyADYayzmiwjg4xhMCqBqm7ul9vExZsPXho"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "302646990350-auonb2o9cfgnhgapcu6ond5shh5k56fk.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

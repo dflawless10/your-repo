@@ -6,19 +6,18 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@kolking/react-native-rating": "^1.4.0",
     "@lottiefiles/dotlottie-react": "^0.13.5",
     "@react-native-async-storage/async-storage": "~2.2.0",
     "@react-native-community/slider": "~5.0.0",
-    "@react-native-firebase/app": "^23.8.6",
-    "@react-native-firebase/messaging": "^23.8.6",
     "@react-native-masked-view/masked-view": "~0.3.0",
     "@react-native-picker/picker": "2.11.1",
     "@reduxjs/toolkit": "^2.11.0",
-    "@stripe/stripe-react-native": "0.50.3",
+    "@stripe/stripe-react-native": "^0.34.0",
     "@types/react": "~19.1.10",
     "axios": "^1.6.0",
     "date-fns": "^4.1.0",
@@ -78,6 +77,7 @@
     "@babel/core": "^7.25.0",
     "@types/lodash": "^4.17.23",
     "@types/prop-types": "^15.7.15",
+    "patch-package": "^8.0.1",
     "typescript": "~5.9.0"
   },
   "private": true
