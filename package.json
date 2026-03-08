@@ -76,7 +76,6 @@
     "@babel/core": "^7.25.0",
     "@types/lodash": "^4.17.23",
     "@types/prop-types": "^15.7.15",
-    "patch-package": "^8.0.1",
     "typescript": "~5.9.0"
   },
   "private": true
