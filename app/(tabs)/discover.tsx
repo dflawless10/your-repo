@@ -1,13 +1,17 @@
-import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { API_BASE_URL } from '@/config';
+
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   FlatList, View, Text, Image, TouchableOpacity, RefreshControl,
-  ActivityIndicator, StyleSheet, Platform, Animated as RNAnimated, useWindowDimensions
+  ActivityIndicator, StyleSheet, Dimensions, Platform, Animated as RNAnimated
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import Animated from 'react-native-reanimated';
-import { playRandomGoatSound } from 'assets/sounds/officialGoatSoundsSoundtrack';
+
+import { playGoatSoundByName } from 'assets/sounds/officialGoatSoundsSoundtrack';
 import { useFocusEffect } from '@react-navigation/native';
+import {BlurView} from "expo-blur";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import {formatTimeWithSeconds} from "@/utils/time";
 import {useWishlist} from "app/wishlistContext"; // ✅ External header component
@@ -17,12 +21,14 @@ import GoatGenieBadge from 'app/GoatGenieBadge';
 import useThemeColor from '@/hooks/useThemeColor';
 import { useTheme } from '@/app/theme/ThemeContext';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
-import { API_BASE_URL } from '@/config';
 
 
 
 
-// Removed static dimensions - now reactive below
+const { width } = Dimensions.get('window');
+const COLUMN_GAP = 12;
+const NUM_COLUMNS = 2;
+const ITEM_WIDTH = (width - 32 - COLUMN_GAP) / NUM_COLUMNS;
 
 interface AuctionItem {
   id: string;
@@ -95,14 +101,6 @@ export default function Discover() {
   const [items, setItems] = useState<AuctionItem[]>([]);
   const scrollY = useRef(new RNAnimated.Value(0)).current;
 
-  // Reactive dimensions for landscape support
-  const { width, height } = useWindowDimensions();
-  const isLandscape = useMemo(() => width > height, [width, height]);
-  const NUM_COLUMNS = useMemo(() => isLandscape ? 4 : 2, [isLandscape]);
-  const HORIZONTAL_PADDING = 16;
-  const COLUMN_GAP = 12;
-  const ITEM_WIDTH = useMemo(() => (width - HORIZONTAL_PADDING * 2 - COLUMN_GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS, [width, NUM_COLUMNS]);
-
   useEffect(() => {
     fetchItems();
   }, []);
@@ -120,11 +118,10 @@ export default function Discover() {
   return hasTZ ? raw : raw.replace(" ", "T") + "Z";
 };
 
-
 const fetchItems = async () => {
   let data: AuctionItem[] = [];
   try {
-    const res = await fetch(`${API_BASE_URL}/items/discover`);
+    const res = await fetch('http://10.0.0.170:5000/items/discover');
     data = await res.json();
     console.log('🔍 Raw discover data:', data);
     console.log('🔍 First item buy_it_now:', data[0]?.buy_it_now);
@@ -157,9 +154,8 @@ const onRefresh = useCallback(async () => {
 
 
   const playBah = async () => {
-  await playRandomGoatSound();
-};
-
+    await playGoatSoundByName('Stutter Baa');
+  };
 
   const handleItemPress = async (item: AuctionItem) => {
   await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -193,12 +189,12 @@ const now = Date.now();
 const handleAddToWishlist = async (item: AuctionItem) => {
   const itemId = item.id;
   console.log('🐐 Discover: Adding item to wishlist:', itemId, item.name);
-  
+
   try {
     // Add to the backend first
     await addToWishlistBackend(itemId);
     console.log('🐐 Discover: Added to backend successfully');
-    
+
     // Then update Redux state
     const listedItem = {
       ...item,
@@ -208,7 +204,7 @@ const handleAddToWishlist = async (item: AuctionItem) => {
       tags: '',
     };
     dispatch(addToWishlist(listedItem));
-    
+
     // Navigate to wishlist with small delay
     await new Promise(resolve => setTimeout(resolve, 300));
     router.push('/wishlist');
@@ -221,17 +217,11 @@ const backgroundColor = useThemeColor({}, 'background');
   const renderItem = ({ item }: { item: AuctionItem }) => {
     const isAuctionEnded = new Date(item.auction_ends_at).getTime() <= Date.now();
     const timeLeftMs = new Date(item.auction_ends_at).getTime() - Date.now();
-    const hoursLeft = timeLeftMs / (1000 * 60 * 60);
+    const isUrgent = timeLeftMs > 1 && timeLeftMs <= 7200000; // Less than 2 hours
 
-    // Color coding: red for ≤24h, orange for ≤48h, green for >48h
-    const isVeryUrgent = timeLeftMs > 1 && hoursLeft <= 24; // Red - 24 hours or less
-    const isUrgent = timeLeftMs > 1 && hoursLeft > 24 && hoursLeft <= 48; // Orange - between 24-48 hours
-
-    const timeColor = isVeryUrgent ? '#e53e3e' : isUrgent ? '#F57C00' : '#38a169';
-
-    // Debug: Log buy_it_now value and time info for each item
+    // Debug: Log buy_it_now value for each item
     if (item.buy_it_now) {
-      console.log(`🏷️ Buy Now Item ${item.id}: hoursLeft=${hoursLeft.toFixed(1)}h, timeColor=${timeColor}, isVeryUrgent=${isVeryUrgent}, isUrgent=${isUrgent}`);
+      console.log(`🏷️ Item ${item.id} has buy_it_now:`, item.buy_it_now);
     }
 
     return (
@@ -278,14 +268,11 @@ const backgroundColor = useThemeColor({}, 'background');
           </View>
 
             <View style={styles.statsContainer}>
-              <MaterialCommunityIcons name="clock-outline" size={14} color={timeColor} style={{marginRight: 4}}/>
-             <Text style={[styles.statsText, { color: timeColor, fontWeight: isVeryUrgent ? '700' : '600' }]}>
+              <Text style={styles.statsText}>👀 {Math.floor(Math.random() * 20) + 5} watching</Text>
+              <MaterialCommunityIcons name="clock-outline" size={14} color={isUrgent ? '#c62828' : '#2e7d32'} style={{marginHorizontal: 4}}/>
+             <Text style={[styles.statsText, isUrgent ? styles.urgentText : styles.timeText]}>
               {item.auction_ends_at ? formatTimeWithSeconds(item.auction_ends_at, now) : 'Not auctioned'}
              </Text>
-            </View>
-
-            <View style={styles.statsContainer}>
-              <Text style={styles.statsText}>👀 {Math.floor(Math.random() * 20) + 5} watching</Text>
             </View>
 
            {item.seller && (
@@ -327,76 +314,48 @@ const backgroundColor = useThemeColor({}, 'background');
  return (
   <View style={{ flex: 1, backgroundColor }}>
     <EnhancedHeader scrollY={scrollY} onSearch={() => {}} />
-    <RNAnimated.ScrollView
-  onScroll={RNAnimated.event(
-    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-    { useNativeDriver: false }
-  )}
-  scrollEventThrottle={16}
-  contentContainerStyle={{
-    paddingHorizontal: 16,
-    paddingBottom: 120,
-  }}
-  refreshControl={
-    <RefreshControl
-      refreshing={refreshing}
-      onRefresh={onRefresh}
-      tintColor="#007AFF"
+    <FlatList
+      data={items}
+      renderItem={renderItem}
+      keyExtractor={(item) => `discover-${item.id}`}
+      numColumns={2}
+      contentContainerStyle={styles.list}
+      columnWrapperStyle={styles.columnWrapper}
+
+      ListHeaderComponent={
+        <View style={{ backgroundColor }}>
+          <View style={{ padding: 16, paddingTop: 32, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme === 'dark' ? '#333' : '#eee', flexDirection: 'row', alignItems: 'center' }}>
+            <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 12 }}>
+              <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 24, fontWeight: '700', color: colors.textPrimary }}>Discover Treasures</Text>
+              <Text style={{ fontSize: 14, color: theme === 'dark' ? '#999' : '#666' }}>Find unique pieces from verified sellers</Text>
+            </View>
+          </View>
+        </View>
+
+      }
+      stickyHeaderIndices={[0]}
+
+      ListFooterComponent={
+        <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+          {loading ? (
+            <ActivityIndicator size="large" style={styles.loader} />
+          ) : (
+            <Text style={{ color: '#666' }}>You&#39;ve reached the end 🐐</Text>
+          )}
+        </View>
+      }
+
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#007AFF" />}
+      onEndReached={async () => {
+        setLoading(true);
+        await new Promise(res => setTimeout(res, 1500));
+        setLoading(false);
+      }}
+      onEndReachedThreshold={0.5}
     />
-  }
->
-  {/* Header */}
-  <View
-    style={{
-      backgroundColor,
-      paddingHorizontal: 16,
-      paddingTop: 16,
-      paddingBottom: 12,
-      flexDirection: 'row',
-      alignItems: 'center',
-    }}
-  >
-    <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 12 }}>
-      <Ionicons name="arrow-back" size={28} color="#6A0DAD" />
-    </TouchableOpacity>
-
-    <View style={{ flex: 1 }}>
-      <Text style={{ fontSize: 20, fontWeight: '700', color: colors.textPrimary }}>
-        Discover Treasures
-      </Text>
-      <Text style={{ fontSize: 14, color: theme === 'dark' ? '#999' : '#666' }}>
-        Find unique pieces from verified sellers
-      </Text>
-    </View>
-  </View>
-
-  {/* GRID — THIS IS THE IMPORTANT PART */}
-  <View
-    style={{
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: COLUMN_GAP,
-      paddingHorizontal: HORIZONTAL_PADDING,
-      width: width, // <— stabilizes layout + scroll
-    }}
-  >
-    {items.map(item => (
-      <View key={`discover-${item.id}`} style={{ width: ITEM_WIDTH }}>
-        {renderItem({ item })}
-      </View>
-    ))}
-  </View>
-
-  {/* Footer */}
-  <View style={{ paddingVertical: 24, alignItems: 'center' }}>
-    {loading ? (
-      <ActivityIndicator size="large" style={styles.loader} />
-    ) : (
-      <Text style={{ color: '#666' }}>You&#39;ve reached the end 🐐</Text>
-    )}
-  </View>
-</RNAnimated.ScrollView>
-
   </View>
 );
 }
@@ -404,8 +363,8 @@ const backgroundColor = useThemeColor({}, 'background');
 const styles = StyleSheet.create({
   list: {
     padding: 16,
-
-    paddingBottom: 120,
+    paddingTop: HEADER_MAX_HEIGHT + 16,
+    paddingBottom: 100,
   },
   wishlistIconWrapper: {
     position: 'absolute',
@@ -446,10 +405,11 @@ mustSellText: {
 },
 
   columnWrapper: {
-    gap: 12,
-    justifyContent: 'flex-start',
+    gap: COLUMN_GAP,
+    justifyContent: 'space-between',
   },
   itemContainer: {
+    width: ITEM_WIDTH,
     marginBottom: 16,
     borderRadius: 16,
     backgroundColor: '#fff',
@@ -490,7 +450,7 @@ mustSellText: {
   },
   image: {
     width: '100%',
-    aspectRatio: 1 / 1.2,
+    height: ITEM_WIDTH * 1.2,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
   },

@@ -101,7 +101,8 @@
           "merchantIdentifier": "merchant.com.dflawless.BidGoatMobile",
           "enableGooglePay": false
         }
-      ]
+      ],
+      "expo-build-properties"
     ],
     "experiments": {
       "typedRoutes": true
