@@ -1,19 +1,23 @@
 import { API_BASE_URL } from '@/config';
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   ScrollView,
   TouchableOpacity,
-  useColorScheme, Dimensions, ActivityIndicator, Modal,
- Animated as RNAnimated } from 'react-native';
+  useColorScheme,
+  ActivityIndicator,
+  Modal,
+  Animated as RNAnimated,
+  useWindowDimensions,
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SystemUI from 'expo-system-ui';
-import EnhancedHeader from '@/app/components/EnhancedHeader';
+import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
 import { ListedItem } from '@/types/items';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import CarouselPreview from '@/app/onboarding/CarouselPreview';
 
 import Animated from 'react-native-reanimated';
@@ -25,14 +29,7 @@ import Toast from "react-native-toast-message";
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '@/app/theme/ThemeContext';
 
-
-
-
-
-
-const { width } = Dimensions.get('window');
 const COLUMN_GAP = 12;
-const NUM_COLUMNS = 2;
 
 const goatColors = {
   light: {
@@ -65,6 +62,12 @@ export default function HomeScreen() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const dispatch = useAppDispatch();
   const [loading, setLoading] = useState(true);
+  const insets = useSafeAreaInsets();
+
+  // Reactive dimensions for landscape support
+  const { width, height } = useWindowDimensions();
+  const isLandscape = useMemo(() => width > height, [width, height]);
+  const NUM_COLUMNS = useMemo(() => isLandscape ? 4 : 2, [isLandscape]);
 
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
 
@@ -351,9 +354,9 @@ export default function HomeScreen() {
           );
         })}
       </ScrollView>
-      <View style={[styles.carouselHeaderWrap, { marginTop: 110 }]}>
-        <CarouselPreview category={activeCategory} />
-      </View>
+      <View style={styles.carouselHeaderWrap}>
+  <CarouselPreview category={activeCategory} />
+</View>
     </>
   );
 
@@ -441,7 +444,8 @@ export default function HomeScreen() {
     <Animated.FlatList
       data={items}
       keyExtractor={(item, index) => `index-${item.id}-${index}`}
-      numColumns={2}
+      numColumns={NUM_COLUMNS}
+      key={`grid-${NUM_COLUMNS}`}
       renderItem={({ item }) => (
         <SparkleItemCard
   item={item}
@@ -456,8 +460,14 @@ export default function HomeScreen() {
 />
 
       )}
-      contentContainerStyle={styles.cardList}
-      columnWrapperStyle={styles.columnWrapper}
+      contentContainerStyle={[
+        styles.cardList,
+        {
+          paddingTop: HEADER_MAX_HEIGHT,
+          paddingBottom: 80 + insets.bottom + 16
+        }
+      ]}
+      columnWrapperStyle={NUM_COLUMNS > 1 ? styles.columnWrapper : undefined}
       onScroll={RNAnimated.event(
         [{ nativeEvent: { contentOffset: { y: scrollY } } }],
         { useNativeDriver: false }
@@ -559,10 +569,14 @@ const styles = StyleSheet.create({
     fontSize: 13
   },
   carouselHeaderWrap: {
-    alignSelf: 'stretch',
-    height: 320,
-    marginVertical: 8,
-  },
+  width: '100%',
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginTop: -12,
+  marginBottom: -16,
+  paddingHorizontal: 16,
+},
+
   categoryBar: {
     flexDirection: 'row',
     justifyContent: 'space-evenly',
@@ -591,10 +605,10 @@ bidLabel: {
   cardList: {
     padding: 16,
     paddingTop: 0,
-    paddingBottom: 120,
+    paddingBottom: 16,
   },
   columnWrapper: {
     gap: COLUMN_GAP,
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
   },
 });

@@ -17,7 +17,6 @@ import { validateContentQuick } from 'app/utils/contentModeration';
 import { useImageValidation } from '@/hooks/useImageValidation';
 import ImageValidationFeedback from '@/app/components/ImageValidationFeedback';
 import { API_BASE_URL } from '@/config';
-import GlobalFooter from "@/app/components/GlobalFooter";
 import CategorySelector, { QUICK_CATEGORIES } from '@/app/components/CategorySelector';
 import { useTheme } from '@/app/theme/ThemeContext';
 
@@ -36,6 +35,7 @@ function ItemScreen() {
   const params = useLocalSearchParams();
   const editItemId = params.editItemId as string | undefined;
 
+
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
@@ -47,8 +47,11 @@ function ItemScreen() {
   const [rarity, setRarity] = useState('common');
   const [weightLbs, setWeightLbs] = useState('1.0');
   const [gender, setGender] = useState<string>('unisex');
-  const [durationDays, setDurationDays] = useState(7);
+  const [durationDays, setDurationDays] = useState(10);
   const [loading, setLoading] = useState(false);
+   const [isMustSell, setIsMustSell] = useState(10);
+
+
 
   // Item-level policy overrides
   const [returnPolicyOverride, setReturnPolicyOverride] = useState<string>('use_default');
@@ -125,10 +128,8 @@ function ItemScreen() {
         setWeightLbs(item.weight_lbs?.toString() || '1.0');
         setGender(item.gender || 'unisex');
 
-        // Convert hours back to days
-        if (item.duration_hours) {
-          setDurationDays(Math.round(item.duration_hours / 24));
-        }
+
+
 
         // Load existing images
         const existingImages = [item.photo_url];
@@ -158,6 +159,14 @@ function ItemScreen() {
       Alert.alert('Missing Fields', 'Please fill out all fields, select a category, and upload at least one photo');
       return;
     }
+if (isMustSell) {
+  const days = Number.parseInt(String(durationDays), 10);
+
+  if (days < 1 || days > 3) {
+    Alert.alert('Error', 'Must Sell duration must be between 1 and 3 days');
+    return;
+  }
+}
 
     setLoading(true);
 
@@ -268,7 +277,7 @@ function ItemScreen() {
         const randomCompliment = compliments[Math.floor(Math.random() * compliments.length)];
 
         Alert.alert('Success!', randomCompliment, [
-          { text: 'OK', onPress: () => router.back() }
+          { text: 'OK', onPress: () => router.replace('/(tabs)/MyAuctionScreen' as any) }
         ]);
       } else {
         // Clear form only for new listings
@@ -555,7 +564,6 @@ function ItemScreen() {
         )}
       </TouchableOpacity>
       </Animated.ScrollView>
-      <GlobalFooter />
     </View>
   );
 }

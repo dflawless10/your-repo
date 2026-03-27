@@ -316,7 +316,7 @@ export default function BuyerOrdersScreen() {
             onPress={() => router.back()}
             style={styles.backButton}
           >
-              <Ionicons name="arrow-back" size={28} color="#B794F4"  />
+              <Ionicons name="arrow-back" size={24} color="#6A0DAD"  />
           </TouchableOpacity>
           <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>My Orders</Text>
         </Animated.View>
@@ -590,9 +590,9 @@ const createStyles = (isDark: boolean, colors: any) => StyleSheet.create({
   pageHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 60,
-    paddingBottom: 8,
+    paddingHorizontal: 12,
+    paddingTop: 45,
+    paddingBottom: 4,
     backgroundColor: colors.background,
   },
   backButton: {
@@ -600,7 +600,7 @@ const createStyles = (isDark: boolean, colors: any) => StyleSheet.create({
     padding: 4,
   },
   pageTitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
     color: colors.textPrimary,
   },

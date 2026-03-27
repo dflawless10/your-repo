@@ -6,7 +6,7 @@ export const useGoatBid = () => {
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const triggerGoat = (amount: number) => {
+  const triggerGoat = (amount: PropTypes.Requireable<any>) => {
     setLastBidAmount(amount);
     setGoatTrigger(true);
 

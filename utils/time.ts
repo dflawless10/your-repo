@@ -181,7 +181,7 @@ export const formatShippingTimeRemaining = (deadline: string | null | undefined,
   const hours = Math.floor((absDiffMs % 86400000) / 3600000);
   const minutes = Math.floor((absDiffMs % 3600000) / 60000);
 
-  // Format based on time scale
+  // Format based on timescale
   if (days >= 7) {
     const weeks = Math.floor(days / 7);
     return isLate

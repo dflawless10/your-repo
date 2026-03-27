@@ -1,7 +1,7 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
   FlatList, View, Text, Image, TouchableOpacity, RefreshControl,
-  ActivityIndicator, StyleSheet, Dimensions, Platform, Animated as RNAnimated
+  ActivityIndicator, StyleSheet, Platform, Animated as RNAnimated, useWindowDimensions
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
@@ -22,10 +22,7 @@ import { API_BASE_URL } from '@/config';
 
 
 
-const { width } = Dimensions.get('window');
-const COLUMN_GAP = 12;
-const NUM_COLUMNS = 2;
-const ITEM_WIDTH = (width - 32 - COLUMN_GAP) / NUM_COLUMNS;
+// Removed static dimensions - now reactive below
 
 interface AuctionItem {
   id: string;
@@ -98,6 +95,14 @@ export default function Discover() {
   const [items, setItems] = useState<AuctionItem[]>([]);
   const scrollY = useRef(new RNAnimated.Value(0)).current;
 
+  // Reactive dimensions for landscape support
+  const { width, height } = useWindowDimensions();
+  const isLandscape = useMemo(() => width > height, [width, height]);
+  const NUM_COLUMNS = useMemo(() => isLandscape ? 4 : 2, [isLandscape]);
+  const HORIZONTAL_PADDING = 16;
+  const COLUMN_GAP = 12;
+  const ITEM_WIDTH = useMemo(() => (width - HORIZONTAL_PADDING * 2 - COLUMN_GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS, [width, NUM_COLUMNS]);
+
   useEffect(() => {
     fetchItems();
   }, []);
@@ -114,6 +119,7 @@ export default function Discover() {
   const hasTZ = raw.includes("T") || raw.includes("+") || raw.endsWith("Z");
   return hasTZ ? raw : raw.replace(" ", "T") + "Z";
 };
+
 
 const fetchItems = async () => {
   let data: AuctionItem[] = [];
@@ -321,48 +327,76 @@ const backgroundColor = useThemeColor({}, 'background');
  return (
   <View style={{ flex: 1, backgroundColor }}>
     <EnhancedHeader scrollY={scrollY} onSearch={() => {}} />
-    <FlatList
-      data={items}
-      renderItem={renderItem}
-      keyExtractor={(item) => `discover-${item.id}`}
-      numColumns={2}
-      contentContainerStyle={styles.list}
-      columnWrapperStyle={styles.columnWrapper}
-
-      ListHeaderComponent={
-        <View style={{ backgroundColor }}>
-          <View style={{ padding: 16, paddingTop: 32, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme === 'dark' ? '#333' : '#eee', flexDirection: 'row', alignItems: 'center' }}>
-            <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 12 }}>
-               <Ionicons name="arrow-back" size={28} color='#6A0DAD'  />
-            </TouchableOpacity>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 20, fontWeight: '700', color: colors.textPrimary }}>Discover Treasures</Text>
-              <Text style={{ fontSize: 14, color: theme === 'dark' ? '#999' : '#666' }}>Find unique pieces from verified sellers</Text>
-            </View>
-          </View>
-        </View>
-
-      }
-      stickyHeaderIndices={[0]}
-
-      ListFooterComponent={
-        <View style={{ paddingVertical: 24, alignItems: 'center' }}>
-          {loading ? (
-            <ActivityIndicator size="large" style={styles.loader} />
-          ) : (
-            <Text style={{ color: '#666' }}>You&#39;ve reached the end 🐐</Text>
-          )}
-        </View>
-      }
-
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#007AFF" />}
-      onEndReached={async () => {
-        setLoading(true);
-        await new Promise(res => setTimeout(res, 1500));
-        setLoading(false);
-      }}
-      onEndReachedThreshold={0.5}
+    <RNAnimated.ScrollView
+  onScroll={RNAnimated.event(
+    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+    { useNativeDriver: false }
+  )}
+  scrollEventThrottle={16}
+  contentContainerStyle={{
+    paddingHorizontal: 16,
+    paddingBottom: 120,
+  }}
+  refreshControl={
+    <RefreshControl
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+      tintColor="#007AFF"
     />
+  }
+>
+  {/* Header */}
+  <View
+    style={{
+      backgroundColor,
+      paddingHorizontal: 16,
+      paddingTop: 16,
+      paddingBottom: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+    }}
+  >
+    <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 12 }}>
+      <Ionicons name="arrow-back" size={28} color="#6A0DAD" />
+    </TouchableOpacity>
+
+    <View style={{ flex: 1 }}>
+      <Text style={{ fontSize: 20, fontWeight: '700', color: colors.textPrimary }}>
+        Discover Treasures
+      </Text>
+      <Text style={{ fontSize: 14, color: theme === 'dark' ? '#999' : '#666' }}>
+        Find unique pieces from verified sellers
+      </Text>
+    </View>
+  </View>
+
+  {/* GRID — THIS IS THE IMPORTANT PART */}
+  <View
+    style={{
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: COLUMN_GAP,
+      paddingHorizontal: HORIZONTAL_PADDING,
+      width: width, // <— stabilizes layout + scroll
+    }}
+  >
+    {items.map(item => (
+      <View key={`discover-${item.id}`} style={{ width: ITEM_WIDTH }}>
+        {renderItem({ item })}
+      </View>
+    ))}
+  </View>
+
+  {/* Footer */}
+  <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+    {loading ? (
+      <ActivityIndicator size="large" style={styles.loader} />
+    ) : (
+      <Text style={{ color: '#666' }}>You&#39;ve reached the end 🐐</Text>
+    )}
+  </View>
+</RNAnimated.ScrollView>
+
   </View>
 );
 }
@@ -370,7 +404,7 @@ const backgroundColor = useThemeColor({}, 'background');
 const styles = StyleSheet.create({
   list: {
     padding: 16,
-    paddingTop: HEADER_MAX_HEIGHT + 16,
+
     paddingBottom: 120,
   },
   wishlistIconWrapper: {
@@ -412,11 +446,10 @@ mustSellText: {
 },
 
   columnWrapper: {
-    gap: COLUMN_GAP,
-    justifyContent: 'space-between',
+    gap: 12,
+    justifyContent: 'flex-start',
   },
   itemContainer: {
-    width: ITEM_WIDTH,
     marginBottom: 16,
     borderRadius: 16,
     backgroundColor: '#fff',
@@ -457,7 +490,7 @@ mustSellText: {
   },
   image: {
     width: '100%',
-    height: ITEM_WIDTH * 1.2,
+    aspectRatio: 1 / 1.2,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
   },

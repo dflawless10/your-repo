@@ -1,6 +1,6 @@
 import { API_BASE_URL } from '@/config';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -14,7 +14,7 @@ import {
   Pressable,
   Dimensions,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons,} from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -55,18 +55,18 @@ type Birthstone = {
 };
 
 const birthstones: Birthstone[] = [
-  { month: 'January', stone: 'Garnet', color: '#8B0000', meaning: 'Deep red warmth, like a goat\'s heartbeat in winter' },
-  { month: 'February', stone: 'Amethyst', color: '#800080', meaning: 'Mystical purple, perfect for twilight bidding' },
-  { month: 'March', stone: 'Aquamarine', color: '#7FFFD4', meaning: 'Ocean breeze meets barnyard calm' },
-  { month: 'April', stone: 'Quartz', color: '#E0E0E0', meaning: 'Clean and crisp, like a fresh modal invocation' },
-  { month: 'May', stone: 'Emerald', color: '#50C878', meaning: 'Lush green, like springtime goat whispers' },
-  { month: 'June', stone: 'Pearl', color: '#dcdcdc', meaning: 'Soft shimmer, now visible against white tiles' },
-  { month: 'July', stone: 'Ruby', color: '#E0115F', meaning: 'Bold and celebratory, like a winning bid' },
-  { month: 'August', stone: 'Peridot', color: '#B4EEB4', meaning: 'Playful green with a hint of summer mischief' },
-  { month: 'September', stone: 'Sapphire', color: '#0F52BA', meaning: 'Royal blue for confident contributors' },
-  { month: 'October', stone: 'Opal', color: '#FFB6C1', meaning: 'Pastel magic with unpredictable sparkle trails' },
-  { month: 'November', stone: 'Topaz', color: '#FFC87C', meaning: 'Golden warmth for cozy barnyard rituals' },
-  { month: 'December', stone: 'Turquoise', color: '#40E0D0', meaning: 'Frosty teal for wintertime lore' },
+  { month: 'January', stone: 'Garnet', color: '#8B0000', meaning: 'The official birthstone for January is the garnet, known for its deep red hues symbolizing passion, energy, and regeneration. Named from the Latin "granatum" meaning pomegranate seed, garnets have been treasured since ancient times and are associated with love, friendship, and protection from harm.' },
+  { month: 'February', stone: 'Amethyst', color: '#800080', meaning: 'The official birthstone for February is the amethyst, a purple variety of quartz prized for its regal violet color. Its name derives from the Greek "amethystos" meaning not intoxicated, as ancient Greeks believed it prevented drunkenness. Amethyst symbolizes wisdom, clarity, and spiritual protection.' },
+  { month: 'March', stone: 'Aquamarine', color: '#40E0D0', meaning: 'The official birthstone for March is the aquamarine, a pale blue-green gemstone from the beryl family. Its name comes from Latin "aqua marina" meaning seawater, reflecting its ocean-like color. Ancient sailors carried aquamarine as a talisman for safe passage. It symbolizes courage, calm, and clarity.' },
+  { month: 'April', stone: 'Diamond', color: '#E0E0E0', meaning: 'The official birthstone for April is the diamond, the hardest natural substance on Earth and most coveted gemstone. Formed deep within the Earth under extreme pressure, diamonds symbolize eternal love, strength, and invincibility. The name derives from Greek "adamas" meaning unconquerable.' },
+  { month: 'May', stone: 'Emerald', color: '#50C878', meaning: 'The official birthstone for May is the emerald, a deep green variety of beryl celebrated for its vibrant color and rarity. Its name originates from the Greek word "smaragdos" meaning green gem, reflecting its lush verdant hue that embodies the essence of spring and growth. Emeralds have been revered for centuries, associated with love, rebirth, and wisdom, and were prized by ancient civilizations including Egyptians, Romans, and Indian royalty.' },
+  { month: 'June', stone: 'Pearl', color: '#F5F5DC', meaning: 'The official birthstone for June is the pearl, the only gemstone created by a living organism. Formed inside oysters and mollusks, pearls have been treasured for millennia and symbolize purity, innocence, and wisdom gained through experience. Their lustrous beauty has adorned royalty throughout history.' },
+  { month: 'July', stone: 'Ruby', color: '#E0115F', meaning: 'The official birthstone for July is the ruby, known as the "king of gemstones" for its intense red color and rarity. A variety of corundum, rubies symbolize passion, love, and courage. Ancient cultures believed rubies held the power of life, and warriors wore them for protection in battle.' },
+  { month: 'August', stone: 'Peridot', color: '#B4EEB4', meaning: 'The official birthstone for August is the peridot, a vibrant lime-green gemstone formed deep in the Earth\'s mantle. Ancient Egyptians called it the "gem of the sun" and believed it protected against nightmares. Peridot symbolizes strength, growth, and positive energy, and is one of the few gemstones that occurs in only one color.' },
+  { month: 'September', stone: 'Sapphire', color: '#0F52BA', meaning: 'The official birthstone for September is the sapphire, a precious gemstone known for its deep blue color, though it occurs in many hues. Associated with royalty, wisdom, and divine favor, sapphires have adorned crowns and religious jewelry for centuries. They symbolize truth, sincerity, and faithfulness.' },
+  { month: 'October', stone: 'Opal', color: '#FFB6C1', meaning: 'The official birthstone for October is the opal, a unique gemstone displaying a mesmerizing play of colors called opalescence. Ancient Romans considered opals symbols of hope and purity, while Arabs believed they fell from heaven in flashes of lightning. Opals represent creativity, inspiration, and spontaneity.' },
+  { month: 'November', stone: 'Topaz', color: '#FFC87C', meaning: 'The official birthstone for November is the topaz, particularly the golden-yellow to orange variety known as Imperial Topaz. Named from the Sanskrit "tapas" meaning fire, topaz symbolizes love, affection, and strength. Ancient civilizations believed it could increase strength and provide protection from harm.' },
+  { month: 'December', stone: 'Tanzanite', color: '#6A0DAD', meaning: 'The official birthstone for December is tanzanite, a rare blue-violet gemstone discovered in Tanzania in 1967. Found only in a small area near Mount Kilimanjaro, tanzanite is celebrated for its remarkable color-shifting properties, appearing blue, violet, or burgundy depending on the light. It symbolizes transformation, wisdom, and spiritual awareness.' },
 ];
 
 // Automatic holiday detection function
@@ -230,7 +230,7 @@ OCCASION_KEYWORDS = {
     ],
 }
 
-export default function GiftDiscoveryModal({ visible, onClose }: GiftDiscoveryModalProps) {
+export default function GiftDiscoveryModal({ visible, onClose }: Readonly<GiftDiscoveryModalProps>) {
   const router = useRouter();
   const { theme, colors } = useTheme();
   const [step, setStep] = useState<'occasions' | 'questionnaire' | 'results'>('occasions');
@@ -248,6 +248,12 @@ export default function GiftDiscoveryModal({ visible, onClose }: GiftDiscoveryMo
 
   // Birthstone modal state
   const [showBirthstoneModal, setShowBirthstoneModal] = useState(false);
+  const [selectedMonthInModal, setSelectedMonthInModal] = useState<string | null>(null);
+
+  // Scroll ref and position tracking
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [budgetSectionY, setBudgetSectionY] = useState(0);
+  const [styleSectionY, setStyleSectionY] = useState(0);
 
   useEffect(() => {
     // Update active occasions when modal opens
@@ -259,19 +265,45 @@ export default function GiftDiscoveryModal({ visible, onClose }: GiftDiscoveryMo
       setBudgetRange(null);
       setStylePreference(null);
       setGiftItems([]);
+      setSelectedMonthInModal(null);
     }
   }, [visible]);
+
+  // Auto-scroll after birth month selected - scroll to start of "What's your budget?"
+  useEffect(() => {
+    if (birthMonth && scrollViewRef.current && budgetSectionY > 0) {
+      setTimeout(() => {
+        // Scroll to budget section header, not below it
+        scrollViewRef.current?.scrollTo({ y: budgetSectionY - 50, animated: true });
+      }, 300);
+    }
+  }, [birthMonth, budgetSectionY]);
+
+  // Auto-scroll after budget selected - scroll to "What's their style?" for applicable occasions
+  useEffect(() => {
+    if (budgetRange && scrollViewRef.current) {
+      const needsScroll = selectedOccasion?.id === 'birthday' ||
+                         selectedOccasion?.id === 'anniversary' ||
+                         selectedOccasion?.id === 'wedding';
+      if (needsScroll && styleSectionY > 0) {
+        setTimeout(() => {
+          // Scroll to style section header
+          scrollViewRef.current?.scrollTo({ y: styleSectionY - 50, animated: true });
+        }, 300);
+      } else if (!needsScroll) {
+        // For occasions without style preference, scroll to "Find Gifts" button
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 300);
+      }
+    }
+  }, [budgetRange, styleSectionY, selectedOccasion]);
 
   const handleOccasionSelect = (occasion: GiftOccasion) => {
     setSelectedOccasion(occasion);
 
-    // For birthday, show questionnaire with birthstone selection
-    if (occasion.id === 'birthday' || occasion.id === 'anniversary' || occasion.id === 'wedding') {
-      setStep('questionnaire');
-    } else {
-      // For other occasions, skip questionnaire and go straight to results
-      fetchGiftRecommendations(occasion, null, null, null);
-    }
+    // All occasions should show the questionnaire for consistent UX
+    setStep('questionnaire');
   };
 
   const handleQuestionnaireComplete = () => {
@@ -346,7 +378,7 @@ export default function GiftDiscoveryModal({ visible, onClose }: GiftDiscoveryMo
       activeOpacity={0.9}
     >
       <LinearGradient
-  colors={['#FF6B35', '#FFB347'] as const}
+  colors={['#6A0DAD', '#38a169'] as const}
   style={styles.occasionGradient}
   start={{ x: 0, y: 0 }}
   end={{ x: 1, y: 1 }}
@@ -365,8 +397,12 @@ export default function GiftDiscoveryModal({ visible, onClose }: GiftDiscoveryMo
   );
 
   const renderQuestionnaire = () => (
-    <ScrollView style={[styles.questionnaireContainer, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
-      <Text style={[styles.questionnaireTitle, { color: colors.textPrimary }]}>Let&#39;s Find The Perfect Gift! 🎁</Text>
+    <ScrollView
+      ref={scrollViewRef}
+      style={[styles.questionnaireContainer, { backgroundColor: colors.background }]}
+      showsVerticalScrollIndicator={false}
+    >
+      <Text style={[styles.questionnaireTitle, { color: colors.textPrimary }]}>Let&#39;s Find The Perfect Gift! 🥚</Text>
 
       {/* Birthday Month Selection (only for birthday) */}
       {selectedOccasion?.id === 'birthday' && (
@@ -406,7 +442,10 @@ export default function GiftDiscoveryModal({ visible, onClose }: GiftDiscoveryMo
       )}
 
       {/* Budget Range */}
-      <View style={styles.questionSection}>
+      <View
+        style={styles.questionSection}
+        onLayout={(e) => setBudgetSectionY(e.nativeEvent.layout.y)}
+      >
         <Text style={[styles.questionLabel, { color: colors.textPrimary }]}>What&#39;s your budget?</Text>
         {BUDGET_RANGES.map((range) => (
           <TouchableOpacity
@@ -432,48 +471,67 @@ export default function GiftDiscoveryModal({ visible, onClose }: GiftDiscoveryMo
         ))}
       </View>
 
-      {/* Style Preference */}
-      <View style={styles.questionSection}>
-        <Text style={[styles.questionLabel, { color: colors.textPrimary }]}>What&#39;s their style?</Text>
-        <View style={styles.styleGrid}>
-          {STYLE_PREFERENCES.map((style) => (
-            <TouchableOpacity
-              key={style.id}
-              style={[
-                styles.styleCard,
-                { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F5F5', borderColor: theme === 'dark' ? '#3C3C3E' : '#E0E0E0' },
-                stylePreference === style.id && [styles.styleCardSelected, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F0F4FF', borderColor: theme === 'dark' ? '#8B5CF6' : '#6A0DAD' }]
-              ]}
-              onPress={() => setStylePreference(style.id)}
-            >
-              <Ionicons
-                name={style.icon as any}
-                size={32}
-                color={stylePreference === style.id ? (theme === 'dark' ? '#8B5CF6' : '#6A0DAD') : '#999'}
-              />
-              <Text style={[
-                styles.styleCardText,
-                { color: theme === 'dark' ? '#999' : '#666' },
-                stylePreference === style.id && [styles.styleCardTextSelected, { color: theme === 'dark' ? '#8B5CF6' : '#6A0DAD' }]
-              ]}>
-                {style.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+      {/* Style Preference - Only for Birthday, Anniversary, Wedding */}
+      {(selectedOccasion?.id === 'birthday' ||
+        selectedOccasion?.id === 'anniversary' ||
+        selectedOccasion?.id === 'wedding') && (
+        <View
+          style={styles.questionSection}
+          onLayout={(e) => setStyleSectionY(e.nativeEvent.layout.y)}
+        >
+          <Text style={[styles.questionLabel, { color: colors.textPrimary }]}>What&#39;s their style?</Text>
+          <View style={styles.styleGrid}>
+            {STYLE_PREFERENCES.map((style) => (
+              <TouchableOpacity
+                key={style.id}
+                style={[
+                  styles.styleCard,
+                  { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F5F5', borderColor: theme === 'dark' ? '#3C3C3E' : '#E0E0E0' },
+                  stylePreference === style.id && [styles.styleCardSelected, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F0F4FF', borderColor: theme === 'dark' ? '#8B5CF6' : '#6A0DAD' }]
+                ]}
+                onPress={() => setStylePreference(style.id)}
+              >
+                <Ionicons
+                  name={style.icon as any}
+                  size={32}
+                  color={stylePreference === style.id ? (theme === 'dark' ? '#8B5CF6' : '#6A0DAD') : '#999'}
+                />
+                <Text style={[
+                  styles.styleCardText,
+                  { color: theme === 'dark' ? '#999' : '#666' },
+                  stylePreference === style.id && [styles.styleCardTextSelected, { color: theme === 'dark' ? '#8B5CF6' : '#6A0DAD' }]
+                ]}>
+                  {style.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
-      </View>
+      )}
 
       {/* Find Gifts Button */}
       <TouchableOpacity
         style={[
           styles.findGiftsButton,
-          (!budgetRange || !stylePreference) && styles.findGiftsButtonDisabled
+          (!budgetRange || (
+            (selectedOccasion?.id === 'birthday' ||
+             selectedOccasion?.id === 'anniversary' ||
+             selectedOccasion?.id === 'wedding') && !stylePreference
+          )) && styles.findGiftsButtonDisabled
         ]}
         onPress={handleQuestionnaireComplete}
-        disabled={!budgetRange || !stylePreference}
+        disabled={!budgetRange || (
+          (selectedOccasion?.id === 'birthday' ||
+           selectedOccasion?.id === 'anniversary' ||
+           selectedOccasion?.id === 'wedding') && !stylePreference
+        )}
       >
         <LinearGradient
-          colors={budgetRange && stylePreference ? ['#6A0DAD', '#9D50BB'] : ['#CCC', '#DDD']}
+          colors={budgetRange && (
+            !(selectedOccasion?.id === 'birthday' ||
+              selectedOccasion?.id === 'anniversary' ||
+              selectedOccasion?.id === 'wedding') || stylePreference
+          ) ? ['#6A0DAD', '#9D50BB'] : ['#CCC', '#DDD']}
           style={styles.findGiftsGradient}
         >
           <Ionicons name="search" size={20} color="#FFF" />
@@ -495,15 +553,15 @@ export default function GiftDiscoveryModal({ visible, onClose }: GiftDiscoveryMo
 
       // Red for < 2 hours
       if (lowerTime.includes('h') && !lowerTime.includes('d')) {
-        const hours = parseInt(lowerTime);
+        const hours = Number.parseInt(lowerTime);
         if (hours < 2) return '#e53e3e';
-        if (hours < 24) return '#FF6B35';
+        if (hours < 24) return '#e53e3e';
       }
 
       // Yellow for 1-3 days
       if (lowerTime.includes('d')) {
-        const days = parseInt(lowerTime);
-        if (days <= 3) return '#FFA500';
+        const days = Number.parseInt(lowerTime);
+        if (days <= 3) return '#38a169';
       }
 
       // Green for 4+ days
@@ -514,7 +572,7 @@ export default function GiftDiscoveryModal({ visible, onClose }: GiftDiscoveryMo
       <TouchableOpacity
         style={[styles.giftCard, {
           borderWidth: 2,
-          borderColor: theme === 'dark' ? '#FFD700' : '#FF6B9D',
+          borderColor: theme === 'dark' ? '#6A0DAD' : '#38a169',
           backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF',
         }]}
         onPress={() => handleItemPress(item.id)}
@@ -524,11 +582,11 @@ export default function GiftDiscoveryModal({ visible, onClose }: GiftDiscoveryMo
         <View style={[styles.giftInfoSection, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#FFF' }]}>
           <Text style={[styles.giftName, { color: colors.textPrimary }]} numberOfLines={2}>{item.name}</Text>
           <View style={styles.giftFooter}>
-            <Text style={[styles.giftPrice, { color: theme === 'dark' ? '#B794F4' : '#FF6B35' }]}>${item.price.toFixed(2)}</Text>
+            <Text style={[styles.giftPrice, { color: theme === 'dark' ? '#6A0DAD' : '#9D50BB' }]}>${item.price.toFixed(2)}</Text>
             {item.timeLeft && (
               <View style={[styles.timeContainer, {
                 backgroundColor: theme === 'dark' ? '#3C3C3E' : '#FFF5F5',
-                borderWidth: 1,
+                borderWidth: 0.5,
                 borderColor: getTimerColor(item.timeLeft),
               }]}>
                 <Ionicons name="time-outline" size={14} color={getTimerColor(item.timeLeft)} />
@@ -538,8 +596,8 @@ export default function GiftDiscoveryModal({ visible, onClose }: GiftDiscoveryMo
           </View>
         </View>
         {/* Celebration confetti accent */}
-        <View style={[styles.celebrationBadge, { backgroundColor: theme === 'dark' ? '#FFD700' : '#FF6B9D' }]}>
-          <Text style={styles.celebrationEmoji}>🎁</Text>
+        <View style={[styles.celebrationBadge, { backgroundColor: theme === 'dark' ? '#6A0DAD' : '#FF6B9D' }]}>
+          <Text style={styles.celebrationEmoji}>🥚</Text>
         </View>
       </TouchableOpacity>
     );
@@ -601,7 +659,7 @@ export default function GiftDiscoveryModal({ visible, onClose }: GiftDiscoveryMo
           {/* Header */}
           <View style={[styles.modalHeader, { borderBottomColor: theme === 'dark' ? '#333' : '#F0F0F0' }]}>
             <Text style={[styles.modalHeaderTitle, { color: colors.textPrimary }]}>
-              {step === 'occasions' ? '🎁 Discover Gift Ideas' :
+              {step === 'occasions' ? '👀 Discover Gift Ideas' :
                step === 'questionnaire' ? '✨ Perfect Gift Finder' :
                '🎀 Gift Recommendations'}
             </Text>
@@ -636,28 +694,61 @@ export default function GiftDiscoveryModal({ visible, onClose }: GiftDiscoveryMo
           <View style={[styles.birthstoneModalContent, { backgroundColor: colors.background }]}>
             <Text style={[styles.birthstoneModalTitle, { color: colors.textPrimary }]}>💎 Birthday Sparkle Ritual</Text>
             <Text style={[styles.birthstoneModalSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]}>Tap a month to see the birthstone meaning</Text>
-            <FlatList
-              data={birthstones}
-              numColumns={3}
-              keyExtractor={(item: Birthstone) => item.month}
-              contentContainerStyle={styles.birthstoneGrid}
-              renderItem={({ item }: { item: Birthstone }) => {
-                const textColor = item.color === '#dcdcdc' || item.color === '#E0E0E0' ? '#333' : '#fff';
-                return (
-                  <TouchableOpacity
-                    style={[styles.birthstoneTile, { backgroundColor: item.color }]}
-                    onPress={() => {
-                      // Auto-select the month when tapping a birthstone
-                      setBirthMonth(item.month);
-                      setShowBirthstoneModal(false);
-                    }}
-                  >
-                    <Text style={[styles.birthstoneMonth, { color: textColor }]}>{item.month}</Text>
-                    <Text style={[styles.birthstoneStone, { color: textColor }]}>{item.stone}</Text>
-                  </TouchableOpacity>
-                );
-              }}
-            />
+            {!selectedMonthInModal ? (
+              <FlatList
+                data={birthstones}
+                numColumns={3}
+                keyExtractor={(item: Birthstone) => item.month}
+                contentContainerStyle={styles.birthstoneGrid}
+                renderItem={({ item }: { item: Birthstone }) => {
+                  // Use dark text for light-colored stones (Pearl, Diamond, light Aquamarine)
+                  const lightColors = ['#dcdcdc', '#E0E0E0', '#F5F5DC', '#40E0D0'];
+                  const textColor = lightColors.includes(item.color) ? '#333' : '#fff';
+                  return (
+                    <TouchableOpacity
+                      style={[styles.birthstoneTile, { backgroundColor: item.color }]}
+                      onPress={() => setSelectedMonthInModal(item.month)}
+                    >
+                      <Text style={[styles.birthstoneMonth, { color: textColor }]}>{item.month}</Text>
+                      <Text style={[styles.birthstoneStone, { color: textColor }]}>{item.stone}</Text>
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            ) : (
+              <View style={styles.birthstoneMeaningContainer}>
+                <Text style={[styles.birthstoneMonthTitle, { color: colors.textPrimary }]}>
+                  {selectedMonthInModal}
+                </Text>
+                <Text style={[styles.birthstoneName, { color: theme === 'dark' ? '#8B5CF6' : '#6A0DAD' }]}>
+                  {birthstones.find((b) => b.month === selectedMonthInModal)?.stone}
+                </Text>
+                <Text style={[styles.birthstoneMeaning, { color: theme === 'dark' ? '#CCC' : '#666' }]}>
+                  {birthstones.find((b) => b.month === selectedMonthInModal)?.meaning}
+                </Text>
+                <TouchableOpacity
+                  style={styles.selectMonthButton}
+                  onPress={() => {
+                    setBirthMonth(selectedMonthInModal);
+                    setShowBirthstoneModal(false);
+                    setSelectedMonthInModal(null);
+                  }}
+                >
+                  <LinearGradient colors={['#6A0DAD', '#9D50BB']} style={styles.selectMonthGradient}>
+                    <Text style={styles.selectMonthButtonText}>Select This Month</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.backToBirthstonesButton, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F5F5' }]}
+                  onPress={() => setSelectedMonthInModal(null)}
+                >
+                  <Ionicons name="arrow-back" size={20} color={theme === 'dark' ? '#8B5CF6' : '#6A0DAD'} />
+                  <Text style={[styles.backToBirthstonesText, { color: theme === 'dark' ? '#8B5CF6' : '#6A0DAD' }]}>
+                    Back to Birthstones
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
             <TouchableOpacity
               style={styles.birthstoneCloseButton}
               onPress={() => setShowBirthstoneModal(false)}
@@ -707,6 +798,7 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     padding: 4,
+    marginBottom:6
   },
 
   // Occasions List
@@ -737,7 +829,7 @@ const styles = StyleSheet.create({
   occasionLabel: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#FFF',
+    color: '#6A0DAD',
     marginTop: 12,
     textAlign: 'center',
   },
@@ -783,6 +875,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
     marginBottom: 12,
+    flex: 1, // Allow label to shrink if needed
+    flexShrink: 1,
   },
   monthGrid: {
     flexDirection: 'row',
@@ -1003,8 +1097,8 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   giftPrice: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 16,
+    fontWeight: '700',
   },
   timeContainer: {
     flexDirection: 'row',
@@ -1015,7 +1109,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   giftTime: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '600',
   },
   celebrationBadge: {
@@ -1109,6 +1203,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
+    paddingRight: 0,
+    gap: 8, // Space between label and button
   },
   birthstoneButton: {
     flexDirection: 'row',
@@ -1120,10 +1216,70 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#6A0DAD',
+    flexShrink: 0, // Prevent button from being cut off
   },
   birthstoneButtonText: {
     fontSize: 12,
     fontWeight: '600',
     color: '#6A0DAD',
+  },
+  birthstoneMeaningContainer: {
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  birthstoneMonthTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  birthstoneName: {
+    fontSize: 22,
+    fontWeight: '600',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  birthstoneMeaning: {
+    fontSize: 16,
+    lineHeight: 24,
+    textAlign: 'center',
+    marginBottom: 24,
+    paddingHorizontal: 8,
+  },
+  selectMonthButton: {
+    width: '100%',
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 12,
+    shadowColor: '#6A0DAD',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  selectMonthGradient: {
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectMonthButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  backToBirthstonesButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    width: '100%',
+    justifyContent: 'center',
+  },
+  backToBirthstonesText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

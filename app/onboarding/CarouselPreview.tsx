@@ -1,25 +1,21 @@
 import { API_BASE_URL } from '@/config';
-
-import React, { useEffect,  useRef, useState } from 'react';
+import { Image } from 'expo-image';
+import React, { useEffect,  useRef, useState, useMemo } from 'react';
 import {
   View,
   Text,
-  Image,
   StyleSheet,
-  Dimensions,
   Animated,
   TouchableOpacity,
+  useWindowDimensions,
 } from 'react-native';
 import Carousel from 'react-native-reanimated-carousel';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import Toast from 'react-native-toast-message';
 import { formatTimeWithSeconds } from '@/utils/time';
 import { useWishlist } from 'app/wishlistContext';
-import { useAppDispatch } from 'hooks/reduxHooks';
 import {Ionicons, MaterialCommunityIcons} from "@expo/vector-icons";
 import {goatSounds, playGoatSoundByName} from "@/assets/sounds/officialGoatSoundsSoundtrack";
-const { width } = Dimensions.get('window');
 const TEN_MIN_MS = 10 * 60 * 1000;
 const LAST_GOAT_KEY = 'last_goat_sound_ts';
 
@@ -72,6 +68,10 @@ const getCountdownColor = (endTime: string): string => {
 };
 
 const CarouselPreview: React.FC<Props> = ({ category, onFirstSwipe }) => {
+  const { width, height } = useWindowDimensions();
+  const isLandscape = useMemo(() => width > height, [width, height]);
+  const cardWidth = useMemo(() => isLandscape ? width * 0.5 : width * 0.85, [width, isLandscape]);
+
   const fade = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.98)).current;
   const lastGoatRef = useRef<number>(0);
@@ -81,8 +81,6 @@ const CarouselPreview: React.FC<Props> = ({ category, onFirstSwipe }) => {
   const [favoritedItems, setFavoritedItems] = useState<Record<number, boolean>>({});
 
   const router = useRouter();
-  const dispatch = useAppDispatch();
-  const { wishlistIds, addToWishlist, removeFromWishlist, refreshWishlist } = useWishlist();
 
   // 🧠 Load last goat sound timestamp
   useEffect(() => {
@@ -138,11 +136,11 @@ const CarouselPreview: React.FC<Props> = ({ category, onFirstSwipe }) => {
       return;
     }
 
-    // Map category to endpoint
+    // Map category to endpoint with limit parameter for more items
     const endpoints = {
-      'Just Listed': `${API_BASE_URL}/api/just-listed`,
-      'Create Auction': `${API_BASE_URL}/api/just-listed`,
-      'Sell Now': `${API_BASE_URL}/api/shop/relisted-discounts`,
+      'Just Listed': `${API_BASE_URL}/api/just-listed?limit=20`,
+      'Create Auction': `${API_BASE_URL}/api/just-listed?limit=20`,
+      'Sell Now': `${API_BASE_URL}/api/shop/relisted-discounts?limit=20`,
     };
 
     const url = endpoints[category];
@@ -432,7 +430,7 @@ total_reviews = 0;
   // Show loading or empty state
   if (loading) {
     return (
-      <View style={{ height: 300, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' }}>
+      <View style={{ height: 340, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5', marginVertical: 16 }}>
         <Text style={{ fontSize: 16, color: '#999' }}>Loading carousel...</Text>
       </View>
     );
@@ -440,26 +438,26 @@ total_reviews = 0;
 
   if (carouselItems.length === 0) {
     return (
-      <View style={{ height: 300, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' }}>
+      <View style={{ height: 340, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5', marginVertical: 16 }}>
         <Text style={{ fontSize: 16, color: '#999' }}>No featured items yet 🐐</Text>
       </View>
     );
   }
 
   return (
-    <Animated.View style={{ opacity: fade, transform: [{ scale }] }}>
+    <Animated.View style={{ opacity: fade, transform: [{ scale }], paddingTop: 0, paddingBottom: 8, alignItems: 'center' }}>
       <Carousel
         key={category}
         loop
-        width={width}
-        height={300}
+        width={cardWidth + 16}
+        height={cardWidth * 1.2 + 120}
         autoPlay={carouselItems.length > 1}
         data={carouselItems}
         scrollAnimationDuration={2000}
         mode="parallax"
         modeConfig={{
           parallaxScrollingScale: 0.9,
-          parallaxScrollingOffset: 50,
+          parallaxScrollingOffset: 30,
         }}
         onSnapToItem={(index) => {
           const item = carouselItems[index];
@@ -475,10 +473,16 @@ total_reviews = 0;
             activeOpacity={0.9}
             style={styles.cardWrapper}
           >
-            <View style={styles.card}>
+            <View style={[styles.card, { width: cardWidth }]}>
               {/* Image Container */}
               <View style={styles.imageContainer}>
-                <Image source={item.image} style={styles.image} resizeMode="cover" />
+                <Image
+       source={item.image}
+       style={styles.image}
+       contentFit="cover"
+       cachePolicy="memory-disk"
+       transition={200}
+     />
 
                 {/* Buy It Now Badge - Top Left */}
                 {!!item.buy_it_now && (
@@ -583,10 +587,11 @@ total_reviews = 0;
 
 const styles = StyleSheet.create({
   cardWrapper: {
-    paddingHorizontal: 8,
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   card: {
-    width: width * 0.85,
     borderRadius: 12,
     backgroundColor: '#fff',
     shadowColor: '#000',
@@ -599,7 +604,7 @@ const styles = StyleSheet.create({
   imageContainer: {
     position: 'relative',
     width: '100%',
-    height: 220,
+    height: 240,
     backgroundColor: '#f5f5f5',
   },
   image: {

@@ -207,14 +207,14 @@ useEffect(() => {
   // --- GOAT INSIGHTS --------------------------------------------------------
   // Real insights only - no mock data
   const goatInsights: GoatInsight[] = [
-    avgBidCount === 0 && generateInsight("NO_BIDS", {
+    avgBidCount === 0 && totalItems > 0 && generateInsight("NO_BIDS", {
       hoursLeft: 48,
       bidCount: avgBidCount,
     }),
     avgWatchers > 5 && generateInsight("WATCHERS", {
       watchers: avgWatchers,
     }),
-  ].filter((i): i is GoatInsight => i !== null);
+  ].filter((i): i is GoatInsight => i !== null && i !== false);
 
   // --- UNIFIED FEED ---------------------------------------------------------
 
@@ -292,7 +292,7 @@ useEffect(() => {
       icon: insight.icon,
       color: insight.color,
       title: insight.title,
-      message: `${insight.message}\n💡 Tip: ${insight.tip}`,
+      message: insight.tip ? `${insight.message}\n💡 Tip: ${insight.tip}` : insight.message,
     })),
 
     // Empty state

@@ -402,7 +402,7 @@ export default function AuctionManagementScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={28} color={isDark ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
-          <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Community🐐Guidelines Enforcement </Text>
+          <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Community Guidelines Enforcement</Text>
         </View>
 
         {/* Filter Chips */}
@@ -584,7 +584,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   backButton: {marginTop: 20, marginRight: 12, padding: 4 },
-  pageTitle: { marginTop: 20,fontSize: 16, fontWeight: '700', color: '#1A202C' },
+  pageTitle: { marginTop: 20, fontSize: 16, fontWeight: '700', color: '#1A202C', flex: 1, flexWrap: 'wrap', marginRight: 16 },
   filterContainer: {
     backgroundColor: '#FFF',
     marginHorizontal: 16,

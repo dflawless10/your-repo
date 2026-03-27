@@ -86,6 +86,7 @@ export default function WatchAppraisalScreen() {
 
 
   // State
+  const [isAppraising, setIsAppraising] = useState(false);
   const [brands, setBrands] = useState<string[]>([]);
   const [models, setModels] = useState<string[]>([]);
   const [filteredBrands, setFilteredBrands] = useState<string[]>([]);
@@ -99,7 +100,6 @@ export default function WatchAppraisalScreen() {
   const [isNew, setIsNew] = useState(true);
   const [caseMetal, setCaseMetal] = useState<CaseMetal>('');
   const [caseGoldKarat, setCaseGoldKarat] = useState<CaseGoldKarat>('');
-  const [caseMaterial, setCaseMaterial] = useState<CaseMaterial>('');
   const [bandMetal, setBandMetal] = useState<BandMetal>('');
   const [bandGoldColor, setBandGoldColor] = useState<BandGoldColor>('');
   const [bandGoldKarat, setBandGoldKarat] = useState<BandGoldKarat>('');
@@ -149,17 +149,8 @@ export default function WatchAppraisalScreen() {
     { label: 'Czech Republic', value: 'czech' as Country },
     { label: 'Poland', value: 'poland' as Country },
     { label: 'Canada', value: 'canada' as Country },
-    { label: 'Mexico', value: 'mexico' as Country },
-    { label: 'Brazil', value: 'brazil' as Country },
-    { label: 'Argentina', value: 'argentina' as Country },
-    { label: 'Australia', value: 'australia' as Country },
-    { label: 'South Korea', value: 'southkorea' as Country },
-    { label: 'Singapore', value: 'singapore' as Country },
     { label: 'Hong Kong', value: 'hongkong' as Country },
-    { label: 'Taiwan', value: 'taiwan' as Country },
-    { label: 'India', value: 'india' as Country },
-    { label: 'UAE', value: 'uae' as Country },
-    { label: 'South Africa', value: 'southafrica' as Country },
+
   ],
   '' as Country
 );
@@ -314,17 +305,23 @@ const warrantyField = useAutocompleteField<Warranty>(
   };
 
   const handleAppraiseAndList = async () => {
+    // Prevent multiple taps
+    if (isAppraising) return;
+    setIsAppraising(true);
+
     // Content Moderation with error handling
     try {
       const brandModeration = validateContentQuick(brandName, 'Brand name');
       if (!brandModeration.isValid) {
         alert(brandModeration.errorMessage);
+        setIsAppraising(false);
         return;
       }
 
       const modelModeration = validateContentQuick(modelName, 'Model name');
       if (!modelModeration.isValid) {
         alert(modelModeration.errorMessage);
+        setIsAppraising(false);
         return;
       }
     } catch (error) {
@@ -345,7 +342,7 @@ const warrantyField = useAutocompleteField<Warranty>(
           modelNumber,
           yearOfManufacture,
           condition,
-          caseMaterial,
+          caseMetal,
           bandMaterial,
           movementType,
           hasOriginalPackaging,
@@ -401,8 +398,8 @@ const warrantyField = useAutocompleteField<Warranty>(
     }
 
     // Step 2: Fallback to local JSON pricing
-    const brandKey = brandName.toLowerCase().replace(/\s+/g, '');
-    const modelKey = modelName.toLowerCase().replace(/\s+/g, '');
+    const brandKey = brandName.toLowerCase().replaceAll(/\s+/g, '');
+    const modelKey = modelName.toLowerCase().replaceAll(/\s+/g, '');
 
     let estimatedPrice: number | null = null;
     let priceSource = '';
@@ -458,7 +455,7 @@ const warrantyField = useAutocompleteField<Warranty>(
         conditionMultiplier = isPremiumBrand ? 0.92 : 0.85;
       } else if (condition === 'excellent') {
         // Excellent: Minimal wear, like new - should be near full value
-        conditionMultiplier = isPremiumBrand ? 1.00 : 0.98;  // ✅ Fixed: no penalty for excellent condition
+        conditionMultiplier = isPremiumBrand ? 1 : 0.98;  // ✅ Fixed: no penalty for excellent condition
       }
 
       // Age depreciation (only for non-vintage, < 25 years) - REDUCED depreciation rates
@@ -481,23 +478,25 @@ const warrantyField = useAutocompleteField<Warranty>(
       finalPrice *= conditionMultiplier;
 
       // Step 3: Material adjustments - INCREASED multipliers for precious metals
-      if (caseMaterial.includes('platinum')) {
-        finalPrice *= 1.50;  // ✅ Increased from 1.35 to 1.50
-      } else if (caseMaterial.includes('23kt') || caseMaterial.includes('22kt')) {
-        finalPrice *= 1.40;  // ✅ Increased from 1.30 to 1.40
-      } else if (caseMaterial.includes('18kt') || caseMaterial === 'yellowGold' || caseMaterial === 'roseGold') {
-        finalPrice *= 1.35;  // ✅ Increased from 1.25 to 1.35
-      } else if (caseMaterial.includes('14kt') || caseMaterial.includes('10kt')) {
-        finalPrice *= 1.20;  // ✅ Increased from 1.15 to 1.20
+      if (caseMetal.includes('platinum')) {
+        finalPrice *= 1.5;  // ✅ Increased from 1.35 to 1.50
+      } else if (caseMetal.includes('23kt') || caseMetal.includes('22kt')) {
+        finalPrice *= 1.4;  // ✅ Increased from 1.30 to 1.40
+      } else { // @ts-ignore
+        if (caseMetal.includes('18kt') || caseMetal === 'yellowGold' || caseMetal === 'roseGold') {
+                finalPrice *= 1.35;  // ✅ Increased from 1.25 to 1.35
+              } else if (caseMetal.includes('14kt') || caseMetal.includes('10kt')) {
+                finalPrice *= 1.2;  // ✅ Increased from 1.15 to 1.20
+              }
       }
 
       // Step 4: New vs. Used adjustment - REMOVED harsh penalty
       // ✅ FIXED: Removed blanket 0.75x penalty - condition + age already handle this
 
       // Step 5: Additional features
-      if (hasOriginalPackaging) finalPrice *= 1.10;
-      if (hasDiamonds) finalPrice *= 1.20;
-      if (movementType === 'tourbillon') finalPrice *= 1.50;
+      if (hasOriginalPackaging) finalPrice *= 1.1;
+      if (hasDiamonds) finalPrice *= 1.2;
+      if (movementType === 'tourbillon') finalPrice *= 1.5;
 
       // Step 6: Watch Detail Bonuses (Bezel, Dial, Band) - NEW!
 
@@ -508,7 +507,7 @@ const warrantyField = useAutocompleteField<Warranty>(
       } else if (bezelMat.includes('platinum')) {
         finalPrice *= 1.25;
       } else if (bezelMat.includes('gold')) {
-        finalPrice *= 1.20;
+        finalPrice *= 1.2;
       }
 
       // Bezel Weight (diamond/gemstone bezels) - $2000-3000 per carat
@@ -526,15 +525,23 @@ const warrantyField = useAutocompleteField<Warranty>(
       // Dial Material Bonuses (10-20% increase for exotic materials)
       const dialMat = dialMaterial?.toLowerCase() || '';
       if (dialMat.includes('mother of pearl')) {
-        finalPrice *= 1.10;
+        finalPrice *= 1.3;
       } else if (dialMat.includes('enamel')) {
         finalPrice *= 1.15;
+         } else if (dialMat.includes('carbon fiber')) {
+        finalPrice *= 1.2;
       } else if (dialMat.includes('meteorite')) {
-        finalPrice *= 1.20;
+        finalPrice *= 1.4;
       } else if (dialMat.includes('diamond')) {
         finalPrice *= 1.25;
+         } else if (dialMat.includes('stainless steel')) {
+        finalPrice *= 1.35;
+         } else if (dialMat.includes('titanium')) {
+        finalPrice *= 1.28;
+         } else if (dialMat.includes('gemstones')) {
+        finalPrice *= 1.45;
       } else if (dialMat.includes('ceramic')) {
-        finalPrice *= 1.12;
+        finalPrice *= 1.1;
       }
 
       // Band Link Type Bonuses (President, Jubilee, Oyster)
@@ -557,24 +564,24 @@ const warrantyField = useAutocompleteField<Warranty>(
 
       // Original vs Aftermarket (authenticity matters)
       if (originalBezel && originalDial) {
-        finalPrice *= 1.10; // +10% for all-original parts
+        finalPrice *= 1.1; // +10% for all-original parts
       } else if (aftermarketBezel || aftermarketDial) {
         finalPrice *= 0.85; // -15% penalty for aftermarket parts
       }
 
       // Step 7: Rarity adjustments
       const rarityMultipliers = {
-        '': 1.0,
-        'common': 1.0,
+        '': 1,
+        'common': 1,
         'uncommon': 1.15,
-        'rare': 1.30,
-        'veryRare': 1.50,
-        'extremelyRare': 2.00
+        'rare': 1.3,
+        'veryRare': 1.5,
+        'extremelyRare': 2
       };
       finalPrice *= rarityMultipliers[rarity];
 
       // Step 8: Country of origin premium
-      if (countryOfOrigin === 'switzerland') finalPrice *= 1.10;
+      if (countryOfOrigin === 'switzerland') finalPrice *= 1.1;
 
       setPrice(Math.round(finalPrice).toString());
       setPriceSource(priceSource);
@@ -583,7 +590,7 @@ const warrantyField = useAutocompleteField<Warranty>(
       if (modelData.yearPrices) {
         const history = Object.entries(modelData.yearPrices)
           .map(([year, price]) => ({ year, price: price as number }))
-          .sort((a, b) => parseInt(a.year) - parseInt(b.year));
+          .sort((a, b) => Number.parseInt(a.year) - Number.parseInt(b.year));
         setPriceHistory(history);
       }
 
@@ -604,7 +611,7 @@ const warrantyField = useAutocompleteField<Warranty>(
       modelNumber,
       condition,
       isNew,
-      caseMaterial,
+      caseMetal,
       bandMaterial,
       movementType,
       rarity,
@@ -636,6 +643,8 @@ const warrantyField = useAutocompleteField<Warranty>(
     } catch (error) {
       console.error('Error appraising watch:', error);
       alert('⚠️ Could not find pricing data for this watch.\n\nPlease check brand and model spelling.');
+    } finally {
+      setIsAppraising(false);
     }
   };
 
@@ -677,7 +686,7 @@ const toggleFeature = (feature: string) => {
       <Animated.View style={[styles.headerTitleContainer, { opacity: headerOpacity, transform: [{ scale: headerScale }] }]}>
         <View style={styles.titleWithArrow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
-            <Ionicons name="arrow-back" size={28} color="#6A0DAD" />
+            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
           </TouchableOpacity>
           <View>
             <Text style={[styles.headerTitleText, { color: colors.textPrimary }]}>Watch Price Calculator</Text>
@@ -926,10 +935,16 @@ const toggleFeature = (feature: string) => {
             fieldName="caseMetal"
             options={[
               {label: 'Select case metal', value: ''},
-              {label: 'Gold', value: 'gold'},
               {label: 'Platinum', value: 'platinum'},
+              {label: 'Gold', value: 'gold'},
+              {label: 'Rose Gold', value: 'roseGold'},
               {label: 'Silver', value: 'silver'},
+              {label: 'Platinum Gold', value: 'platinum gold'},
+              {label: 'Gold Stainless', value: 'gold stainless'},
+              {label: 'Gold Silver', value: 'gold silver'},
               {label: 'Stainless Steel', value: 'stainlessSteel'},
+              {label: 'Hardened Steel', value: 'hardened steel'},
+              {label: 'Tantalum', value: 'tantalum'},
               {label: 'Titanium', value: 'titanium'},
               {label: 'Metal (Other)', value: 'metal'},
             ]}
@@ -944,8 +959,6 @@ const toggleFeature = (feature: string) => {
               fieldName="caseGoldKarat"
               options={[
                 {label: 'Select karat', value: ''},
-                {label: '22 Karat', value: '22kt'},
-                {label: '20 Karat', value: '20kt'},
                 {label: '18 Karat', value: '18kt'},
                 {label: '14 Karat', value: '14kt'},
                 {label: '10 Karat', value: '10kt'},
@@ -955,16 +968,19 @@ const toggleFeature = (feature: string) => {
           )}
 
           <AutocompleteInput
-            label="Case Material Finish"
-            value={caseMaterial}
-            onValueChange={(v) => setCaseMaterial(v as CaseMaterial)}
+            label="Case Metal Finish"
+            value={caseMetal}
+            onValueChange={(v) => setCaseMetal(v as CaseMetal)}
             editable={false}
-            fieldName="caseMaterial"
+            fieldName="caseMetal"
             options={[
-              {label: 'Select finish/material', value: ''},
+              {label: 'Select finish/metal', value: ''},
+              {label: 'Platinum', value: 'platinum'},
+              {label: 'Platinum Gold', value: 'platinumGold'},
               {label: 'Yellow Gold', value: 'yellowGold'},
               {label: 'White Gold', value: 'whiteGold'},
               {label: 'Rose Gold', value: 'roseGold'},
+              {label: 'Stainless Steel Gold', value: 'stainlessSteelGold'},
               {label: 'Ceramic', value: 'ceramic'},
               {label: 'Carbon Fiber', value: 'carbonFiber'},
               {label: 'Plastic', value: 'plastic'},
@@ -1527,10 +1543,13 @@ const toggleFeature = (feature: string) => {
 </View>
 
 <TouchableOpacity
-  style={styles.appraiseButton}
+  style={[styles.appraiseButton, isAppraising && { opacity: 0.6 }]}
   onPress={handleAppraiseAndList}
+  disabled={isAppraising}
 >
-  <Text style={styles.appraiseButtonText}>Get Appraisal</Text>
+  <Text style={styles.appraiseButtonText}>
+    {isAppraising ? 'Appraising...' : 'Get Appraisal'}
+  </Text>
 </TouchableOpacity>
 
 {!!(price) && (
@@ -1563,7 +1582,6 @@ const toggleFeature = (feature: string) => {
       modelNumber,
       yearOfManufacture,
       isNew,
-      caseMaterial,
       bandMaterial,
       movementType,
       rarity,
@@ -1648,10 +1666,8 @@ export const themedStyles = (scheme: 'light' | 'dark') => {
       left: 0,
       right: 0,
       paddingHorizontal: 16,
-      paddingVertical: 16,
+      paddingVertical: 12,
       backgroundColor: palette.cardBackground,
-      borderBottomWidth: 1,
-      borderBottomColor: palette.border,
       zIndex: 100,
     },
     titleWithArrow: {
@@ -1663,13 +1679,13 @@ export const themedStyles = (scheme: 'light' | 'dark') => {
       padding: 4,
     },
     headerTitleText: {
-      fontSize: 20,
+      fontSize: 16,
       fontWeight: '700',
       color: palette.textPrimary,
       marginBottom: 2,
     },
     headerSubtitle: {
-      fontSize: 14,
+      fontSize: 10,
       color: palette.textSecondary,
     },
     section: {

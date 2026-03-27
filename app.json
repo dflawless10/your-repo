@@ -2,15 +2,14 @@
   "expo": {
     "name": "BidGoat",
     "slug": "BidGoatMobile",
-    "version": "1.0.0",
-    "orientation": "portrait",
+    "version": "5.5.5",
     "icon": "./assets/images/icon.png",
-    "scheme": "bidgoatmobile",
+    "scheme": "bidgoat",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "owner": "dflawless",
     "extra": {
-      "API_URL": "http://10.0.0.171:5000",
+      "API_URL": "http://74.208.72.226:5000",
       "EXPO_DEV_SERVER": "http://10.0.0.171:8081",
       "router": {},
       "eas": {
@@ -22,7 +21,8 @@
       "supportsTablet": true,
       "runtimeVersion": {
         "policy": "appVersion"
-      }
+      },
+      "bundleIdentifier": "com.dflawless.BidGoatMobile"
     },
     "android": {
       "icon": "./assets/images/icon.png",
@@ -30,7 +30,6 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
@@ -39,9 +38,24 @@
         "android.permission.WRITE_EXTERNAL_STORAGE"
       ],
       "package": "com.dflawless.BidGoatMobile",
-      "versionCode": 1,
-      "runtimeVersion": "1.0.0",
-      "googleServicesFile": "./google-services.json"
+      "versionCode": 43,
+      "runtimeVersion": "5.5.5",
+      "googleServicesFile": "./google-services.json",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "bidgoat"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -79,6 +93,13 @@
           "color": "#ffffff",
           "sounds": [],
           "androidCollapsedTitle": "#{unread_notifications} new notifications"
+        }
+      ],
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.dflawless.BidGoatMobile",
+          "enableGooglePay": false
         }
       ]
     ],

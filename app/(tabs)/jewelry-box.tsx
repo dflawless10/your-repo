@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { API_BASE_URL } from '@/config';
 import {
   View,
@@ -20,7 +20,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import MascotOverlay from '@/app/components/MascotOverlay';
 import type { MascotMood } from '@/types/goatmoods';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
-import GlobalFooter from '@/app/components/GlobalFooter';
 import { useTheme } from '@/app/theme/ThemeContext';
 
 type JewelryItem = {
@@ -105,14 +104,7 @@ export default function JewelryBoxScreen() {
     loadCollection();
   }, []);
 
-  // Check first visit after items are loaded
-  useEffect(() => {
-    if (!loading) {
-      checkFirstVisit();
-    }
-  }, [loading, items]);
-
-  const checkFirstVisit = async () => {
+  const checkFirstVisit = useCallback(async () => {
     const hasVisited = await AsyncStorage.getItem('jewelry_box_visited');
     const hasPurchased = items.length > 0; // Only show if they have at least one item
 
@@ -120,7 +112,14 @@ export default function JewelryBoxScreen() {
       setTimeout(() => setShowOnboarding(true), 1500); // Show after box opens
       await AsyncStorage.setItem('jewelry_box_visited', 'true');
     }
-  };
+  }, [items]);
+
+  // Check first visit after items are loaded
+  useEffect(() => {
+    if (!loading) {
+      checkFirstVisit();
+    }
+  }, [loading, checkFirstVisit]);
 
   useEffect(() => {
     // Fade in header title and arrow - wait for screen to fully render first
@@ -579,9 +578,9 @@ export default function JewelryBoxScreen() {
             </View>
           ) : (
             <View style={viewMode === 'grid' ? styles.itemsGrid : styles.itemsList}>
-              {sortedItems.map(item => (
+              {sortedItems.map((item, index) => (
                 <TouchableOpacity
-                  key={item.id}
+                  key={`${item.id}-${index}`}
                   style={styles.itemCard}
                   onPress={() => router.push(`/(tabs)/item/${item.id}`)}
                   onLongPress={async () => {

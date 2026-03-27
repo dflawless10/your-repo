@@ -73,19 +73,20 @@ export default function SellerFlexBidsScreen() {
         }}
       >
         <View style={styles.cardContent}>
-          {hasPhoto && (
-            <Image
-              source={{ uri: item.photo_url }}
-              style={styles.thumbnail}
-              contentFit="cover"
-            />
-          )}
+          {item.photo_url && (
+         <Image
+        source={{ uri: item.photo_url }}
+        style={styles.thumbnail}
+          contentFit="cover"
+       />
+           )}
+
 
           <View style={styles.cardInfo}>
             <View style={styles.cardHeader}>
               <Text style={styles.cardTitle} numberOfLines={2}>
                 {item.title}
-              </Text>
+                </Text>
               <View style={[styles.statusBadge, isActive ? styles.activeBadge : styles.inactiveBadge]}>
                 <Text style={styles.statusText}>{isActive ? 'Active' : 'Closed'}</Text>
               </View>

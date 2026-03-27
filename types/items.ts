@@ -17,7 +17,7 @@ export type AuctionItem = {
     Auction_id: number;
     AuctionItem: {}
   };
-    seller?: {
+   seller?: {
   id: number;
   itemDetails: string;
   username: string;
@@ -30,10 +30,10 @@ export type AuctionItem = {
   address?: string | undefined;
   city?: string | undefined;
   state?: string | undefined;
+  is_premium_seller?: boolean;
   // ...other fields
 };
-
-  current_bid: number;
+   current_bid: number;
   category_id: number;
   category: string;
   end_time: string;
@@ -71,6 +71,7 @@ material: '',
   is_sold: number | boolean;
   sold_to: string | number;
   status?: string; // 'active', 'sold', 'deleted', 'closed'
+  moderation_status?: string; // 'pending', 'approved', 'rejected', 'flagged'
   is_must_sell?: number | boolean;
   must_sell_duration?: number;
   selling_strategy?: string; // 'auction', 'relist', 'relisted_discount', 'buy_it_now', 'must_sell'

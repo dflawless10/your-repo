@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 import { API_BASE_URL } from '@/config';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '../components/EnhancedHeader';
 import GlobalFooter from "@/app/components/GlobalFooter";
@@ -557,7 +558,9 @@ export default function AccountSettingsScreen() {
 
         {/* App Info */}
         <View style={styles.section}>
-          <Text style={[styles.versionText, { color: theme === 'dark' ? '#999' : '#999' }]}>BidGoat v1.0.0</Text>
+          <Text style={[styles.versionText, { color: theme === 'dark' ? '#999' : '#999' }]}>
+            BidGoat v{Constants.expoConfig?.version || '2.1.0'}
+          </Text>
           <Text style={[styles.copyrightText, { color: theme === 'dark' ? '#666' : '#CCC' }]}>© 2024 BidGoat. All rights reserved.</Text>
         </View>
 

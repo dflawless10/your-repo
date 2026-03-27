@@ -3,10 +3,10 @@ import { API_BASE_URL } from '@/config';
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, ActivityIndicator, Animated, RefreshControl
+  TouchableOpacity, ActivityIndicator, Animated, RefreshControl, Alert
 } from 'react-native';
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
 import { Ionicons } from '@expo/vector-icons';
 import GlobalFooter from "@/app/components/GlobalFooter";
@@ -48,6 +48,7 @@ function SellerDashboardScreen() {
   const headerOpacity = React.useRef(new Animated.Value(0)).current;
   const headerScale = React.useRef(new Animated.Value(1)).current;
   const router = useRouter();
+  const params = useLocalSearchParams();
 
   // Fade in header title and arrow
   useEffect(() => {
@@ -79,6 +80,17 @@ useEffect(() => {
   fetchDashboardData();
   loadUsername();
   checkStripeStatus();
+
+  // Check for Stripe onboarding completion from deep link
+  if (params.onboarding === 'complete') {
+    setTimeout(() => {
+      Alert.alert(
+        '🎉 Setup Complete!',
+        'Your Stripe account has been successfully connected. You can now receive payments from your sales!',
+        [{ text: 'Great!', onPress: () => checkStripeStatus() }]
+      );
+    }, 500);
+  }
 }, []);
 
 const checkStripeStatus = async () => {
@@ -328,29 +340,45 @@ return (
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Performance Metrics</Text>
           <View style={styles.statsGrid}>
-            <View style={[styles.statCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}>
+            <TouchableOpacity
+              style={[styles.statCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}
+              onPress={() => router.push('/MyAuctionScreen' as any)}
+              activeOpacity={0.7}
+            >
               <Ionicons name="flame" size={24} color="#EF4444" />
               <Text style={[styles.statValue, { color: colors.textPrimary }]}>{stats?.active_auctions || 0}</Text>
               <Text style={[styles.statLabel, { color: theme === 'dark' ? '#999' : '#718096' }]}>Active Auctions</Text>
-            </View>
+            </TouchableOpacity>
 
-            <View style={[styles.statCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}>
+            <TouchableOpacity
+              style={[styles.statCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}
+              onPress={() => router.push('/seller/analytics' as any)}
+              activeOpacity={0.7}
+            >
               <Ionicons name="eye" size={24} color="#8B5CF6" />
               <Text style={[styles.statValue, { color: colors.textPrimary }]}>{stats?.total_watchers || 0}</Text>
               <Text style={[styles.statLabel, { color: theme === 'dark' ? '#999' : '#718096' }]}>Total Watchers</Text>
-            </View>
+            </TouchableOpacity>
 
-            <View style={[styles.statCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}>
+            <TouchableOpacity
+              style={[styles.statCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}
+              onPress={() => router.push('/seller/analytics' as any)}
+              activeOpacity={0.7}
+            >
               <Ionicons name="flash" size={24} color="#F59E0B" />
               <Text style={[styles.statValue, { color: colors.textPrimary }]}>{stats?.total_bids || 0}</Text>
               <Text style={[styles.statLabel, { color: theme === 'dark' ? '#999' : '#718096' }]}>Total Bids</Text>
-            </View>
+            </TouchableOpacity>
 
-            <View style={[styles.statCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}>
+            <TouchableOpacity
+              style={[styles.statCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}
+              onPress={() => router.push('/MyAuctionScreen' as any)}
+              activeOpacity={0.7}
+            >
               <Ionicons name="time" size={24} color="#EF4444" />
               <Text style={[styles.statValue, { color: colors.textPrimary }]}>{stats?.items_ending_soon || 0}</Text>
               <Text style={[styles.statLabel, { color: theme === 'dark' ? '#999' : '#718096' }]}>Ending Soon</Text>
-            </View>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -359,7 +387,11 @@ return (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Alerts & Notifications</Text>
             {(stats?.items_ending_soon || 0) > 0 ? (
-              <View style={[styles.alertCard, { backgroundColor: theme === 'dark' ? '#2C2C1E' : '#FFF5E6', borderColor: theme === 'dark' ? '#8B6914' : '#FEEBC8' }]}>
+              <TouchableOpacity
+                style={[styles.alertCard, { backgroundColor: theme === 'dark' ? '#2C2C1E' : '#FFF5E6', borderColor: theme === 'dark' ? '#8B6914' : '#FEEBC8' }]}
+                onPress={() => router.push('/MyAuctionScreen' as any)}
+                activeOpacity={0.7}
+              >
                 <Ionicons name="alert-circle" size={24} color="#F59E0B" />
                 <View style={styles.alertContent}>
                   <Text style={[styles.alertTitle, { color: colors.textPrimary }]}>Items Ending Soon</Text>
@@ -367,7 +399,8 @@ return (
                     {stats?.items_ending_soon} {stats?.items_ending_soon === 1 ? 'item' : 'items'} ending in the next 24 hours
                   </Text>
                 </View>
-              </View>
+                <Ionicons name="chevron-forward" size={24} color="#9CA3AF" />
+              </TouchableOpacity>
             ) : null}
             {(stats?.pending_shipments || 0) > 0 ? (
               <View style={[styles.alertCard, { backgroundColor: theme === 'dark' ? '#2C1C1E' : '#FEE2E2', borderColor: theme === 'dark' ? '#8B1E1E' : '#FEE2E2' }]}>
@@ -389,7 +422,23 @@ return (
         {/* Tips Section */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Seller Tips</Text>
-          <View style={[styles.tipCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}>
+          <TouchableOpacity
+            style={[styles.tipCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}
+            onPress={() => {
+              Alert.alert(
+                '💡 Boost Your Sales',
+                '✅ Add 3-5 high-quality photos\n' +
+                '✅ Write detailed descriptions (200+ words)\n' +
+                '✅ Include measurements and materials\n' +
+                '✅ Highlight unique features\n' +
+                '✅ Mention condition honestly\n\n' +
+                'Example: "Vintage Rolex Submariner, 40mm case, stainless steel, automatic movement. Excellent condition with minor wear on clasp. Includes original box and papers. Serviced in 2024."\n\n' +
+                'Listings with these elements get 3x more bids!',
+                [{ text: 'Got it!' }]
+              );
+            }}
+            activeOpacity={0.7}
+          >
             <Ionicons name="bulb" size={24} color="#F59E0B" />
             <View style={styles.tipContent}>
               <Text style={[styles.tipTitle, { color: colors.textPrimary }]}>Boost Your Sales</Text>
@@ -397,8 +446,30 @@ return (
                 Items with detailed descriptions and multiple photos get 3x more bids!
               </Text>
             </View>
-          </View>
-          <View style={[styles.tipCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tipCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}
+            onPress={() => {
+              Alert.alert(
+                '📸 Quality Photos Matter',
+                '✅ Use natural lighting (near a window)\n' +
+                '✅ Show multiple angles (front, back, sides)\n' +
+                '✅ Include close-ups of details\n' +
+                '✅ Capture any flaws or wear\n' +
+                '✅ Use a neutral background\n' +
+                '✅ Keep photos in focus\n\n' +
+                'Photography Tips:\n' +
+                '• Avoid flash (causes harsh shadows)\n' +
+                '• Clean the item before photographing\n' +
+                '• Include size reference (like a coin)\n' +
+                '• Take photos during daylight hours\n\n' +
+                'Great photos = More bids = Higher prices!',
+                [{ text: 'Thanks!' }]
+              );
+            }}
+            activeOpacity={0.7}
+          >
             <Ionicons name="camera" size={24} color="#8B5CF6" />
             <View style={styles.tipContent}>
               <Text style={[styles.tipTitle, { color: colors.textPrimary }]}>Quality Photos Matter</Text>
@@ -406,11 +477,12 @@ return (
                 Use natural lighting and show multiple angles to attract more buyers.
               </Text>
             </View>
-          </View>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
         </View>
       </ScrollView>
 
-      <GlobalFooter />
+      <GlobalFooter scrollY={scrollY} />
     </View>
   );
 }

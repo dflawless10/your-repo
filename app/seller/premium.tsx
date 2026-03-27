@@ -148,25 +148,27 @@ export default function PremiumSellerScreen() {
       <EnhancedHeader scrollY={scrollY} onSearch={() => {}} />
       <Animated.ScrollView
         style={[styles.container, { backgroundColor: colors.background }]}
-        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20, backgroundColor: colors.background }}
+        contentContainerStyle={{
+          paddingTop: HEADER_MAX_HEIGHT,
+          paddingBottom: 160,
+          paddingHorizontal: 16,
+        }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
         )}
         scrollEventThrottle={16}
       >
-        {/* Page Header with Back Arrow */}
+        {/* Page Header with Back Arrow - Now scrolls with content */}
         <Animated.View style={[
-          styles.pageHeader,
+          styles.pageHeaderInline,
           {
             opacity: headerOpacity,
             transform: [{ scale: headerScale }],
-            backgroundColor: colors.background,
-            borderBottomColor: theme === 'dark' ? '#333' : '#E5E5E5'
           }
         ]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-             <Ionicons name="arrow-back" size={28} color="#B794F4"  />
+             <Ionicons name="arrow-back" size={28} color="#6A0DAD"  />
           </TouchableOpacity>
           <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Premium Seller</Text>
         </Animated.View>
@@ -318,14 +320,11 @@ const createStyles = (isDark: boolean, colors: any) => StyleSheet.create({
     fontSize: 18,
     color: '#E53E3E',
   },
-  pageHeader: {
+  pageHeaderInline: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 60,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: isDark ? '#333' : '#E2E8F0',
+    paddingVertical: 12,
+    marginBottom: 8,
   },
   backButton: {
     marginRight: 12,

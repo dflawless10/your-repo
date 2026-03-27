@@ -8,13 +8,13 @@ import {
   Text,
   TouchableOpacity,
   ActivityIndicator,
-  Dimensions,
   Alert,
   Modal,
   Image as RNImage,
   Animated as RNAnimated,
   Platform,
   TextInput,
+  useWindowDimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
@@ -23,7 +23,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
-import GlobalFooter from '@/app/components/GlobalFooter';
 
 import { useAppDispatch, useAppSelector } from '@/hooks/reduxHooks';
 import { setWishlistItems, removeFromWishlist } from '@/utils/wishlistSlice';
@@ -34,8 +33,7 @@ import { getAuctionReminders, setAuctionReminders } from '@/api/reminders';
 import { registerAlert } from '@/api/alerts';
 import { useTheme } from '@/app/theme/ThemeContext';
 
-const { width, height } = Dimensions.get('window');
-const CARD_WIDTH = (width - 48) / 2;
+// Removed static dimensions - now reactive below
 
 type SortOption = 'recent' | 'price-low' | 'price-high' | 'ending-soon';
 type FilterOption = 'all' | 'active' | 'ended';
@@ -49,6 +47,14 @@ export default function WishlistScreen() {
   const [sortBy, setSortBy] = useState<SortOption>('ending-soon');
   const [filterBy, setFilterBy] = useState<FilterOption>('all');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
+
+  // Reactive dimensions for landscape support
+  const { width, height } = useWindowDimensions();
+  const isLandscape = useMemo(() => width > height, [width, height]);
+  const NUM_COLUMNS = useMemo(() => isLandscape ? 4 : 2, [isLandscape]);
+  const HORIZONTAL_PADDING = 16;
+  const COLUMN_GAP = 12;
+  const CARD_WIDTH = useMemo(() => (width - HORIZONTAL_PADDING * 2 - COLUMN_GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS, [width, NUM_COLUMNS]);
   const [reminderModalVisible, setReminderModalVisible] = useState(false);
   const [priceAlertModalVisible, setPriceAlertModalVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState<AuctionItem | null>(null);
@@ -190,7 +196,7 @@ export default function WishlistScreen() {
 
   const handleSetReminder = async (item: AuctionItem) => {
     setSelectedItem(item);
-    const itemId = typeof item.id === 'string' ? parseInt(item.id) : item.id;
+    const itemId = typeof item.id === 'string' ? Number.parseInt(item.id) : item.id;
     const existingReminders = await getAuctionReminders(itemId);
     if (existingReminders.length > 0) {
       setSelectedReminders(existingReminders.map(r => r.minutes_before));
@@ -232,7 +238,7 @@ export default function WishlistScreen() {
       return;
     }
 
-    const threshold = parseFloat(priceThreshold);
+    const threshold = Number.parseFloat(priceThreshold);
     if (isNaN(threshold) || threshold <= 0) {
       Alert.alert('Error', 'Please enter a valid price');
       return;
@@ -581,27 +587,17 @@ export default function WishlistScreen() {
 
         {/* Items List */}
         {viewMode === 'grid' ? (
-          <FlatList
-            key="grid-view"
-            data={filteredAndSortedItems}
-            keyExtractor={(item) => String(item.id)}
-            renderItem={renderGridItem}
-            numColumns={2}
-            columnWrapperStyle={styles.gridRow}
-            contentContainerStyle={styles.gridContainer}
-            showsVerticalScrollIndicator={false}
-            scrollEnabled={false}
-          />
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: COLUMN_GAP, paddingHorizontal: HORIZONTAL_PADDING, alignItems: 'flex-start' }}>
+            {filteredAndSortedItems.map((item) => (
+              <View key={String(item.id)} style={{ width: CARD_WIDTH }}>
+                {renderGridItem({ item })}
+              </View>
+            ))}
+          </View>
         ) : (
-          <FlatList
-            key="list-view"
-            data={filteredAndSortedItems}
-            keyExtractor={(item) => String(item.id)}
-            renderItem={renderListItem}
-            contentContainerStyle={styles.listContainer}
-            showsVerticalScrollIndicator={false}
-            scrollEnabled={false}
-          />
+          <View style={styles.listContainer}>
+            {filteredAndSortedItems.map((item) => renderListItem({ item }))}
+          </View>
         )}
       </>
     );
@@ -802,15 +798,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingTop: HEADER_MAX_HEIGHT + 48,
-    paddingBottom: 120,
+    paddingTop: HEADER_MAX_HEIGHT,
+    paddingBottom: 160,
+    paddingHorizontal: 16,
   },
   pageHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFF',
     marginBottom: 8,
   },
   backButton: {
@@ -873,7 +869,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 32,
-    maxWidth: width * 0.8,
+    maxWidth: '80%',
   },
   emptyFeatures: {
     flexDirection: 'row',
@@ -1023,7 +1019,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   gridItem: {
-    flex: 1,
+    width: '100%',
   },
   gridCard: {
     backgroundColor: '#FFF',
@@ -1038,7 +1034,7 @@ const styles = StyleSheet.create({
   gridImageContainer: {
     position: 'relative',
     width: '100%',
-    height: CARD_WIDTH * 1.25,
+    aspectRatio: 1 / 1.25,
     backgroundColor: '#F0F0F0',
   },
   gridImage: {
@@ -1216,7 +1212,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
-    maxHeight: height * 0.75,
+    maxHeight: '75%',
   },
   modalHeader: {
     flexDirection: 'row',

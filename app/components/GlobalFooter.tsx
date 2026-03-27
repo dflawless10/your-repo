@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, TouchableOpacity, StyleSheet, Platform, Text, Image } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons  } from '@expo/vector-icons';
 import { useRouter, useSegments } from 'expo-router';
 import { Colors } from '@/constants/Colors';
 import wishlistIcon from '@/assets/goat-stamp-coin.png';

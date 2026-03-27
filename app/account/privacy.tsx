@@ -371,20 +371,6 @@ export default function PrivacySettingsScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Privacy Statement */}
-        <View style={[styles.statementCard, {
-          backgroundColor: theme === 'dark' ? '#1C2C1E' : '#F0FDF4',
-          borderColor: theme === 'dark' ? '#2C4F2E' : '#86EFAC'
-        }]}>
-          <Text style={[styles.statementTitle, { color: theme === 'dark' ? '#86EFAC' : '#166534' }]}>🛡️ Our Commitment</Text>
-          <Text style={[styles.statementText, { color: theme === 'dark' ? '#A7F3D0' : '#166534' }]}>
-            BidGoat takes your privacy seriously. We never sell your personal data to third parties and use industry-standard encryption to protect your information.
-          </Text>
-          <TouchableOpacity onPress={() => setShowPolicyModal(true)} style={styles.learnMoreButton}>
-            <Text style={[styles.learnMoreText, { color: theme === 'dark' ? '#6EE7B7' : '#059669' }]}>Learn more about our privacy practices →</Text>
-          </TouchableOpacity>
-        </View>
-
         <View style={{ height: 40 }} />
       </Animated.ScrollView>
 
@@ -461,8 +447,14 @@ export default function PrivacySettingsScreen() {
             <Text style={[styles.policySectionTitle, { color: colors.textPrimary }]}>7. Contact Us</Text>
             <Text style={[styles.policyBody, { color: theme === 'dark' ? '#999' : '#4B5563' }]}>
               For privacy questions or concerns:{'\n\n'}
-              Email: privacy@bidgoat.com{'\n'}
-              Data Protection Officer: dpo@bidgoat.com{'\n\n'}
+              Email: <Text style={styles.emailLink} onPress={() => {
+                const { Linking } = require('react-native');
+                Linking.openURL('mailto:privacy@bidgoat.com');
+              }}>privacy@bidgoat.com</Text>{'\n'}
+              Data Protection Officer: <Text style={styles.emailLink} onPress={() => {
+                const { Linking } = require('react-native');
+                Linking.openURL('mailto:dpo@bidgoat.com');
+              }}>dpo@bidgoat.com</Text>{'\n\n'}
               Response Time: 7 business days
             </Text>
 
@@ -738,5 +730,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 16,
     marginBottom: 40,
+  },
+  emailLink: {
+    color: '#2196F3',
+    textDecorationLine: 'underline',
+    fontWeight: '600',
   },
 });

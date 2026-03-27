@@ -1,10 +1,10 @@
 import React from 'react';
 import { Platform, Image, Animated, View, Text, Appearance } from 'react-native';
 import { router, Tabs } from 'expo-router';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Provider } from 'react-redux';
-import store from '@/utils/filestore';
+import store from 'utils/filestore';
 import { useAppSelector } from '@/hooks/reduxHooks';
 import { Colors } from '@/constants/Colors';
 import EnhancedHeader from 'app/components/EnhancedHeader';
@@ -87,13 +87,33 @@ function CustomTabIcon({
           color={color}
         />
       );
-    case 'wishlist':
+    case 'wishlist': {
       const hasReminder = wishlistItems.some(item => item.reminder_active);
       const hasPriceAlert = wishlistItems.some(item => item.price_alert_active);
       const showBadge = hasReminder || hasPriceAlert;
 
+      let badgeContent;
+
+if (hasReminder && hasPriceAlert) {
+  badgeContent = (
+    <View style={{ flexDirection: 'row', width: '100%', height: '100%' }}>
+      <View style={{ width: '50%', height: '100%', backgroundColor: '#4A90E2' }} />
+      <View style={{ width: '50%', height: '100%', backgroundColor: '#10B981' }} />
+    </View>
+  );
+} else if (hasReminder) {
+  badgeContent = (
+    <View style={{ width: '100%', height: '100%', backgroundColor: '#4A90E2', borderRadius: 7 }} />
+  );
+} else {
+  badgeContent = (
+    <View style={{ width: '100%', height: '100%', backgroundColor: '#10B981', borderRadius: 7 }} />
+  );
+}
+
+
       return (
-        <View style={{ position: 'relative' }}>
+        <View style={{position: 'relative'}}>
           <Image
             source={wishlistIcon}
             style={{
@@ -116,23 +136,12 @@ function CustomTabIcon({
                 overflow: 'hidden',
               }}
             >
-              {hasReminder && hasPriceAlert ? (
-                // Split circle: left blue, right green
-                <View style={{ flexDirection: 'row', width: '100%', height: '100%' }}>
-                  <View style={{ width: '50%', height: '100%', backgroundColor: '#4A90E2' }} />
-                  <View style={{ width: '50%', height: '100%', backgroundColor: '#10B981' }} />
-                </View>
-              ) : hasReminder ? (
-                // Blue only
-                <View style={{ width: '100%', height: '100%', backgroundColor: '#4A90E2', borderRadius: 7 }} />
-              ) : (
-                // Green only
-                <View style={{ width: '100%', height: '100%', backgroundColor: '#10B981', borderRadius: 7 }} />
-              )}
+              {badgeContent}
             </View>
           )}
         </View>
       );
+    }
     default:
       return null;
   }

@@ -22,6 +22,7 @@ import ImageValidationFeedback from '@/app/components/ImageValidationFeedback';
 import Toast from 'react-native-toast-message';
 import { API_BASE_URL } from '@/config';
 import { useTheme } from '@/app/theme/ThemeContext';
+import {Picker} from "@react-native-picker/picker";
 
 const AnimatedSvg = Animated.createAnimatedComponent(Svg);
 
@@ -160,8 +161,8 @@ export default function DiamondListingScreen() {
 
     // Validate Must Sell constraints
     if (isMustSell) {
-      const durationNum = parseInt(duration);
-      if (durationNum < 24 || durationNum > 72) {
+      const duration_Hours = Number.parseInt(duration);
+      if (duration_Hours < 24 || duration_Hours > 72) {
         Alert.alert('Error', 'Must Sell duration must be 24, 48, or 72 hours');
         return;
       }
@@ -173,8 +174,8 @@ export default function DiamondListingScreen() {
 
     // Validate Reserve Price
     if (hasReserve && reservePrice) {
-      const reserve = parseFloat(reservePrice);
-      const starting = parseFloat(startingBid);
+      const reserve = Number.parseFloat(reservePrice);
+      const starting = Number.parseFloat(startingBid);
       if (reserve < starting) {
         Alert.alert('Error', 'Reserve price must be greater than or equal to starting bid');
         return;
@@ -339,8 +340,11 @@ console.log('diamond_specifications:', diamondSpecs);
           text2 += ` • Buy Now: $${parseFloat(buyItNowPrice).toLocaleString()}`;
         }
         if (isMustSell) {
-          text2 += ` • Must Sell: ${duration}d`;
-        }
+  text2 += ` • Must Sell (${duration}h)`;
+  text2 += `\n🔥 Your Must Sell listing ends in ${duration} hours!`;
+  text2 += `\n⏳ It will be live in 1 hour. Want to preview it?`;
+}
+
 
         // Show celebratory toast
         Toast.show({
@@ -360,7 +364,7 @@ console.log('diamond_specifications:', diamondSpecs);
             'Success! 🎉',
             isEditMode
               ? 'Your diamond has been updated! Want to preview it?'
-              : 'Your diamond listing will be live in an hour! Want to preview it?',
+              :    `Your Must Sell listing ends in ${duration} hours! It will be live in 1 hour. Want to preview it?`,
             [
               {
                 text: 'Preview Now',
@@ -773,6 +777,9 @@ const styles = StyleSheet.create({
     height: 250,
     backgroundColor: '#E2E8F0',
   },
+  picker: {
+    padding: 0,
+    },
   form: {
     padding: 16,
   },

@@ -598,6 +598,9 @@ const { cartItems, addToCart, isInCart } = useCartBackend();
   return () => sub.remove();
 }, []);
 
+
+
+
   const triggerGoatBah = () => {
     setShowGoatBah(true);
     setTimeout(() => setShowGoatBah(false), 3000);
@@ -977,12 +980,12 @@ const handleAddToCart = async () => {
     if (!item) return;
 
     try {
-      const message = `Check out this ${item.name} on BidGoat! \n\nPrice: $${displayPrice.toFixed(2)}\n\nView: https://bidgoat.com/item/${item.id}`;
+      const message = `Check out this ${item.name} on BidGoat! \n\nPrice: $${displayPrice.toFixed(2)}\n\nView: https://bidgoat.com/listing/${item.id}`;
 
       const result = await Share.share({
         message,
         title: item.name,
-        url: `https://bidgoat.com/item/${item.id}`,
+        url: `https://bidgoat.com/listing/${item.id}`,
       });
 
       if (result.action === Share.sharedAction) {
@@ -1344,7 +1347,7 @@ const handleAddToCart = async () => {
   </View>
       <ScrollView
         ref={scrollViewRef}
-        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT, paddingBottom: 120 }}
+        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT, paddingBottom: 60 }}
       >
         {/* Image Gallery */}
         <View style={[styles.imageGalleryContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}>
@@ -2535,18 +2538,26 @@ const handleAddToCart = async () => {
 
             {/* Secondary Actions Row */}
             <View style={styles.secondaryActionsRow}>
-              {/* Favorite - Hide if already favorited */}
-              {!item.is_favorited ? (
-                <TouchableOpacity
-                  style={[styles.iconActionButton, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F9FAFB' }]}
-                  onPress={handleFavorite}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="heart-outline" size={22} color="#E53E3E" />
-                  <Text style={[styles.iconActionText, { color: colors.textPrimary }]}>Favorite</Text>
-                </TouchableOpacity>
-              ) : null}
-
+              {/* Share */}
+              <TouchableOpacity
+                style={[
+                  styles.iconActionButton,
+                  item.is_favorited
+                    ? { backgroundColor: '#6A0DAD', borderWidth: 2, borderColor: '#6A0DAD' }
+                    : { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F9FAFB', borderWidth: 2, borderColor: '#6A0DAD' }
+                ]}
+                onPress={handleFavorite}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name={item.is_favorited ? "heart" : "heart-outline"}
+                  size={22}
+                  color={item.is_favorited ? "#FFF" : "#6A0DAD"}
+                />
+                <Text style={[styles.iconActionText, { color: item.is_favorited ? "#FFF" : colors.textPrimary }]}>
+                  {item.is_favorited ? "Favorited" : "Favorite"}
+                </Text>
+              </TouchableOpacity>
               {/* Share */}
               <TouchableOpacity
                 style={[styles.iconActionButton, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F9FAFB' }]}
@@ -2701,17 +2712,17 @@ const handleAddToCart = async () => {
                 Lower your price to attract more buyers
               </Text>
 
-              <View style={[styles.discountInfo, { backgroundColor: theme === 'dark' ? '#2C2410' : '#fef3c7' }]}>
+              <View style={[styles.discountInfo, { backgroundColor: theme === 'dark' ? '#00BCD4' : '#C0C0C0' }]}>
                 {item?.original_price && item.original_price !== item.price ? (
                   <>
-                    <Text style={[styles.discountLabel, { color: theme === 'dark' ? '#FCD34D' : '#92400e' }]}>
+                    <Text style={[styles.discountLabel, { color: theme === 'dark' ? '#6A0DAD' : '#38a169' }]}>
                       Original Price: ${(item.original_price ?? 0).toLocaleString()}
                     </Text>
-                    <Text style={[styles.discountLabel, { color: theme === 'dark' ? '#FCD34D' : '#92400e' }]}>
+                    <Text style={[styles.discountLabel, { color: theme === 'dark' ? '#6A0DAD' : '#38a169' }]}>
                       Current Price: ${(item.price ?? 0).toLocaleString()}
                     </Text>
                     {item.original_price > item.price && (
-                      <Text style={[styles.discountSavings, { color: theme === 'dark' ? '#FBBF24' : '#b45309' }]}>
+                      <Text style={[styles.discountSavings, { color: theme === 'dark' ? '#6A0DAD' : '#38a169' }]}>
                         Already discounted {Math.round(((item.original_price - item.price) / item.original_price) * 100)}%
                       </Text>
                     )}
@@ -3692,7 +3703,7 @@ carouselImage: {
   marginVertical: 12,
 },
   arrowButton: {
-    padding: 8,
+    padding: 12,
     backgroundColor: '#edf2f7',
     borderRadius: 8,
     marginHorizontal: 6,

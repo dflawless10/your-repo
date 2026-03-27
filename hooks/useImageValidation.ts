@@ -156,9 +156,10 @@ export function useImageValidation(
       }
 
       if (!aspectRatioMatch) {
-        checks.aspectRatio.passed = false;
-        checks.aspectRatio.message = `${aspectRatio.toFixed(2)}:1 (invalid)`;
-        errors.push(`Image must be 1:1 or 16:9.`);
+        // Changed from error to warning - allow any aspect ratio
+        checks.aspectRatio.passed = true; // Mark as passed to allow upload
+        checks.aspectRatio.message = `${aspectRatio.toFixed(2)}:1 (custom ratio)`;
+        warnings.push(`Recommended aspect ratios are 1:1 (square) or 16:9 (landscape) for best display. Your image will still work fine!`);
       }
 
       // File size

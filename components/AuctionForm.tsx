@@ -7,7 +7,7 @@ import { MascotMood as AppMascotMood } from '@/types/goatmoods';
 import Constants from 'expo-constants';
 
 export const api = axios.create({
-  baseURL: Constants.expoConfig?.extra?.API_URL ?? 'http://10.0.0.171:5000',
+  baseURL: Constants.expoConfig?.extra?.API_URL ?? 'https://bidgoat.com',
   timeout: 15000,
 });
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   StyleSheet,
   ActivityIndicator,
@@ -9,11 +9,11 @@ import {
   View,
   Image,
   Alert,
-  Dimensions,
   Modal,
   TextInput,
   ScrollView,
   KeyboardAvoidingView,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter, Link, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,8 +22,7 @@ import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHead
 import { useAuth } from '@/hooks/AuthContext';
 import Toast from 'react-native-toast-message';
 import { Ionicons } from '@expo/vector-icons';
-import { convertToBuyNow, canConvertToBuyNow } from '@/api/convert';
-import GlobalFooter from "../components/GlobalFooter";
+import { convertToBuyNow } from '@/api/convert';
 import { API_BASE_URL } from '@/config';
 import { useTheme } from '@/app/theme/ThemeContext';
 
@@ -58,10 +57,7 @@ export const unstable_settings = {
 
 const API_URL = API_BASE_URL;
 
-const { width } = Dimensions.get('window');
-const COLUMN_GAP = 12;
-const NUM_COLUMNS = 2;
-const ITEM_WIDTH = (width - 48 - COLUMN_GAP) / NUM_COLUMNS;
+// Removed static dimensions - now reactive below
 
 export default function MyAuctionsScreen() {
   const { token, username } = useAuth();
@@ -70,6 +66,13 @@ export default function MyAuctionsScreen() {
   const scrollY = useRef(new Animated.Value(0)).current;
   const headerOpacity = useRef(new Animated.Value(0)).current;
   const headerScale = useRef(new Animated.Value(1)).current;
+
+  // Reactive dimensions for landscape support
+  const { width, height } = useWindowDimensions();
+  const isLandscape = useMemo(() => width > height, [width, height]);
+  const NUM_COLUMNS = useMemo(() => isLandscape ? 3 : 2, [isLandscape]);
+  const COLUMN_GAP = 12;
+  const ITEM_WIDTH = useMemo(() => (width - 48 - COLUMN_GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS, [width, NUM_COLUMNS]);
 
   const [auctions, setAuctions] = useState<Auction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -490,7 +493,7 @@ export default function MyAuctionsScreen() {
   const getTimeDisplayText = (isSold: boolean, hasEnded: boolean, endDate: string) => {
     if (isSold) return 'Sold';
     if (hasEnded) return 'Ended';
-    return `Auction ends ${new Date(endDate).toLocaleDateString('en-US', {
+    return `Ends ${new Date(endDate).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric'
     })}`;
@@ -650,14 +653,15 @@ export default function MyAuctionsScreen() {
 
       {/* Title with Back Arrow */}
       <Animated.View style={[styles.headerTitleContainer, { opacity: headerOpacity, transform: [{ scale: headerScale }], backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E5E5E5' }]}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backButton}
-          >
-            <Ionicons name="arrow-back" size={28} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backButton}
+        >
+          <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
         </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>My Listings</Text>
-        </Animated.View>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>My Auctions</Text>
+      </Animated.View>
+
 
 
 
@@ -666,9 +670,10 @@ export default function MyAuctionsScreen() {
         data={filteredAuctions}
         keyExtractor={(item) => item.id}
         renderItem={renderAuctionCard}
-        numColumns={2}
+        numColumns={NUM_COLUMNS}
+        key={`grid-${NUM_COLUMNS}`}
         contentContainerStyle={styles.listContent}
-        columnWrapperStyle={styles.columnWrapper}
+        columnWrapperStyle={NUM_COLUMNS > 1 ? styles.columnWrapper : undefined}
         onRefresh={handleRefresh}
         refreshing={refreshing}
         onScroll={Animated.event(
@@ -852,46 +857,52 @@ export default function MyAuctionsScreen() {
         animationType="slide"
         onRequestClose={() => setShowConvertModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Convert to Buy It Now</Text>
-            <Text style={styles.modalSubtitle}>
-              Set a Buy It Now price for &#34;{selectedAuction?.title}&#34;
-            </Text>
-
-            <View style={styles.priceInputContainer}>
-              <Text style={styles.priceInputLabel}>Buy It Now Price</Text>
-              <View style={styles.priceInputWrapper}>
-                <Text style={styles.dollarSign}>$</Text>
-                <TextInput
-                  style={styles.priceInput}
-                  value={buyNowPrice}
-                  onChangeText={setBuyNowPrice}
-                  placeholder="0.00"
-                  keyboardType="decimal-pad"
-                  autoFocus
-                />
-              </View>
-              <Text style={styles.priceHint}>
-                💡 Tip: Price competitively to attract buyers
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Convert to Buy It Now</Text>
+              <Text style={[styles.modalSubtitle, { color: theme === 'dark' ? '#9CA3AF' : '#666' }]}>
+                Set a Buy It Now price for &#34;{selectedAuction?.title}&#34;
               </Text>
+
+              <View style={styles.priceInputContainer}>
+                <Text style={[styles.priceInputLabel, { color: colors.textPrimary }]}>Buy It Now Price</Text>
+                <View style={[styles.priceInputWrapper, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F5F5', borderColor: theme === 'dark' ? '#444' : '#DDD' }]}>
+                  <Text style={[styles.dollarSign, { color: colors.textPrimary }]}>$</Text>
+                  <TextInput
+                    style={[styles.priceInput, { color: colors.textPrimary }]}
+                    value={buyNowPrice}
+                    onChangeText={setBuyNowPrice}
+                    placeholder="0.00"
+                    placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
+                    keyboardType="decimal-pad"
+                    autoFocus
+                  />
+                </View>
+                <Text style={[styles.priceHint, { color: theme === 'dark' ? '#9CA3AF' : '#666' }]}>
+                  💡 Tip: Price competitively to attract buyers
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.modalButton}
+                onPress={convertAuctionToBuyNow}
+              >
+                <Text style={styles.modalButtonText}>Convert to Buy It Now</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancelButton]}
+                onPress={() => setShowConvertModal(false)}
+              >
+                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
             </View>
-
-            <TouchableOpacity
-              style={styles.modalButton}
-              onPress={convertAuctionToBuyNow}
-            >
-              <Text style={styles.modalButtonText}>Convert to Buy It Now</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.modalButton, styles.modalCancelButton]}
-              onPress={() => setShowConvertModal(false)}
-            >
-              <Text style={styles.modalCancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Must Sell Modal */}
@@ -966,11 +977,11 @@ const styles = StyleSheet.create({
   },
   columnWrapper: {
     justifyContent: 'space-between',
-    gap: COLUMN_GAP,
+    gap: 12,
     marginBottom: 12,
   },
   card: {
-    width: ITEM_WIDTH,
+    flex: 1,
     backgroundColor: '#fff',
     borderRadius: 12,
     overflow: 'hidden',
@@ -1061,6 +1072,7 @@ const styles = StyleSheet.create({
   timeText: {
     fontSize: 12,
     color: '#666',
+    flex: 1,
   },
   actionButtons: {
     flexDirection: 'row',

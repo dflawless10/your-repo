@@ -43,7 +43,11 @@ export interface CreateOfferResponse {
 /**
  * Create an offer on an expired/unsold item
  */
-export const createOffer = async (data: CreateOfferRequest): Promise<CreateOfferResponse | null> => {
+export const createOffer = async (data: {
+  item_id: number | string[];
+  offer_amount: number;
+  message: string
+}): Promise<CreateOfferResponse | null> => {
   try {
     const token = await AsyncStorage.getItem('jwtToken');
     if (!token) {

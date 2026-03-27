@@ -8,11 +8,14 @@ import {
   Alert,
   Pressable,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/app/theme/ThemeContext';
+import { uploadToR2 } from '@/utils/r2Upload';
 
 type ImageUploaderProps = {
   maxImages?: number;
@@ -33,6 +36,7 @@ export default function ImageUploader({
   const [imageUris, setImageUris] = useState<string[]>(externalImageUris || []);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0);
+  const [uploading, setUploading] = useState(false);
 
   // Sync external imageUris with internal state
   useEffect(() => {
@@ -41,28 +45,69 @@ export default function ImageUploader({
     }
   }, [externalImageUris]);
 
+  // Compress image to prevent 413 errors
+  const compressImage = async (uri: string): Promise<string> => {
+    try {
+      const manipResult = await ImageManipulator.manipulateAsync(
+        uri,
+        [{ resize: { width: 1200 } }], // Resize to max 1200px width
+        { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG } // 50% quality JPEG
+      );
+      console.log('🐐 Image compressed:', { original: uri, compressed: manipResult.uri });
+      return manipResult.uri;
+    } catch (error) {
+      console.error('Image compression failed:', error);
+      return uri; // Return original if compression fails
+    }
+  };
+
   const pickImages = async () => {
     if (imageUris.length >= maxImages) {
       Alert.alert('Limit Reached', `You can only upload up to ${maxImages} photos.`);
       return;
     }
 
+    if (uploading) {
+      Alert.alert('Please wait', 'Another image is currently uploading.');
+      return;
+    }
+
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        allowsEditing: false,
-        allowsMultipleSelection: true,
-        quality: 0.8,
-        selectionLimit: maxImages - imageUris.length,
+        allowsEditing: true, // Allow basic cropping
+        allowsMultipleSelection: false,
+        quality: 0.5, // Lower quality to reduce file size
       });
 
-      if (!result.canceled && result.assets) {
-        const newUris = result.assets.map((asset) => asset.uri);
-        const updatedUris = [...imageUris, ...newUris].slice(0, maxImages);
-        setImageUris(updatedUris);
-        onImagesChange(updatedUris);
+      if (!result.canceled && result.assets && result.assets[0]) {
+        setUploading(true);
+        console.log('🐐 Starting image upload to R2...');
+
+        // Step 1: Compress the image
+        const compressedUri = await compressImage(result.assets[0].uri);
+
+        // Step 2: Upload to R2 (with automatic retry and fallback)
+        const uploadResult = await uploadToR2(compressedUri);
+
+        setUploading(false);
+
+        if (uploadResult.success && uploadResult.url) {
+          console.log('🐐 Upload successful:', uploadResult.url);
+          const updatedUris = [...imageUris, uploadResult.url];
+          setImageUris(updatedUris);
+          onImagesChange(updatedUris);
+        } else {
+          console.error('🐐 Upload failed:', uploadResult.error);
+          Alert.alert(
+            'Upload Failed',
+            uploadResult.error || 'Failed to upload image. Please try again.',
+            [{ text: 'OK' }]
+          );
+        }
       }
     } catch (error) {
+      setUploading(false);
       console.error('Image picker error:', error);
       Alert.alert('Error', 'Failed to pick images. Please try again.');
     }
@@ -74,6 +119,11 @@ export default function ImageUploader({
       return;
     }
 
+    if (uploading) {
+      Alert.alert('Please wait', 'Another image is currently uploading.');
+      return;
+    }
+
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
@@ -82,17 +132,38 @@ export default function ImageUploader({
       }
 
       const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        quality: 0.8,
+        allowsEditing: true, // Allow basic cropping
+        quality: 0.5, // Lower quality to reduce file size
       });
 
-      if (!result.canceled && result.assets) {
-        const newUri = result.assets[0].uri;
-        const updatedUris = [...imageUris, newUri];
-        setImageUris(updatedUris);
-        onImagesChange(updatedUris);
+      if (!result.canceled && result.assets && result.assets[0]) {
+        setUploading(true);
+        console.log('🐐 Starting camera photo upload to R2...');
+
+        // Step 1: Compress the image
+        const compressedUri = await compressImage(result.assets[0].uri);
+
+        // Step 2: Upload to R2 (with automatic retry and fallback)
+        const uploadResult = await uploadToR2(compressedUri);
+
+        setUploading(false);
+
+        if (uploadResult.success && uploadResult.url) {
+          console.log('🐐 Upload successful:', uploadResult.url);
+          const updatedUris = [...imageUris, uploadResult.url];
+          setImageUris(updatedUris);
+          onImagesChange(updatedUris);
+        } else {
+          console.error('🐐 Upload failed:', uploadResult.error);
+          Alert.alert(
+            'Upload Failed',
+            uploadResult.error || 'Failed to upload image. Please try again.',
+            [{ text: 'OK' }]
+          );
+        }
       }
     } catch (error) {
+      setUploading(false);
       console.error('Camera error:', error);
       Alert.alert('Error', 'Failed to take photo. Please try again.');
     }
@@ -149,13 +220,23 @@ export default function ImageUploader({
               borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0'
             }
           ]}
-          onPress={showActionSheet}
+          onPress={uploading ? undefined : showActionSheet}
         >
-          <View style={[styles.emptyIconContainer, { backgroundColor: theme === 'dark' ? '#2C2C3E' : '#F0F4FF' }]}>
-            <Ionicons name="images-outline" size={48} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
-          </View>
-          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Add Photos</Text>
-          <Text style={[styles.emptySubtitle, { color: theme === 'dark' ? '#999' : '#718096' }]}>Tap to upload or take a photo</Text>
+          {uploading ? (
+            <>
+              <ActivityIndicator size="large" color="#6A0DAD" />
+              <Text style={[styles.emptyTitle, { color: colors.textPrimary, marginTop: 16 }]}>Uploading to Cloud...</Text>
+              <Text style={[styles.emptySubtitle, { color: theme === 'dark' ? '#999' : '#718096' }]}>Please wait</Text>
+            </>
+          ) : (
+            <>
+              <View style={[styles.emptyIconContainer, { backgroundColor: theme === 'dark' ? '#2C2C3E' : '#F0F4FF' }]}>
+                <Ionicons name="images-outline" size={48} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+              </View>
+              <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>Add Photos</Text>
+              <Text style={[styles.emptySubtitle, { color: theme === 'dark' ? '#999' : '#718096' }]}>Tap to upload or take a photo</Text>
+            </>
+          )}
           <View style={styles.emptyActions}>
             <View style={styles.emptyAction}>
               <Ionicons name="camera-outline" size={20} color={theme === 'dark' ? '#999' : '#666'} />
@@ -200,13 +281,24 @@ export default function ImageUploader({
                 styles.addButton,
                 {
                   backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F7FAFC',
-                  borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0'
+                  borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0',
+                  opacity: uploading ? 0.5 : 1
                 }
               ]}
-              onPress={showActionSheet}
+              onPress={uploading ? undefined : showActionSheet}
+              disabled={uploading}
             >
-              <Ionicons name="add-circle-outline" size={40} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
-              <Text style={[styles.addButtonText, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>Add More</Text>
+              {uploading ? (
+                <>
+                  <ActivityIndicator size="small" color="#6A0DAD" />
+                  <Text style={[styles.addButtonText, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD', marginTop: 8 }]}>Uploading...</Text>
+                </>
+              ) : (
+                <>
+                  <Ionicons name="add-circle-outline" size={40} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+                  <Text style={[styles.addButtonText, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>Add More</Text>
+                </>
+              )}
             </TouchableOpacity>
           )}
         </ScrollView>
@@ -253,6 +345,7 @@ export default function ImageUploader({
           </View>
         </Pressable>
       </Modal>
+
     </View>
   );
 }
@@ -340,15 +433,17 @@ const styles = StyleSheet.create({
   },
   removeButton: {
     position: 'absolute',
-    top: -8,
-    right: -8,
+    top: 4,
+    right: 4,
     backgroundColor: '#FFF',
     borderRadius: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 6,
+    padding: 2,
+    zIndex: 10,
   },
   primaryBadge: {
     position: 'absolute',

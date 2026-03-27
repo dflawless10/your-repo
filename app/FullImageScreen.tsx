@@ -43,11 +43,20 @@ const ZoomableImage = ({
 }) => {
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const savedTranslateX = useSharedValue(0);
+  const savedTranslateY = useSharedValue(0);
   const focalX = useSharedValue(width / 2);
   const focalY = useSharedValue(height / 2);
 
   useEffect(() => {
     scale.value = 1;
+    savedScale.value = 1;
+    translateX.value = 0;
+    translateY.value = 0;
+    savedTranslateX.value = 0;
+    savedTranslateY.value = 0;
   }, [uri]);
 
   const tapGesture = Gesture.Tap()
@@ -55,6 +64,17 @@ const ZoomableImage = ({
     .onEnd(() => {
       const targetScale = scale.value > 1 ? 1 : 2;
       scale.value = withTiming(targetScale, { duration: 200 });
+      savedScale.value = targetScale;
+      // Reset position when zooming out
+      if (targetScale <= 1) {
+        translateX.value = withTiming(0, { duration: 200 });
+        translateY.value = withTiming(0, { duration: 200 });
+        savedTranslateX.value = 0;
+        savedTranslateY.value = 0;
+        runOnJS(scrollEnabledSetter)(true);
+      } else {
+        runOnJS(scrollEnabledSetter)(false);
+      }
     });
 
   const pinchGesture = Gesture.Pinch()
@@ -67,19 +87,38 @@ const ZoomableImage = ({
       if (clamped > 1) runOnJS(scrollEnabledSetter)(false);
     })
     .onEnd(() => {
-      savedScale.value = 1;
-      scale.value = withTiming(1, { duration: 200 });
-      focalX.value = withTiming(width / 2);
-      focalY.value = withTiming(height / 2);
-      runOnJS(scrollEnabledSetter)(true);
+      // Save the current scale so zoom persists
+      savedScale.value = scale.value;
+      // Only re-enable scrolling if zoomed out
+      if (scale.value <= 1) {
+        translateX.value = withTiming(0, { duration: 200 });
+        translateY.value = withTiming(0, { duration: 200 });
+        savedTranslateX.value = 0;
+        savedTranslateY.value = 0;
+        runOnJS(scrollEnabledSetter)(true);
+      }
     });
 
-  const composedGesture = Gesture.Simultaneous(pinchGesture, tapGesture);
+  const panGesture = Gesture.Pan()
+    .enabled(scale.value > 1)
+    .onUpdate((e) => {
+      translateX.value = savedTranslateX.value + e.translationX;
+      translateY.value = savedTranslateY.value + e.translationY;
+    })
+    .onEnd(() => {
+      savedTranslateX.value = translateX.value;
+      savedTranslateY.value = translateY.value;
+    });
+
+  const composedGesture = Gesture.Simultaneous(
+    Gesture.Exclusive(panGesture, pinchGesture),
+    tapGesture
+  );
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
-      { translateX: (1 - scale.value) * (focalX.value - width / 2) },
-      { translateY: (1 - scale.value) * (focalY.value - height / 2) },
+      { translateX: translateX.value + (1 - scale.value) * (focalX.value - width / 2) },
+      { translateY: translateY.value + (1 - scale.value) * (focalY.value - height / 2) },
       { scale: scale.value },
     ],
   }));
@@ -87,7 +126,7 @@ const ZoomableImage = ({
   return (
     <View style={styles.imageWrapper}>
       <GestureDetector gesture={composedGesture}>
-        <ReanimatedAnimated.View style={animatedStyle}>
+        <ReanimatedAnimated.View style={[styles.imageContainer, animatedStyle]}>
           <Image
             source={{ uri: uri || fallbackImage }}
             style={styles.image}
@@ -251,8 +290,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.95)',
     zIndex: 1000,
   },
   backButton: {
@@ -269,6 +306,11 @@ const styles = StyleSheet.create({
     height,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
+  },
+  imageContainer: {
+    width,
+    height,
   },
   image: {
     width,

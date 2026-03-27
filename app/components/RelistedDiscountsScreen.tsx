@@ -1,5 +1,5 @@
-import React, { useState, useRef } from "react";
-import { Animated as RNAnimated, Text, View, Image, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
+import React, { useState, useRef, useMemo } from "react";
+import { Animated as RNAnimated, Text, View, Image, StyleSheet, TouchableOpacity, ScrollView, useWindowDimensions } from "react-native";
 import { ListedItem } from "@/types/items";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { differenceInSeconds, parseISO } from "date-fns";
@@ -112,6 +112,14 @@ export default function RelistedDiscountsScreen({ items }: Props) {
   const scrollY = useRef(new RNAnimated.Value(0)).current;
   const headerOpacity = useRef(new RNAnimated.Value(0)).current;
   const headerScale = useRef(new RNAnimated.Value(1)).current;
+
+  // Reactive dimensions for landscape support
+  const { width, height } = useWindowDimensions();
+  const isLandscape = useMemo(() => width > height, [width, height]);
+  const NUM_COLUMNS = useMemo(() => isLandscape ? 4 : 2, [isLandscape]);
+  const HORIZONTAL_PADDING = 16;
+  const COLUMN_GAP = 12;
+  const CARD_WIDTH = useMemo(() => (width - HORIZONTAL_PADDING * 2 - COLUMN_GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS, [width, NUM_COLUMNS]);
 
   // Filter states
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
@@ -272,7 +280,7 @@ export default function RelistedDiscountsScreen({ items }: Props) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <EnhancedHeader scrollY={scrollY} />
-        <View style={[styles.headerTitleContainer, { backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
+        <View style={[styles.headerTitleContainerInline, { backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
           <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>🔄 Relisted & Reduced</Text>
           <Text style={[styles.headerSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]}>Your Second Chance at Great Deals</Text>
         </View>
@@ -287,29 +295,6 @@ export default function RelistedDiscountsScreen({ items }: Props) {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <EnhancedHeader scrollY={scrollY} />
 
-      <RNAnimated.View style={[
-        styles.headerTitleContainer,
-        {
-          opacity: headerOpacity,
-          transform: [{ scale: headerScale }],
-          backgroundColor: colors.background,
-          borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0'
-        }
-      ]}>
-        <View style={styles.titleRow}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backButton}
-          >
-             <Ionicons name="arrow-back" size={24} color="#B794F4"  />
-          </TouchableOpacity>
-          <View style={styles.titleTextContainer}>
-            <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>🔄 Relisted & Reduced</Text>
-            <Text style={[styles.headerSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]}>Your Second Chance at Great Deals</Text>
-          </View>
-        </View>
-      </RNAnimated.View>
-
       <RNAnimated.ScrollView
         onScroll={RNAnimated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -319,6 +304,27 @@ export default function RelistedDiscountsScreen({ items }: Props) {
         style={{ flex: 1 }}
         contentContainerStyle={styles.contentContainer}
       >
+        {/* Title - Now scrolls with content */}
+        <RNAnimated.View style={[
+          styles.headerTitleContainerInline,
+          {
+            opacity: headerOpacity,
+            transform: [{ scale: headerScale }],
+          }
+        ]}>
+          <View style={styles.titleRow}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.backButton}
+            >
+               <Ionicons name="arrow-back" size={24} color="#6A0DAD"  />
+            </TouchableOpacity>
+            <View style={styles.titleTextContainer}>
+              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>🔄 Relisted & Reduced</Text>
+              <Text style={[styles.headerSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]}>Your Second Chance at Great Deals</Text>
+            </View>
+          </View>
+        </RNAnimated.View>
       {/* Filter Section */}
       <View style={[styles.filtersSection, { backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#e5e5e5' }]}>
         {/* Results Count & Clear */}
@@ -590,7 +596,8 @@ export default function RelistedDiscountsScreen({ items }: Props) {
         )}
       </View>
 
-      {/* Items List */}
+      {/* Items List - Grid Layout */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: COLUMN_GAP, paddingHorizontal: 16 }}>
       {filteredItems.map(item => {
         const now = new Date();
         const urgent = item.auction_ends_at ? isAuctionUrgent(item.auction_ends_at, now) : false;
@@ -598,7 +605,7 @@ export default function RelistedDiscountsScreen({ items }: Props) {
         return (
           <TouchableOpacity
             key={item.id}
-            style={[styles.card, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}
+            style={[styles.card, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff', width: CARD_WIDTH }]}
             onPress={() => router.push(`/item/${item.id}`)}
           >
             <Image source={{ uri: item.photo_url }} style={styles.image} />
@@ -706,6 +713,7 @@ export default function RelistedDiscountsScreen({ items }: Props) {
           </TouchableOpacity>
         );
       })}
+      </View>
 
           {filteredItems.length === 0 && (
             <View style={styles.emptyContainer}>
@@ -720,19 +728,13 @@ export default function RelistedDiscountsScreen({ items }: Props) {
 
 const styles = StyleSheet.create({
   contentContainer: {
-    paddingTop: 200,
-    paddingBottom: 20,
-  },
-  headerTitleContainer: {
-    position: 'absolute',
-    top: HEADER_MAX_HEIGHT + 50,
-    left: 0,
-    right: 0,
+    paddingTop: HEADER_MAX_HEIGHT,
+    paddingBottom: 160,
     paddingHorizontal: 16,
+  },
+  headerTitleContainerInline: {
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    zIndex: 999,
-    elevation: 15,
+    marginBottom: 8,
   },
   titleRow: {
     flexDirection: 'row',

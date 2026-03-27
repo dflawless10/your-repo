@@ -30,9 +30,10 @@ import { useWishlist } from '@/app/wishlistContext';
 
 
 const { width } = Dimensions.get('window');
-const COLUMN_GAP = 8;
+const COLUMN_GAP = 12;
+const HORIZONTAL_PADDING = 16;
 const NUM_COLUMNS = 2;
-const ITEM_WIDTH = (width - 16 - COLUMN_GAP) / NUM_COLUMNS;
+const ITEM_WIDTH = (width - (HORIZONTAL_PADDING * 2) - COLUMN_GAP) / NUM_COLUMNS;
 
 
 
@@ -178,9 +179,9 @@ console.log("🐐 MUST SELL DEBUG:", {
   const diffHours = (end - now) / (1000 * 60 * 60);
 
   if (diffHours <= 2) {
-    return { color: '#E53E3E', fontWeight: 'bold' }; // Bright red + bold if ≤2h
+     return { color: '#e53e3e', fontWeight: 'bold' }; // Bright red + bold if ≤2h
   } else if (diffHours <= 24) {
-    return { color: '#c53030', fontWeight: '600' }; // Red if ≤24h
+    return { color: '#e53e3e', fontWeight: '600' }; // Red if ≤24h
   }
   return { color: '#38a169', fontWeight: '600' }; // Green otherwise
 };
@@ -676,9 +677,9 @@ justListedText: {
     marginTop: 4,
   },
   sellerAvatar: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     marginRight: 6,
   },
   sellerNameContainer: {

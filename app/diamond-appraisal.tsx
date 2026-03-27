@@ -176,8 +176,7 @@ export default function DiamondAppraisalScreen() {
             <Ionicons name="arrow-back" size={28} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
           <View>
-            <Text style={[styles.headerTitleText, { color: colors.textPrimary }]}>Diamond Price Calculator</Text>
-            <Text style={[styles.headerSubtitle, { color: theme === 'dark' ? '#999' : '#718096' }]}>Calculate your diamond&#39;s market value</Text>
+            <Text style={[styles.headerTitleText, { color: colors.textPrimary }]}>Calculate your diamond&#39;s market value</Text>
           </View>
         </View>
       </Animated.View>
@@ -390,14 +389,10 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   headerTitleText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
     color: '#1A202C',
     marginBottom: 2,
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    color: '#718096',
   },
   input: {
     borderWidth: 1,

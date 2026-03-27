@@ -1,6 +1,6 @@
 import { API_BASE_URL } from '@/config';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,10 +13,12 @@ import {
   ScrollView,
   TouchableWithoutFeedback,
   Keyboard,
+  Animated,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import StarRating from 'app/seller/StarRating';
+import { Rating } from '@kolking/react-native-rating';
+import { Ionicons } from '@expo/vector-icons';
 import { validateContentQuick } from 'app/utils/contentModeration';
 import { useTheme } from '@/app/theme/ThemeContext';
 
@@ -35,6 +37,38 @@ export default function BuyerReviewForm({ seller, orderId }: Readonly<{ seller: 
     comment: '',
   });
   const [submitting, setSubmitting] = useState(false);
+
+  // Sparkle animation state
+  const [sparkles, setSparkles] = useState<{ id: number; x: number; y: number; anim: Animated.Value }[]>([]);
+  const sparkleCounter = useRef(0);
+
+  const createSparkles = () => {
+    const newSparkles = Array.from({ length: 8 }, (_, i) => {
+      const angle = (Math.PI * 2 * i) / 8;
+      const distance = 40 + Math.random() * 20;
+      return {
+        id: sparkleCounter.current++,
+        x: Math.cos(angle) * distance,
+        y: Math.sin(angle) * distance,
+        anim: new Animated.Value(0),
+      };
+    });
+
+    setSparkles(newSparkles);
+
+    // Animate sparkles
+    Animated.parallel(
+      newSparkles.map(sparkle =>
+        Animated.timing(sparkle.anim, {
+          toValue: 1,
+          duration: 600,
+          useNativeDriver: true,
+        })
+      )
+    ).start(() => {
+      setSparkles([]);
+    });
+  };
 
   const handleSubmitReview = async () => {
     // Check if user is authenticated
@@ -129,12 +163,43 @@ export default function BuyerReviewForm({ seller, orderId }: Readonly<{ seller: 
       <Text style={[styles.header, { color: colors.textPrimary }]}>Leave a Review</Text>
 
       <Text style={[styles.label, { color: theme === 'dark' ? '#CCC' : '#4a5568' }]}>Your Rating</Text>
-      <StarRating
-        rating={review.rating}
-        count={0}
-        // @ts-ignore: StarRating onChange signature
-        onChange={(newRating: number) => setReview((r) => ({ ...r, rating: newRating }))}
-      />
+      <View style={{ alignItems: 'center', marginBottom: 12, position: 'relative' }}>
+        <Rating
+          key={`rating-${review.rating}`}
+          size={32}
+          rating={review.rating}
+          maxRating={5}
+          fillColor="#FFD700"
+          baseColor={theme === 'dark' ? '#3C3C3E' : '#E2E8F0'}
+          onChange={(newRating: number) => {
+            setReview((r) => ({ ...r, rating: newRating }));
+            createSparkles();
+          }}
+          touchColor="rgba(255, 215, 0, 0.3)"
+        />
+
+        {/* Gold Sparkles */}
+        {sparkles.map((sparkle) => (
+          <Animated.View
+            key={sparkle.id}
+            style={{
+              position: 'absolute',
+              transform: [
+                { translateX: sparkle.anim.interpolate({ inputRange: [0, 1], outputRange: [0, sparkle.x] }) },
+                { translateY: sparkle.anim.interpolate({ inputRange: [0, 1], outputRange: [0, sparkle.y] }) },
+                { scale: sparkle.anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 1.2, 0] }) },
+              ],
+              opacity: sparkle.anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1, 0] }),
+            }}
+          >
+            <Ionicons name="sparkles" size={20} color="#FFD700" />
+          </Animated.View>
+        ))}
+
+        <Text style={[{ fontSize: 14, marginTop: 8, color: theme === 'dark' ? '#9CA3AF' : '#718096' }]}>
+          Tap to rate (1-5 stars) ✨
+        </Text>
+      </View>
 
       <Text style={[styles.label, { color: theme === 'dark' ? '#CCC' : '#4a5568' }]}>Your Name</Text>
       <TextInput

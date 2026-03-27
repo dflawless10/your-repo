@@ -207,26 +207,33 @@ if (!token) {
 
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ImagePicker.MediaTypeOptions.Images,
-    allowsEditing: true,
+    allowsMultipleSelection: true,
     quality: 0.3, // Lower quality for faster processing
-    aspect: [4, 3],
     exif: false,
   });
 
   if (!result.canceled && result.assets.length > 0) {
-    const uri = result.assets[0].uri;
+    // Process multiple images
+    for (const asset of result.assets) {
+      if (additionalImages.length >= 5) {
+        Alert.alert('Limit Reached', 'Maximum 5 images allowed.');
+        break;
+      }
 
-    // Compress and resize image for faster uploads
-    try {
-      const manipResult = await ImageManipulator.manipulateAsync(
-        uri,
-        [{ resize: { width: 800 } }], // Resize to max 800px width
-        { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG }
-      );
-      onPickResult(manipResult.uri);
-    } catch (error) {
-      console.error('Image compression error:', error);
-      onPickResult(uri); // Fallback to original if compression fails
+      const uri = asset.uri;
+
+      // Compress and resize image for R2 cloud storage (1200px width, 0.7 quality)
+      try {
+        const manipResult = await ImageManipulator.manipulateAsync(
+          uri,
+          [{ resize: { width: 1200 } }], // R2 standard: 1200px width
+          { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG } // R2 standard: 0.7 quality
+        );
+        onPickResult(manipResult.uri);
+      } catch (error) {
+        console.error('Image compression error:', error);
+        onPickResult(uri); // Fallback to original if compression fails
+      }
     }
   }
 };

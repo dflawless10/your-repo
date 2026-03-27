@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,7 @@ import {
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { useAuth } from '@/hooks/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
-import ElasticsearchResultCard from './components/ElasticsearchResultCard';
+import { ElasticsearchResultCard } from './components/ElasticsearchResultCard';
 import { API_URL } from '@/constants/api';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
 import GlobalFooter from '@/app/components/GlobalFooter';
@@ -75,6 +75,11 @@ export default function SearchScreen() {
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<Record<number, boolean>>({});
+
+  // Reactive dimensions for landscape support
+  const { width: windowWidth, height: windowHeight } = Dimensions.get('window');
+  const isLandscape = useMemo(() => windowWidth > windowHeight, [windowWidth, windowHeight]);
+  const NUM_COLUMNS = isLandscape ? 3 : 1;
 
   // Scroll animation for EnhancedHeader
   const scrollY = useRef(new RNAnimated.Value(0)).current;
@@ -332,7 +337,10 @@ export default function SearchScreen() {
           data={items}
           keyExtractor={(item) => `item-${item.item_id}`}
           renderItem={renderItem}
-          contentContainerStyle={{ paddingBottom: 100 }}
+          numColumns={NUM_COLUMNS}
+          key={`grid-${NUM_COLUMNS}`}
+          columnWrapperStyle={NUM_COLUMNS > 1 ? { gap: 12 } : undefined}
+          contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 16, gap: 12 }}
           onScroll={RNAnimated.event(
             [{ nativeEvent: { contentOffset: { y: scrollY } } }],
             { useNativeDriver: false }

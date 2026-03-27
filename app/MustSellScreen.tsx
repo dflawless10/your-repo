@@ -7,7 +7,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Picker } from "@react-native-picker/picker";
 import { Ionicons } from '@expo/vector-icons';
 import { useGoatBid } from "@/hooks/useGoatBid";
-import { GoatFlip } from "@/components/GoatAnimator/goatFlip";
+
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import ImageUploader from '@/components/ImageUploader';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
@@ -21,6 +21,8 @@ import { API_BASE_URL } from '@/config';
 import CategorySelector, { QUICK_CATEGORIES } from '@/app/components/CategorySelector';
 import { useTheme } from '@/app/theme/ThemeContext';
 import {playGoatSoundByName} from "@/assets/sounds/officialGoatSoundsSoundtrack";
+import {triggerGoat} from "@/utils/goatFeedback";
+import {any} from "prop-types";
 
 const API_URL = API_BASE_URL;
 
@@ -55,6 +57,7 @@ const [showConfetti, setShowConfetti] = useState(false);
   const { goatTrigger, lastBidAmount, triggerGoat } = useGoatBid();
 
   // Image validation for first image
+  // Image validation for first image
   const imageValidation = useImageValidation(imageUris.length > 0 ? imageUris[0] : null);
 
   useEffect(() => {
@@ -87,6 +90,7 @@ const [showConfetti, setShowConfetti] = useState(false);
       loadItemForEdit();
     }
   }, [editItemId]);
+
 
   const loadItemForEdit = async () => {
     try {
@@ -233,25 +237,20 @@ console.log("🐐 FULL ITEM:", item);
     formData.append('selling_strategy', 'must_sell');
     formData.append('return_policy_override', returnPolicyOverride);
 
-    // Handle images: only send if they're new local files (not existing URLs)
-    if (imageUris[0] && imageUris[0].startsWith('file://')) {
-      // Main image (first image) - only if it's a new local file
-      formData.append('photo', {
-        uri: imageUris[0],
-        name: 'photo.jpg',
+    // Main image (first image)
+    formData.append('photo', {
+      uri: imageUris[0],
+      name: 'photo.jpg',
+      type: 'image/jpeg',
+    } as any);
+
+    // Additional images
+    for (let i = 1; i < imageUris.length; i++) {
+      formData.append(`additional_photo_${i - 1}`, {
+        uri: imageUris[i],
+        name: `extra_${i - 1}.jpg`,
         type: 'image/jpeg',
       } as any);
-    }
-
-    // Additional images - only send new local files
-    for (let i = 1; i < imageUris.length; i++) {
-      if (imageUris[i].startsWith('file://')) {
-        formData.append(`additional_photo_${i - 1}`, {
-          uri: imageUris[i],
-          name: `extra_${i - 1}.jpg`,
-          type: 'image/jpeg',
-        } as any);
-      }
     }
 
     try {
@@ -299,7 +298,10 @@ console.log("🐐 FULL ITEM:", item);
           const randomCompliment = compliments[Math.floor(Math.random() * compliments.length)];
 
           Alert.alert('Success!', randomCompliment, [
-            {text: 'OK', onPress: () => router.back()}
+            {text: 'OK', onPress: () => {
+              setLoading(false);
+              router.replace('/(tabs)/MyAuctionScreen');
+            }}
           ]);
 
         } else {
@@ -323,19 +325,20 @@ console.log("🐐 FULL ITEM:", item);
 
           // 3. Wait for confetti animation
           setTimeout(() => {
+            setLoading(false);
             // 4. Show success alert AFTER confetti
             Alert.alert(
               'Success! 🎉',
-              'Your Must Sell listing will be live in an hour! Want to preview it?',
+              `Your Must Sell listing ends in ${durationHours} hours! It will be live in 1 hour. Want to preview it?`,
               [
                 {
                   text: 'Preview Now',
-                  onPress: () => router.push(`/seller/review-item/${itemId}` as any),
+                  onPress: () => router.push(`/seller/review-item/${itemId}`),
                 },
                 {
                   text: 'Later',
                   style: 'cancel',
-                  onPress: () => router.push('/(tabs)/MyAuctionScreen' as any),
+                  onPress: () => router.push('/(tabs)/MyAuctionScreen'),
                 },
               ],
               {cancelable: false}

@@ -65,7 +65,7 @@ export default function WatchListingScreen() {
     ? (parseFloat(params.price as string) * 0.6).toFixed(0)
     : '';
   const [startingBid, setStartingBid] = useState(defaultStartingBid);
-  const [duration, setDuration] = useState('7');
+  const [duration, setDuration] = useState('24');
 
   // Advanced auction options
   const [hasReserve, setHasReserve] = useState(false);
@@ -73,6 +73,7 @@ export default function WatchListingScreen() {
   const [hasBuyItNow, setHasBuyItNow] = useState(false);
   const [buyItNowPrice, setBuyItNowPrice] = useState('');
   const [isMustSell, setIsMustSell] = useState(false);
+  const [durationHours, setDurationHours] = useState(30);
 
   // Header state
   const [username, setUsername] = useState<string | null>(null);
@@ -119,10 +120,7 @@ const previewUris: string[] =
 };
 
 
-
-
-
-useEffect(() => {
+  useEffect(() => {
   console.log('🖼️ Image URI updated:', imageUris);
 }, [imageUris]);
 
@@ -136,16 +134,15 @@ useEffect(() => {
 
   // Validate Must Sell constraints
   if (isMustSell) {
-    const durationNum = parseInt(duration);
-    if (durationNum < 24 || durationNum > 72) {
-      Alert.alert('Error', 'Must Sell duration must be 24, 48, or 72 hours');
-      return;
-    }
-    if (hasReserve || hasBuyItNow) {
-      Alert.alert('Error', 'Must Sell mode cannot have Reserve Price or Buy It Now options');
-      return;
-    }
+  const hours = Number.parseInt(String(durationHours), 24);
+
+
+  if (hours < 24 || hours > 72) {
+    Alert.alert('Error', 'Must Sell duration must be between 24 and 72 days');
+    return;
   }
+}
+
 
   // Validate Reserve Price
   if (hasReserve && reservePrice) {
@@ -223,8 +220,8 @@ try {
   }
 
   if (isMustSell) {
-    formData.append('is_must_sell', '1');
-    console.log('is_must_sell: 1');
+    formData.append('is_must_sell', '24');
+    console.log('is_must_sell: 24');
   }
 
   // Handle the main image file
@@ -563,7 +560,7 @@ try {
                 setBuyItNowPrice('');
                 setDuration('48'); // Default to 48 hours
               } else {
-                setDuration('7'); // Reset to 7 days when disabling
+                setDuration('24'); // Reset to 7 days when disabling
               }
             }}
             activeOpacity={0.7}
@@ -602,7 +599,7 @@ try {
                 style={styles.cancelMustSellButton}
                 onPress={() => {
                   setIsMustSell(false);
-                  setDuration('7');
+                  setDuration('24');
                 }}
               >
                 <Text style={styles.cancelMustSellText}>Cancel Must Sell</Text>

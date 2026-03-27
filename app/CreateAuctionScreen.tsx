@@ -473,7 +473,7 @@ const API_URL = API_BASE_URL;
         <Text style={[styles.label, { color: colors.textPrimary }]}>Reserve Price (Optional)</Text>
         <TextInput placeholder="Reserve Price (minimum to sell, optional)" placeholderTextColor={theme === 'dark' ? '#666' : '#999'} value={reservePrice} onChangeText={setReservePrice} keyboardType="numeric" style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: colors.textPrimary, borderColor: theme === 'dark' ? '#3C3C3E' : '#DDD' }]} />
         <Text style={styles.helperText}>
-          💡 Reserve price protects you from selling below your minimum. If bidding doesn't reach this price, the item won't sell. Leave blank to sell to highest bidder.
+          💡 Reserve price protects you from selling below your minimum. If bidding does&#39;t reach this price, the item won&#39;t sell. Leave blank to sell to highest bidder.
         </Text>
 
         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>📦 Item Details</Text>

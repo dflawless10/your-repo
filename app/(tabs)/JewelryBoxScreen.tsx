@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { API_BASE_URL } from '@/config';
 import {
   View,
@@ -8,11 +8,10 @@ import {
   Image,
   Animated,
   TouchableOpacity,
-  Dimensions,
   ActivityIndicator,
-  Share,
   ScrollView,
   Modal,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/hooks/AuthContext';
@@ -45,6 +44,14 @@ export default function JewelryBoxScreen() {
   const headerOpacity = useRef(new Animated.Value(0)).current;
   const headerScale = useRef(new Animated.Value(1)).current;
   const dispatch = useAppDispatch();
+
+  // Reactive dimensions for landscape support
+  const { width, height } = useWindowDimensions();
+  const isLandscape = useMemo(() => width > height, [width, height]);
+  const PADDING = 16;
+  const GAP = 12;
+  const NUM_COLUMNS = isLandscape ? 3 : 2;
+  const CARD_WIDTH = (width - PADDING * 2 - GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
 
   // Fetch favorites from backend
   const fetchFavoritesFromBackend = React.useCallback(async () => {
@@ -233,19 +240,6 @@ export default function JewelryBoxScreen() {
       console.error('🐐 Failed to toggle favorite:', err);
     }
   };
-
-  const handleShare = async (item: ListedItem) => {
-    try {
-      await Share.share({
-        message: `Check out this item on BidGoat: ${item.name}\nCurrent price: $${(item.highest_bid || item.price || 0).toFixed(2)}`,
-        url: item.photo_url,
-        title: item.name,
-      });
-    } catch (error) {
-      console.warn('Share failed:', error);
-    }
-  };
-
   const getCountdownColor = (endTime: string): string => {
     const now = Date.now();
     const end = new Date(endTime).getTime();
@@ -482,8 +476,9 @@ export default function JewelryBoxScreen() {
         )}
         scrollEventThrottle={16}
         contentContainerStyle={{
-          paddingTop: HEADER_MAX_HEIGHT + 30,
-          paddingBottom: 20,
+          paddingTop: HEADER_MAX_HEIGHT,
+          paddingBottom: 160,
+          paddingHorizontal: 16,
         }}
         showsVerticalScrollIndicator={false}
       >
@@ -549,8 +544,12 @@ export default function JewelryBoxScreen() {
             </ScrollView>
 
             {/* Items Grid */}
-            <View style={styles.grid}>
-              {filteredItems.map((item, index) => renderItem(item, index))}
+            <View style={[styles.grid, { gap: GAP }]}>
+              {filteredItems.map((item, index) => (
+                <View key={item.id} style={{ width: CARD_WIDTH, marginBottom: GAP }}>
+                  {renderItem(item, index)}
+                </View>
+              ))}
             </View>
           </>
         )}
@@ -658,11 +657,7 @@ export default function JewelryBoxScreen() {
   );
 }
 
-const { width } = Dimensions.get('window');
-const PADDING = 16;
-const GAP = 12;
-const NUM_COLUMNS = 2;
-const CARD_WIDTH = (width - PADDING * 2 - GAP) / NUM_COLUMNS;
+// Removed static dimensions - moved to component for reactive layout
 
 const styles = StyleSheet.create({
   container: {
@@ -681,9 +676,8 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   headerStats: {
-    paddingHorizontal: PADDING,
     marginBottom: 16,
-    paddingTop: 20,
+    paddingVertical: 12,
   },
   headerTitle: {
     fontSize: 20,
@@ -697,7 +691,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   filtersContainer: {
-    paddingHorizontal: PADDING,
+    paddingHorizontal: 16,
     paddingVertical: 8,
     gap: 8,
     alignItems: 'center',
@@ -736,13 +730,12 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: PADDING,
-    gap: GAP,
+    paddingHorizontal: 16,
+    gap: 12,
     marginTop: 8,
   },
   cardWrapper: {
-    width: CARD_WIDTH,
-    marginBottom: GAP,
+    marginBottom: 12,
   },
   card: {
     backgroundColor: '#FFF',
@@ -762,7 +755,7 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     width: '100%',
-    height: CARD_WIDTH * 1.1,
+    aspectRatio: 1 / 1.1,
     position: 'relative',
     backgroundColor: '#F0F0F0',
   },

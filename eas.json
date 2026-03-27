@@ -1,23 +1,33 @@
 {
   "cli": {
     "version": ">= 16.26.0",
-    "appVersionSource": "remote"
+    "appVersionSource": "local"
   },
   "build": {
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "node": "22.12.0"
+      "node": "22.12.0",
+      "channel": "development"
     },
     "preview": {
       "distribution": "internal",
-      "node": "22.12.0"
+      "node": "22.12.0",
+      "channel": "preview",
+      "android": {
+        "buildType": "app-bundle",
+        "gradleCommand": ":app:bundleRelease"
+      }
     },
     "production": {
       "node": "22.12.0",
+      "channel": "production",
       "cache": {
-        "disabled": false,
-        "clear": true
+        "disabled": false
+      },
+      "android": {
+        "buildType": "app-bundle",
+        "gradleCommand": ":app:bundleRelease"
       },
       "env": {
         "ORG_GRADLE_PROJECT_react.includeJitpackRepository": "false"

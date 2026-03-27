@@ -12,6 +12,7 @@ import {
   Modal,
   TextInput,
   Linking,
+  Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, Stack } from 'expo-router';
@@ -23,17 +24,43 @@ import { API_BASE_URL } from '@/config';
 import { useTheme } from '@/app/theme/ThemeContext';
 
 interface PaymentMethod {
-  id: string;
-  type: 'card' | 'apple_pay' | 'google_pay';
-  brand?: string; // visa, mastercard, amex, discover
-  last4: string;
-  exp_month?: number;
-  exp_year?: number;
+  id: number;
+  method_type: string;
+  provider: string;
+  card_brand?: string;
+  card_last4?: string;
+  card_exp_month?: number;
+  card_exp_year?: number;
+  paypal_email?: string;
+  cashapp_cashtag?: string;
+  crypto_wallet_address?: string;
+  crypto_currency?: string;
+  billing_name?: string;
   is_default: boolean;
-  billing_details?: {
-    name: string;
-    email?: string;
-  };
+  is_verified: boolean;
+  enabled_for_receiving: boolean;
+  enabled_for_sending: boolean;
+  last_used_at?: string;
+}
+
+interface SellerPreferences {
+  accepts_stripe: boolean;
+  accepts_paypal: boolean;
+  accepts_cashapp: boolean;
+  accepts_crypto: boolean;
+  track_payment_method_performance: boolean;
+  notify_when_better_method_available: boolean;
+}
+
+interface PaymentAnalytics {
+  method_type: string;
+  provider: string;
+  total_transactions: number;
+  successful_transactions: number;
+  avg_amount: number;
+  total_volume: number;
+  avg_conversion_rate: number;
+  avg_time_seconds: number;
 }
 
 export default function PaymentMethodsScreen() {
@@ -42,26 +69,37 @@ export default function PaymentMethodsScreen() {
   const scrollY = new Animated.Value(0);
 
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [sellerPrefs, setSellerPrefs] = useState<SellerPreferences | null>(null);
+  const [analytics, setAnalytics] = useState<PaymentAnalytics[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [addingCard, setAddingCard] = useState(false);
+  const [selectedAddType, setSelectedAddType] = useState<string>('');
 
-  // Card form state
-  const [cardDetails, setCardDetails] = useState<any>(null);
+  // Form states
   const [cardholderName, setCardholderName] = useState('');
-  const [billingZip, setBillingZip] = useState('');
+  const [paypalEmail, setPaypalEmail] = useState('');
+  const [cashappCashtag, setCashappCashtag] = useState('');
+  const [cryptoAddress, setCryptoAddress] = useState('');
+  const [cryptoCurrency, setCryptoCurrency] = useState('ETH');
 
   useEffect(() => {
-    loadPaymentMethods();
+    loadAllData();
   }, []);
+
+  const loadAllData = async () => {
+    setLoading(true);
+    await Promise.all([
+      loadPaymentMethods(),
+      loadSellerPreferences(),
+      loadAnalytics(),
+    ]);
+    setLoading(false);
+  };
 
   const loadPaymentMethods = async () => {
     try {
       const token = await AsyncStorage.getItem('jwtToken');
-      if (!token) {
-        setLoading(false);
-        return;
-      }
+      if (!token) return;
 
       const response = await fetch(`${API_BASE_URL}/api/payment/methods`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -72,13 +110,47 @@ export default function PaymentMethodsScreen() {
         setPaymentMethods(data.payment_methods || []);
       }
     } catch (error) {
-      console.log('Payment methods endpoint not available yet');
-    } finally {
-      setLoading(false);
+      console.error('Error loading payment methods:', error);
     }
   };
 
-  const handleSetDefault = async (methodId: string) => {
+  const loadSellerPreferences = async () => {
+    try {
+      const token = await AsyncStorage.getItem('jwtToken');
+      if (!token) return;
+
+      const response = await fetch(`${API_BASE_URL}/api/payment/seller/preferences`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setSellerPrefs(data);
+      }
+    } catch (error) {
+      console.error('Error loading seller preferences:', error);
+    }
+  };
+
+  const loadAnalytics = async () => {
+    try {
+      const token = await AsyncStorage.getItem('jwtToken');
+      if (!token) return;
+
+      const response = await fetch(`${API_BASE_URL}/api/payment/seller/analytics`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setAnalytics(data.methods || []);
+      }
+    } catch (error) {
+      console.error('Error loading analytics:', error);
+    }
+  };
+
+  const handleSetDefault = async (methodId: number) => {
     try {
       const token = await AsyncStorage.getItem('jwtToken');
       const response = await fetch(`${API_BASE_URL}/api/payment/methods/${methodId}/set-default`, {
@@ -95,7 +167,7 @@ export default function PaymentMethodsScreen() {
     }
   };
 
-  const handleDeleteMethod = (methodId: string) => {
+  const handleDeleteMethod = (methodId: number) => {
     Alert.alert(
       'Delete Payment Method',
       'Are you sure you want to remove this payment method?',
@@ -125,116 +197,204 @@ export default function PaymentMethodsScreen() {
     );
   };
 
-
-  const handleAddCard = async () => {
-    if (!cardholderName.trim()) {
-      Alert.alert('Error', 'Please enter cardholder name');
-      return;
-    }
-
-    if (!cardDetails || !cardDetails.complete) {
-      Alert.alert('Error', 'Please enter valid card information');
-      return;
-    }
-
-    setAddingCard(true);
-
+  const handleAddPaymentMethod = async () => {
     try {
-      // Create payment method using Stripe SDK (secure, PCI-compliant)
-      const { error, paymentMethod } = await createPaymentMethod({
-        paymentMethodType: 'Card',
-        paymentMethodData: {
-          billingDetails: {
-            name: cardholderName,
-          },
+      const token = await AsyncStorage.getItem('jwtToken');
+      if (!token) return;
+
+      let body: any = {
+        method_type: selectedAddType,
+        enabled_for_sending: true,
+      };
+
+      switch (selectedAddType) {
+        case 'stripe_card':
+          if (!cardholderName.trim()) {
+            Alert.alert('Error', 'Please enter cardholder name');
+            return;
+          }
+          body.billing_name = cardholderName;
+          // In production, you'd collect card details via Stripe SDK
+          body.card_brand = 'visa';
+          body.card_last4 = '4242';
+          body.card_exp_month = 12;
+          body.card_exp_year = 2025;
+          break;
+
+        case 'paypal':
+          if (!paypalEmail.trim()) {
+            Alert.alert('Error', 'Please enter PayPal email');
+            return;
+          }
+          body.paypal_email = paypalEmail;
+          body.billing_name = paypalEmail.split('@')[0];
+          break;
+
+        case 'cashapp':
+          if (!cashappCashtag.trim()) {
+            Alert.alert('Error', 'Please enter Cash App $cashtag');
+            return;
+          }
+          body.cashapp_cashtag = cashappCashtag.startsWith('$') ? cashappCashtag : `$${cashappCashtag}`;
+          body.billing_name = body.cashapp_cashtag;
+          break;
+
+        case 'crypto':
+          if (!cryptoAddress.trim()) {
+            Alert.alert('Error', 'Please enter wallet address');
+            return;
+          }
+          body.crypto_wallet_address = cryptoAddress;
+          body.crypto_currency = cryptoCurrency;
+          body.billing_name = `${cryptoCurrency} Wallet`;
+          break;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/payment/methods`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify(body),
       });
 
-      if (error) {
-        Alert.alert('Error', error.message || 'Failed to process card');
-        setAddingCard(false);
-        return;
-      }
-
-      if (paymentMethod) {
-        await savePaymentMethodToBackend(paymentMethod.id, 'card');
+      if (response.ok) {
         setShowAddModal(false);
-        setCardDetails(null);
-        setCardholderName('');
-        setBillingZip('');
+        resetForm();
+        await loadPaymentMethods();
+        Alert.alert('Success', 'Payment method added successfully');
+      } else {
+        const data = await response.json();
+        Alert.alert('Error', data.error || 'Failed to add payment method');
       }
     } catch (error) {
-      console.error('Add card error:', error);
+      console.error('Error adding payment method:', error);
       Alert.alert('Error', 'Something went wrong. Please try again.');
-    } finally {
-      setAddingCard(false);
     }
   };
 
-  const handleLearnMoreStripe = () => {
-    Linking.openURL('https://stripe.com/docs/payments');
+  const resetForm = () => {
+    setCardholderName('');
+    setPaypalEmail('');
+    setCashappCashtag('');
+    setCryptoAddress('');
+    setSelectedAddType('');
   };
 
-  const getCardIcon = (method: PaymentMethod) => {
-    if (method.type === 'apple_pay') {
-      return { name: 'logo-apple', color: '#000000' };
-    }
-    if (method.type === 'google_pay') {
-      return { name: 'logo-google', color: '#4285F4' };
-    }
+  const handleToggleSellerAcceptance = async (methodType: 'stripe' | 'paypal' | 'cashapp' | 'crypto', enabled: boolean) => {
+    try {
+      const token = await AsyncStorage.getItem('jwtToken');
+      if (!token) return;
 
-    switch (method.brand?.toLowerCase()) {
-      case 'visa':
-        return { name: 'card', color: '#1A1F71' };
-      case 'mastercard':
-        return { name: 'card', color: '#EB001B' };
-      case 'amex':
-      case 'american express':
-        return { name: 'card', color: '#006FCF' };
-      case 'discover':
-        return { name: 'card', color: '#FF6000' };
+      const updatedPrefs = {
+        ...sellerPrefs,
+        [`accepts_${methodType}`]: enabled,
+      };
+
+      const response = await fetch(`${API_BASE_URL}/api/payment/seller/preferences`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updatedPrefs),
+      });
+
+      if (response.ok) {
+        setSellerPrefs(updatedPrefs as SellerPreferences);
+      }
+    } catch (error) {
+      console.error('Error updating seller preferences:', error);
+    }
+  };
+
+  const getMethodIcon = (method: PaymentMethod) => {
+    switch (method.method_type) {
+      case 'stripe_apple_pay':
+        return { name: 'logo-apple' as const, color: '#000000' };
+      case 'stripe_google_pay':
+        return { name: 'logo-google' as const, color: '#4285F4' };
+      case 'paypal':
+        return { name: 'logo-paypal' as const, color: '#00457C' };
+      case 'cashapp':
+        return { name: 'cash' as const, color: '#00D64F' };
+      case 'crypto':
+        return { name: 'logo-bitcoin' as const, color: '#F7931A' };
+      case 'stripe_card':
       default:
-        return { name: 'card-outline', color: '#6A0DAD' };
+        switch (method.card_brand?.toLowerCase()) {
+          case 'visa':
+            return { name: 'card' as const, color: '#1A1F71' };
+          case 'mastercard':
+            return { name: 'card' as const, color: '#EB001B' };
+          case 'amex':
+            return { name: 'card' as const, color: '#006FCF' };
+          default:
+            return { name: 'card-outline' as const, color: '#6A0DAD' };
+        }
     }
   };
 
   const getMethodLabel = (method: PaymentMethod) => {
-    if (method.type === 'apple_pay') return 'Apple Pay';
-    if (method.type === 'google_pay') return 'Google Pay';
-    return method.brand?.toUpperCase() || 'CARD';
+    switch (method.method_type) {
+      case 'stripe_apple_pay':
+        return 'Apple Pay';
+      case 'stripe_google_pay':
+        return 'Google Pay';
+      case 'paypal':
+        return 'PayPal';
+      case 'cashapp':
+        return 'Cash App';
+      case 'crypto':
+        return `${method.crypto_currency} Wallet`;
+      case 'stripe_card':
+      default:
+        return method.card_brand?.toUpperCase() || 'CARD';
+    }
+  };
+
+  const getMethodDetails = (method: PaymentMethod) => {
+    switch (method.method_type) {
+      case 'stripe_card':
+        return `•••• ${method.card_last4}`;
+      case 'paypal':
+        return method.paypal_email || '';
+      case 'cashapp':
+        return method.cashapp_cashtag || '';
+      case 'crypto':
+        return `${method.crypto_wallet_address?.substring(0, 6)}...${method.crypto_wallet_address?.substring(method.crypto_wallet_address.length - 4)}`;
+      default:
+        return '';
+    }
   };
 
   const renderPaymentMethod = (method: PaymentMethod) => {
-    const icon = getCardIcon(method);
+    const icon = getMethodIcon(method);
 
     return (
-      <View key={method.id} style={styles.paymentMethodCard}>
+      <View key={method.id} style={[styles.paymentMethodCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
         <View style={styles.paymentMethodHeader}>
           <View style={[styles.cardIcon, { backgroundColor: `${icon.color}15` }]}>
-            <Ionicons name={icon.name as any} size={24} color={icon.color} />
+            <Ionicons name={icon.name} size={24} color={icon.color} />
           </View>
 
           <View style={styles.paymentMethodInfo}>
             <View style={styles.paymentMethodTitleRow}>
-              <Text style={styles.paymentMethodBrand}>{getMethodLabel(method)}</Text>
+              <Text style={[styles.paymentMethodBrand, { color: colors.textPrimary }]}>{getMethodLabel(method)}</Text>
               {method.is_default && (
                 <View style={styles.defaultBadge}>
                   <Text style={styles.defaultBadgeText}>DEFAULT</Text>
                 </View>
               )}
             </View>
-            {method.type === 'card' && (
-              <>
-                <Text style={styles.paymentMethodNumber}>•••• {method.last4}</Text>
-                {method.exp_month && method.exp_year && (
-                  <Text style={styles.paymentMethodExpiry}>
-                    Expires {String(method.exp_month).padStart(2, '0')}/{String(method.exp_year).slice(-2)}
-                  </Text>
-                )}
-              </>
-            )}
-            {method.billing_details?.name && (
-              <Text style={styles.paymentMethodName}>{method.billing_details.name}</Text>
+            <Text style={[styles.paymentMethodNumber, { color: theme === 'dark' ? '#999' : '#666' }]}>
+              {getMethodDetails(method)}
+            </Text>
+            {method.billing_name && (
+              <Text style={[styles.paymentMethodName, { color: theme === 'dark' ? '#666' : '#999' }]}>
+                {method.billing_name}
+              </Text>
             )}
           </View>
         </View>
@@ -262,6 +422,248 @@ export default function PaymentMethodsScreen() {
     );
   };
 
+  const renderSellerPaymentOption = (
+    methodType: 'stripe' | 'paypal' | 'cashapp' | 'crypto',
+    icon: any,
+    title: string,
+    subtitle: string,
+    stats?: PaymentAnalytics
+  ) => {
+    const enabled = sellerPrefs?.[`accepts_${methodType}` as keyof SellerPreferences] as boolean || false;
+
+    return (
+      <View style={[styles.sellerMethodCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
+        <View style={styles.sellerMethodHeader}>
+          <View style={styles.sellerMethodLeft}>
+            <Ionicons name={icon} size={28} color={enabled ? '#10B981' : '#999'} />
+            <View style={styles.sellerMethodText}>
+              <Text style={[styles.sellerMethodTitle, { color: colors.textPrimary }]}>{title}</Text>
+              <Text style={[styles.sellerMethodSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]}>
+                {subtitle}
+              </Text>
+            </View>
+          </View>
+          <Switch
+            value={enabled}
+            onValueChange={(value) => handleToggleSellerAcceptance(methodType, value)}
+            trackColor={{ false: '#767577', true: '#10B981' }}
+            thumbColor={enabled ? '#FFF' : '#f4f3f4'}
+          />
+        </View>
+
+        {stats && enabled && (
+          <View style={[styles.statsRow, { borderTopColor: theme === 'dark' ? '#2C2C2E' : '#E5E5E5' }]}>
+            <View style={styles.statItem}>
+              <Text style={[styles.statValue, { color: colors.textPrimary }]}>{stats.total_transactions}</Text>
+              <Text style={[styles.statLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Sales</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={[styles.statValue, { color: colors.textPrimary }]}>${stats.total_volume.toFixed(0)}</Text>
+              <Text style={[styles.statLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Volume</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={[styles.statValue, { color: colors.textPrimary }]}>{stats.avg_conversion_rate}%</Text>
+              <Text style={[styles.statLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Conversion</Text>
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  const renderAddMethodModal = () => (
+    <Modal
+      visible={showAddModal}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={() => {
+        setShowAddModal(false);
+        resetForm();
+      }}
+    >
+      <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+        <View style={[styles.modalHeader, { backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
+          <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Add Payment Method</Text>
+          <TouchableOpacity
+            onPress={() => {
+              setShowAddModal(false);
+              resetForm();
+            }}
+            style={styles.closeButton}
+          >
+            <Ionicons name="close" size={28} color={colors.textPrimary} />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={[styles.modalContent, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
+          {!selectedAddType ? (
+            <View style={styles.methodTypeSelector}>
+              <Text style={[styles.selectorTitle, { color: colors.textPrimary }]}>Select Payment Method Type</Text>
+
+              <TouchableOpacity
+                style={[styles.methodTypeButton, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}
+                onPress={() => setSelectedAddType('stripe_card')}
+              >
+                <Ionicons name="card-outline" size={32} color="#6A0DAD" />
+                <Text style={[styles.methodTypeText, { color: colors.textPrimary }]}>Credit/Debit Card</Text>
+                <Ionicons name="chevron-forward" size={24} color={theme === 'dark' ? '#666' : '#999'} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.methodTypeButton, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}
+                onPress={() => setSelectedAddType('paypal')}
+              >
+                <Ionicons name="logo-paypal" size={32} color="#00457C" />
+                <Text style={[styles.methodTypeText, { color: colors.textPrimary }]}>PayPal</Text>
+                <Ionicons name="chevron-forward" size={24} color={theme === 'dark' ? '#666' : '#999'} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.methodTypeButton, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}
+                onPress={() => setSelectedAddType('cashapp')}
+              >
+                <Ionicons name="cash-outline" size={32} color="#00D64F" />
+                <Text style={[styles.methodTypeText, { color: colors.textPrimary }]}>Cash App</Text>
+                <Ionicons name="chevron-forward" size={24} color={theme === 'dark' ? '#666' : '#999'} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.methodTypeButton, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}
+                onPress={() => setSelectedAddType('crypto')}
+              >
+                <Ionicons name="logo-bitcoin" size={32} color="#F7931A" />
+                <Text style={[styles.methodTypeText, { color: colors.textPrimary }]}>Crypto Wallet</Text>
+                <Ionicons name="chevron-forward" size={24} color={theme === 'dark' ? '#666' : '#999'} />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.methodForm}>
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={() => {
+                  setSelectedAddType('');
+                  resetForm();
+                }}
+              >
+                <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+                <Text style={[styles.backButtonText, { color: colors.textPrimary }]}>Back</Text>
+              </TouchableOpacity>
+
+              {selectedAddType === 'stripe_card' && (
+                <>
+                  <Text style={[styles.formTitle, { color: colors.textPrimary }]}>Add Credit/Debit Card</Text>
+                  <View style={styles.inputSection}>
+                    <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>Cardholder Name</Text>
+                    <TextInput
+                      style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: colors.textPrimary, borderColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}
+                      value={cardholderName}
+                      onChangeText={setCardholderName}
+                      placeholder="John Doe"
+                      placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
+                    />
+                  </View>
+                  <View style={[styles.comingSoonBox, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F5F5F5', borderColor: colors.border }]}>
+                    <Ionicons name="card-outline" size={32} color={colors.textSecondary} />
+                    <Text style={[styles.comingSoonText, { color: colors.textSecondary }]}>
+                      Stripe card integration coming soon
+                    </Text>
+                  </View>
+                </>
+              )}
+
+              {selectedAddType === 'paypal' && (
+                <>
+                  <Text style={[styles.formTitle, { color: colors.textPrimary }]}>Add PayPal Account</Text>
+                  <View style={styles.inputSection}>
+                    <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>PayPal Email</Text>
+                    <TextInput
+                      style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: colors.textPrimary, borderColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}
+                      value={paypalEmail}
+                      onChangeText={setPaypalEmail}
+                      placeholder="user@example.com"
+                      placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                    />
+                  </View>
+                </>
+              )}
+
+              {selectedAddType === 'cashapp' && (
+                <>
+                  <Text style={[styles.formTitle, { color: colors.textPrimary }]}>Add Cash App</Text>
+                  <View style={styles.inputSection}>
+                    <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>Cash App $Cashtag</Text>
+                    <TextInput
+                      style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: colors.textPrimary, borderColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}
+                      value={cashappCashtag}
+                      onChangeText={setCashappCashtag}
+                      placeholder="$johndoe"
+                      placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
+                      autoCapitalize="none"
+                    />
+                  </View>
+                </>
+              )}
+
+              {selectedAddType === 'crypto' && (
+                <>
+                  <Text style={[styles.formTitle, { color: colors.textPrimary }]}>Add Crypto Wallet</Text>
+                  <View style={styles.inputSection}>
+                    <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>Cryptocurrency</Text>
+                    <View style={styles.cryptoSelector}>
+                      {['BTC', 'ETH', 'USDC'].map((crypto) => (
+                        <TouchableOpacity
+                          key={crypto}
+                          style={[
+                            styles.cryptoButton,
+                            { borderColor: cryptoCurrency === crypto ? '#6A0DAD' : (theme === 'dark' ? '#333' : '#E0E0E0') },
+                            cryptoCurrency === crypto && styles.cryptoButtonSelected
+                          ]}
+                          onPress={() => setCryptoCurrency(crypto)}
+                        >
+                          <Text style={[styles.cryptoButtonText, { color: cryptoCurrency === crypto ? '#6A0DAD' : colors.textPrimary }]}>
+                            {crypto}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                  <View style={styles.inputSection}>
+                    <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>Wallet Address</Text>
+                    <TextInput
+                      style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: colors.textPrimary, borderColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}
+                      value={cryptoAddress}
+                      onChangeText={setCryptoAddress}
+                      placeholder="0x..."
+                      placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
+                      autoCapitalize="none"
+                    />
+                  </View>
+                </>
+              )}
+
+              <TouchableOpacity
+                style={styles.submitButton}
+                onPress={handleAddPaymentMethod}
+              >
+                <LinearGradient
+                  colors={['#6A0DAD', '#8B5CF6']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.submitButtonGradient}
+                >
+                  <Ionicons name="checkmark-circle" size={22} color="#FFF" />
+                  <Text style={styles.submitButtonText}>Add Payment Method</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          )}
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ headerShown: false }} />
@@ -276,16 +678,17 @@ export default function PaymentMethodsScreen() {
         )}
         scrollEventThrottle={16}
       >
-        {/* Page Header with Back Arrow */}
+        {/* Page Header */}
         <View style={[styles.pageHeader, { backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E5E5E5' }]}>
           <TouchableOpacity
             onPress={() => router.back()}
-            style={styles.backButton}
+            style={styles.backButtonHeader}
           >
             <Ionicons name="arrow-back" size={28} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
           <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Payment Methods</Text>
         </View>
+
         {/* Security Banner */}
         <LinearGradient
           colors={['#10B981', '#059669']}
@@ -297,7 +700,7 @@ export default function PaymentMethodsScreen() {
           <View style={styles.securityText}>
             <Text style={styles.securityTitle}>Secure Payment Processing</Text>
             <Text style={styles.securitySubtitle}>
-              Powered by Stripe • PCI-DSS Compliant • Your data is encrypted
+              All methods encrypted • PCI-DSS Compliant • Multiple trusted providers
             </Text>
           </View>
         </LinearGradient>
@@ -305,162 +708,101 @@ export default function PaymentMethodsScreen() {
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
-            <Text style={[styles.loadingText, { color: theme === 'dark' ? '#999' : '#999' }]}>Loading payment methods...</Text>
-          </View>
-        ) : paymentMethods.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="card-outline" size={64} color={theme === 'dark' ? '#3C3C3E' : '#D1D5DB'} />
-            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No Payment Methods</Text>
-            <Text style={[styles.emptySubtitle, { color: theme === 'dark' ? '#999' : '#999' }]}>
-              Add a payment method to make purchases faster and easier
-            </Text>
+            <Text style={[styles.loadingText, { color: theme === 'dark' ? '#999' : '#999' }]}>Loading payment data...</Text>
           </View>
         ) : (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Your Payment Methods</Text>
-            {paymentMethods.map(renderPaymentMethod)}
-          </View>
-        )}
-
-        {/* Stripe Integration Notice */}
-        <TouchableOpacity style={[styles.stripeNotice, { backgroundColor: theme === 'dark' ? '#1C1C2E' : '#F0F4FF', borderColor: theme === 'dark' ? '#2C2C3E' : '#D1D9FF' }]} onPress={handleLearnMoreStripe}>
-          <View style={styles.stripeNoticeContent}>
-            <Ionicons name="shield-checkmark" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
-            <View style={styles.stripeNoticeText}>
-              <Text style={[styles.stripeNoticeTitle, { color: theme === 'dark' ? '#B794F4' : '#1E40AF' }]}>Powered by Stripe</Text>
-              <Text style={[styles.stripeNoticeSubtitle, { color: theme === 'dark' ? '#999' : '#1E40AF' }]}>
-                Secure payment processing with Apple Pay, Google Pay, and card payments
+          <>
+            {/* BUYER SECTION: Your Payment Methods */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>💳 Your Payment Methods</Text>
+              <Text style={[styles.sectionSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]}>
+                Use these to purchase items
               </Text>
+
+              {paymentMethods.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Ionicons name="card-outline" size={64} color={theme === 'dark' ? '#3C3C3E' : '#D1D5DB'} />
+                  <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No Payment Methods</Text>
+                  <Text style={[styles.emptySubtitle, { color: theme === 'dark' ? '#999' : '#999' }]}>
+                    Add a payment method to make purchases faster
+                  </Text>
+                </View>
+              ) : (
+                paymentMethods.map(renderPaymentMethod)
+              )}
+
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={() => setShowAddModal(true)}
+              >
+                <LinearGradient
+                  colors={['#6A0DAD', '#8B5CF6']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.addButtonGradient}
+                >
+                  <Ionicons name="add-circle-outline" size={22} color="#FFF" />
+                  <Text style={styles.addButtonText}>Add Payment Method</Text>
+                </LinearGradient>
+              </TouchableOpacity>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
-          </View>
-        </TouchableOpacity>
 
-        {/* Add Payment Method Button */}
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setShowAddModal(true)}
-          activeOpacity={0.8}
-        >
-          <LinearGradient
-            colors={['#6A0DAD', '#8B5CF6']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.addButtonGradient}
-          >
-            <Ionicons name="add-circle-outline" size={22} color="#FFF" />
-            <Text style={styles.addButtonText}>Add Credit or Debit Card</Text>
-          </LinearGradient>
-        </TouchableOpacity>
+            {/* SELLER SECTION: Accept Payments */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>💰 Accept Payments (Seller)</Text>
+              <Text style={[styles.sectionSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]}>
+                Select which payment methods you accept from buyers
+              </Text>
 
-        {/* Info Card */}
-        <View style={[styles.infoCard, { backgroundColor: theme === 'dark' ? '#1C1C2E' : '#F0F4FF', borderColor: theme === 'dark' ? '#2C2C3E' : '#D1D9FF' }]}>
-          <Text style={[styles.infoTitle, { color: theme === 'dark' ? '#B794F4' : '#1E40AF' }]}>💳 Accepted Payment Methods</Text>
-          <Text style={[styles.infoText, { color: theme === 'dark' ? '#999' : '#1E40AF' }]}>
-            • Visa, Mastercard, American Express, Discover{'\n'}
-            • Secure card payments via Stripe{'\n'}
-            • Apple Pay & Google Pay (coming soon)
-          </Text>
-        </View>
+              {renderSellerPaymentOption(
+                'stripe',
+                'card-outline',
+                'Stripe',
+                'Cards, Apple Pay, Google Pay',
+                analytics.find(a => a.provider === 'stripe')
+              )}
+
+              {renderSellerPaymentOption(
+                'paypal',
+                'logo-paypal',
+                'PayPal',
+                'Higher trust for expensive items',
+                analytics.find(a => a.provider === 'paypal')
+              )}
+
+              {renderSellerPaymentOption(
+                'cashapp',
+                'cash-outline',
+                'Cash App',
+                'Popular with younger buyers',
+                analytics.find(a => a.provider === 'cashapp')
+              )}
+
+              {renderSellerPaymentOption(
+                'crypto',
+                'logo-bitcoin',
+                'Cryptocurrency',
+                'BTC, ETH, USDC - Lower fees (2%)',
+                analytics.find(a => a.provider === 'crypto' || a.provider === 'coinbase')
+              )}
+
+              <TouchableOpacity
+                style={[styles.analyticsButton, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#333' : '#E5E5E5' }]}
+                onPress={() => router.push('/seller/payment-analytics' as any)}
+              >
+                <Ionicons name="analytics-outline" size={20} color="#6A0DAD" />
+                <Text style={[styles.analyticsButtonText, { color: '#6A0DAD' }]}>View Detailed Analytics</Text>
+                <Ionicons name="chevron-forward" size={20} color="#6A0DAD" />
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
 
         <View style={{ height: 40 }} />
       </Animated.ScrollView>
 
-      {/* Add Card Modal */}
-      <Modal
-        visible={showAddModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowAddModal(false)}
-      >
-        <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
-          <View style={[styles.modalHeader, { backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
-            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Add Card</Text>
-            <TouchableOpacity onPress={() => setShowAddModal(false)} style={styles.closeButton}>
-              <Ionicons name="close" size={28} color={colors.textPrimary} />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView style={[styles.modalContent, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
-            <LinearGradient
-              colors={['#6A0DAD', '#8B5CF6']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.modalBanner}
-            >
-              <Ionicons name="lock-closed" size={24} color="#FFF" />
-              <Text style={styles.modalBannerText}>
-                Your card information is encrypted and secure
-              </Text>
-            </LinearGradient>
-
-            {/* Cardholder Name */}
-            <View style={styles.inputSection}>
-              <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>Cardholder Name</Text>
-              <View style={[styles.inputContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
-                <Ionicons name="person-outline" size={20} color={theme === 'dark' ? '#666' : '#999'} style={styles.inputIcon} />
-                <TextInput
-                  style={[styles.input, { color: colors.textPrimary }]}
-                  value={cardholderName}
-                  onChangeText={setCardholderName}
-                  placeholder="John Doe"
-                  placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
-                  autoCapitalize="words"
-                />
-              </View>
-            </View>
-
-            {/* Card Information - Coming Soon */}
-            <View style={styles.inputSection}>
-              <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>Card Information</Text>
-              <View style={[styles.comingSoonBox, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F5F5F5', borderColor: colors.border }]}>
-                <Ionicons name="card-outline" size={32} color={colors.textSecondary} />
-                <Text style={[styles.comingSoonText, { color: colors.textSecondary }]}>
-                  Stripe integration coming soon
-                </Text>
-                <Text style={[styles.comingSoonSubtext, { color: colors.textSecondary }]}>
-                  Add payment methods securely
-                </Text>
-              </View>
-            </View>
-
-            {/* Add Card Button */}
-            <TouchableOpacity
-              style={[styles.submitButton, addingCard && styles.submitButtonDisabled]}
-              onPress={handleAddCard}
-              disabled={addingCard}
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={addingCard ? ['#D1D5DB', '#9CA3AF'] : ['#6A0DAD', '#8B5CF6']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.submitButtonGradient}
-              >
-                {addingCard ? (
-                  <ActivityIndicator color="#FFF" />
-                ) : (
-                  <>
-                    <Ionicons name="checkmark-circle" size={22} color="#FFF" />
-                    <Text style={styles.submitButtonText}>Add Card</Text>
-                  </>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
-
-            {/* Security Notice */}
-            <View style={[styles.securityNotice, { backgroundColor: theme === 'dark' ? '#1C1C2E' : '#F0F4FF' }]}>
-              <Ionicons name="information-circle" size={20} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
-              <Text style={[styles.securityNoticeText, { color: theme === 'dark' ? '#999' : '#1E40AF' }]}>
-                We use Stripe for secure payment processing. Your card details are encrypted with industry-standard SSL/TLS.
-              </Text>
-            </View>
-
-            <View style={{ height: 40 }} />
-          </ScrollView>
-        </View>
-      </Modal>
-       <GlobalFooter />
+      {renderAddMethodModal()}
+      <GlobalFooter />
     </View>
   );
 }
@@ -468,7 +810,6 @@ export default function PaymentMethodsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
   },
   pageHeader: {
     flexDirection: 'row',
@@ -476,16 +817,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 40,
     paddingBottom: 8,
-    backgroundColor: '#F8F9FA',
   },
-  backButton: {
+  backButtonHeader: {
     marginRight: 12,
     padding: 4,
   },
   pageTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1A202C',
   },
   scrollView: {
     flex: 1,
@@ -522,12 +861,25 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 14,
   },
+  section: {
+    marginBottom: 32,
+    paddingHorizontal: 16,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    marginBottom: 16,
+  },
   emptyState: {
     alignItems: 'center',
-    paddingVertical: 60,
+    paddingVertical: 40,
   },
   emptyTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     marginTop: 16,
     marginBottom: 8,
@@ -537,19 +889,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 40,
   },
-  section: {
-    marginBottom: 24,
-    paddingHorizontal: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 12,
-    paddingHorizontal: 4,
-  },
   paymentMethodCard: {
-    backgroundColor: '#FFF',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
@@ -583,7 +923,6 @@ const styles = StyleSheet.create({
   paymentMethodBrand: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1A1A1A',
     marginRight: 8,
   },
   defaultBadge: {
@@ -599,17 +938,10 @@ const styles = StyleSheet.create({
   },
   paymentMethodNumber: {
     fontSize: 15,
-    color: '#666',
-    marginBottom: 2,
-  },
-  paymentMethodExpiry: {
-    fontSize: 13,
-    color: '#999',
     marginBottom: 2,
   },
   paymentMethodName: {
     fontSize: 13,
-    color: '#999',
   },
   paymentMethodActions: {
     flexDirection: 'row',
@@ -632,42 +964,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#6A0DAD',
   },
-  stripeNotice: {
-    backgroundColor: '#F0F4FF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#D1D9FF',
-  },
-  stripeNoticeContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  stripeNoticeText: {
-    flex: 1,
-  },
-  stripeNoticeTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1E40AF',
-    marginBottom: 4,
-  },
-  stripeNoticeSubtitle: {
-    fontSize: 13,
-    color: '#1E40AF',
-    lineHeight: 18,
-  },
   addButton: {
     borderRadius: 12,
     overflow: 'hidden',
-    marginBottom: 20,
-    shadowColor: '#6A0DAD',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    marginTop: 8,
   },
   addButtonGradient: {
     flexDirection: 'row',
@@ -681,27 +981,72 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
-  infoCard: {
-    backgroundColor: '#F0F4FF',
+  sellerMethodCard: {
     borderRadius: 12,
     padding: 16,
-    borderWidth: 1,
-    borderColor: '#D1D9FF',
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  infoTitle: {
+  sellerMethodHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sellerMethodLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 12,
+  },
+  sellerMethodText: {
+    flex: 1,
+  },
+  sellerMethodTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1E40AF',
-    marginBottom: 8,
+    marginBottom: 2,
   },
-  infoText: {
-    fontSize: 14,
-    color: '#1E40AF',
-    lineHeight: 22,
+  sellerMethodSubtitle: {
+    fontSize: 13,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  statLabel: {
+    fontSize: 12,
+  },
+  analyticsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginTop: 8,
+    gap: 8,
+  },
+  analyticsButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -710,14 +1055,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingBottom: 20,
-    backgroundColor: '#FFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
   },
   modalTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#1A1A1A',
   },
   closeButton: {
     padding: 4,
@@ -726,20 +1068,49 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
   },
-  modalBanner: {
+  methodTypeSelector: {
+    paddingTop: 20,
+  },
+  selectorTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 16,
+  },
+  methodTypeButton: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
     borderRadius: 12,
-    marginTop: 20,
-    marginBottom: 24,
+    marginBottom: 12,
     gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
-  modalBannerText: {
+  methodTypeText: {
     flex: 1,
-    color: '#FFF',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
+  },
+  methodForm: {
+    paddingTop: 20,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    gap: 8,
+  },
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  formTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 20,
   },
   inputSection: {
     marginBottom: 20,
@@ -747,49 +1118,37 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1A1A1A',
     marginBottom: 8,
-    paddingHorizontal: 4,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    paddingHorizontal: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  inputIcon: {
-    marginRight: 8,
   },
   input: {
-    flex: 1,
     height: 50,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 16,
     fontSize: 16,
-    color: '#1A1A1A',
   },
-  rowInputs: {
+  cryptoSelector: {
     flexDirection: 'row',
+    gap: 12,
+  },
+  cryptoButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 2,
+    alignItems: 'center',
+  },
+  cryptoButtonSelected: {
+    backgroundColor: '#F5F3FF',
+  },
+  cryptoButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
   submitButton: {
     borderRadius: 12,
     overflow: 'hidden',
     marginTop: 8,
-    marginBottom: 20,
-    shadowColor: '#6A0DAD',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  submitButtonDisabled: {
-    opacity: 0.6,
   },
   submitButtonGradient: {
     flexDirection: 'row',
@@ -803,20 +1162,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
-  securityNotice: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#F0F4FF',
-    borderRadius: 12,
-    padding: 16,
-    gap: 12,
-  },
-  securityNoticeText: {
-    flex: 1,
-    fontSize: 13,
-    color: '#1E40AF',
-    lineHeight: 20,
-  },
   comingSoonBox: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -824,14 +1169,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 2,
     borderStyle: 'dashed',
-  },
-  comingSoonText: {
-    fontSize: 16,
-    fontWeight: '600',
     marginTop: 12,
   },
-  comingSoonSubtext: {
+  comingSoonText: {
     fontSize: 14,
-    marginTop: 4,
+    marginTop: 12,
+    textAlign: 'center',
   },
 });

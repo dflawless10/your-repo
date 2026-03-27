@@ -82,6 +82,9 @@ export default function ReviewItemScreen() {
 
       if (response.ok) {
         const data = await response.json();
+        console.log('🐐 Review Item Data:', data);
+        console.log('🐐 Photo URL:', data.photo_url);
+        console.log('🐐 Additional Photos:', data.additional_photos);
         setItem(data);
       } else {
         Alert.alert('Error', 'Could not load item');
@@ -272,11 +275,19 @@ export default function ReviewItemScreen() {
       <View style={[styles.previewSection, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}>
         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Preview</Text>
 
-        <Image
-          source={{ uri: item.photo_url }}
-          style={styles.itemImage}
-          resizeMode="cover"
-        />
+        {item.photo_url ? (
+          <Image
+            source={{ uri: item.photo_url }}
+            style={styles.itemImage}
+            resizeMode="cover"
+            onError={(error) => console.error('🐐 Image load error:', error.nativeEvent)}
+          />
+        ) : (
+          <View style={[styles.itemImage, styles.placeholderImage, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#f0f0f0' }]}>
+            <Ionicons name="image-outline" size={64} color={theme === 'dark' ? '#666' : '#999'} />
+            <Text style={[styles.placeholderText, { color: theme === 'dark' ? '#666' : '#999' }]}>No image available</Text>
+          </View>
+        )}
 
         <View style={styles.itemDetails}>
           <Text style={[styles.itemName, { color: colors.textPrimary }]}>{item.name}</Text>
@@ -468,6 +479,15 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 250,
     backgroundColor: '#f0f0f0',
+  },
+  placeholderImage: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  placeholderText: {
+    marginTop: 12,
+    fontSize: 14,
+    fontWeight: '500',
   },
   itemDetails: {
     padding: 16,

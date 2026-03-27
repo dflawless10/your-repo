@@ -81,6 +81,20 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
   const [buyingExpanded, setBuyingExpanded] = useState(true);
   const [sellingExpanded, setSellingExpanded] = useState(true);
   const [accountExpanded, setAccountExpanded] = useState(true);
+
+// Add to component state
+const [expandedSections, setExpandedSections] = useState<{buying: boolean, selling: boolean, account: boolean}>({
+  buying: false,
+  selling: false, 
+  account: false
+});
+
+// Reset when modal closes
+useEffect(() => {
+  if (!visible) {
+    setExpandedSections({ buying: false, selling: false, account: false });
+  }
+}, [visible]);
   const [cartSlideAnim] = useState(new Animated.Value(0));
   const [lastViewedCounts, setLastViewedCounts] = useState({
     jewelryBox: 0,
@@ -180,22 +194,18 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
         console.warn('Failed to fetch favorites:', e);
       }
 
-      // Fetch seller sales count (delivered orders)
+      // Fetch seller sales count from user profile
       let salesCount = 0;
       try {
-        console.log('🐐 BidGoatMenuModal: Fetching seller orders...');
-        const ordersResponse = await fetch(`${API_BASE_URL}/api/seller/orders`, {
+        console.log('🐐 BidGoatMenuModal: Fetching user profile for sales count...');
+        const profileResponse = await fetch(`${API_BASE_URL}/api/user-profile`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        console.log('🐐 BidGoatMenuModal: Orders response status:', ordersResponse.status);
-        if (ordersResponse.ok) {
-          const ordersData = await ordersResponse.json();
-          const orders = ordersData.orders || [];
-          console.log('🐐 BidGoatMenuModal: Total orders:', orders.length);
-          // Count only delivered orders as sales
-          const deliveredOrders = orders.filter((order: any) => order.order_status === 'delivered');
-          salesCount = deliveredOrders.length;
-          console.log('🐐 BidGoatMenuModal: Delivered orders (sales):', salesCount);
+        if (profileResponse.ok) {
+          const profileData = await profileResponse.json();
+          // Use items_sold from profile (same as seller profile shows)
+          salesCount = profileData.items_sold || 0;
+          console.log('🐐 BidGoatMenuModal: Total sales from profile:', salesCount);
         }
       } catch (e) {
         console.warn('🐐 BidGoatMenuModal: Failed to fetch sales:', e);
@@ -414,7 +424,7 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
       iconBg: '#F3E5F5',
       route: '/premium-benefits',
       isNew: true,
-      subtitle: 'Save 3% on fees + exclusive perks',
+      subtitle: 'Lower fees, priority listings & verified badge',
       isPremiumHighlight: true,
     }]),
     {
@@ -564,6 +574,10 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
         </View>
       )}
       <Ionicons name="chevron-forward" size={18} color={theme === 'dark' ? '#666' : '#CCC'} style={styles.chevron} />
+    <Ionicons
+  name="chevron-down"
+  style={{ transform: [{ rotate: expandedSections.buying ? '180deg' : '0deg' }] }}
+/>
     </TouchableOpacity>
   );
 
@@ -604,68 +618,68 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
             },
           ]}
         >
-          {/* Header */}
-          <LinearGradient
-            colors={['#6A0DAD', '#8B5CF6', '#A78BFA']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.header}
-          >
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={28} color="#FFF" />
-            </TouchableOpacity>
-            
-            <View style={styles.headerContent}>
-              <Avatar
-                uri={avatarUrl || undefined}
-                size={64}
-                variant="gradient"
-                fallbackSource={require('../../assets/goat-icon.png')}
-                cacheKey={avatarUrl || 'default-goat'}
-              />
-              <View style={styles.userInfo}>
-                <Text style={styles.userName}>{username || 'Guest'}</Text>
-                <TouchableOpacity
-                  onPress={() => handleNavigation('/(tabs)/profile')}
-                  style={styles.viewProfileButton}
-                >
-                  <Text style={styles.viewProfileText}>My Profile</Text>
-                  <Ionicons name="arrow-forward" size={14} color="#FFF" />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* User Stats */}
-            {username ? (
-              <View style={styles.statsContainer}>
-                <View style={styles.statItem}>
-                  <Text style={styles.statValue}>{userStats.activeBids}</Text>
-                  <Text style={styles.statLabel}>Active Bids</Text>
-                </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statItem}>
-                  <Text style={styles.statValue}>{userStats.watching}</Text>
-                  <Text style={styles.statLabel}>Watching</Text>
-                </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statItem}>
-                  <Text style={styles.statValue}>{userStats.sales}</Text>
-                  <Text style={styles.statLabel}>Sales</Text>
-                </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statItem}>
-                  <Text style={styles.statValue}>{userStats.purchases}</Text>
-                  <Text style={styles.statLabel}>Collected</Text>
-                </View>
-              </View>
-            ) : null}
-          </LinearGradient>
+          {/* Fixed Close Button - stays on top */}
+          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <Ionicons name="close" size={28} color="#FFF" />
+          </TouchableOpacity>
 
           <ScrollView
             style={[styles.scrollContent, { backgroundColor: colors.background }]}
             showsVerticalScrollIndicator={false}
             bounces={true}
           >
+            {/* Header - Now scrollable */}
+            <LinearGradient
+              colors={['#6A0DAD', '#8B5CF6', '#A78BFA']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.headerScrollable}
+            >
+              <View style={styles.headerContent}>
+                <Avatar
+                  uri={avatarUrl || undefined}
+                  size={64}
+                  variant="gradient"
+                  fallbackSource={require('../../assets/goat-icon.png')}
+                  cacheKey={avatarUrl || 'default-goat'}
+                />
+                <View style={styles.userInfo}>
+                  <Text style={styles.userName}>{username || 'Guest'}</Text>
+                  <TouchableOpacity
+                    onPress={() => handleNavigation('/(tabs)/profile')}
+                    style={styles.viewProfileButton}
+                  >
+                    <Text style={styles.viewProfileText}>My Profile</Text>
+                    <Ionicons name="arrow-forward" size={14} color="#FFF" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* User Stats */}
+              {username ? (
+                <View style={styles.statsContainer}>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statValue}>{userStats.activeBids}</Text>
+                    <Text style={styles.statLabel}>My Active Bids</Text>
+                  </View>
+                  <View style={styles.statDivider} />
+                  <View style={styles.statItem}>
+                    <Text style={styles.statValue}>{userStats.watching}</Text>
+                    <Text style={styles.statLabel}>Watching</Text>
+                  </View>
+                  <View style={styles.statDivider} />
+                  <View style={styles.statItem}>
+                    <Text style={styles.statValue}>{userStats.sales}</Text>
+                    <Text style={styles.statLabel}>Sales</Text>
+                  </View>
+                  <View style={styles.statDivider} />
+                  <View style={styles.statItem}>
+                    <Text style={styles.statValue}>{userStats.purchases}</Text>
+                    <Text style={styles.statLabel}>Collected</Text>
+                  </View>
+                </View>
+              ) : null}
+            </LinearGradient>
             {/* Quick Actions */}
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Quick Actions</Text>
@@ -736,7 +750,7 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
                 <View style={styles.giftFinderContent}>
                   <Ionicons name="gift" size={32} color="#FFF" />
                   <View style={styles.giftFinderText}>
-                    <Text style={styles.giftFinderTitle}>🎁 Gift Finder</Text>
+                    <Text style={styles.giftFinderTitle}>🥚 Gift Finder</Text>
                     <Text style={styles.giftFinderSubtitle}>
                       Find the perfect jewelry gift
                     </Text>
@@ -941,10 +955,19 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     paddingHorizontal: 20,
   },
+  headerScrollable: {
+    paddingTop: 20,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+  },
   closeButton: {
-    alignSelf: 'flex-end',
-    marginBottom: 12,
-    padding: 4,
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 30,
+    right: 20,
+    zIndex: 999,
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
   headerContent: {
     flexDirection: 'row',

@@ -7,7 +7,7 @@ import {
 } from '@react-navigation/native';
 
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
@@ -24,6 +24,7 @@ import {
 import * as Notifications from 'expo-notifications';
 import { ThemeProvider as AppThemeProvider, useTheme } from 'app/theme/ThemeContext';
 import Toast from 'react-native-toast-message';
+import * as Linking from 'expo-linking';
 
 
 function ThemedNavigation({ children }: { children: React.ReactNode }) {
@@ -42,6 +43,38 @@ export default function RootLayout() {
 
   const notificationListener = useRef<Notifications.Subscription | null>(null);
   const responseListener = useRef<Notifications.Subscription | null>(null);
+  const [initialURL, setInitialURL] = useState<string | null>(null);
+
+  // Handle deep links for Stripe Connect onboarding
+  useEffect(() => {
+    const handleDeepLink = (event: { url: string }) => {
+      console.log('🐐 Deep link received:', event.url);
+      const url = event.url;
+
+      // Check if this is a Stripe onboarding completion link
+      // Format: bidgoat://seller/dashboard?onboarding=complete
+      if (url.includes('seller/dashboard') && url.includes('onboarding=complete')) {
+        console.log('🐐 Stripe onboarding completed, navigating to seller dashboard');
+        // The router will handle navigation automatically through expo-router
+      }
+    };
+
+    // Get initial URL (app opened via deep link)
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        console.log('🐐 App opened with deep link:', url);
+        setInitialURL(url);
+        handleDeepLink({ url });
+      }
+    });
+
+    // Listen for deep links while app is running
+    const subscription = Linking.addEventListener('url', handleDeepLink);
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   useEffect(() => {
     const initializeNotifications = async () => {

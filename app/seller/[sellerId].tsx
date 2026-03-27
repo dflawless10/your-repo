@@ -6,7 +6,10 @@ import {
   Image,
   Alert,
   ScrollView,
-  Animated, Share, TouchableOpacity,
+  Animated,
+  Share,
+  TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,6 +43,8 @@ type Review = {
   updated_at: string;
 };
 
+
+
 type Seller = {
   id: number;
   username: string;
@@ -55,6 +60,8 @@ type Seller = {
     buyer_pays_return_shipping: boolean;
     restocking_fee_percent: number;
     authenticity_guarantee: boolean;
+    is_premium_seller?: boolean;
+
     shipping_policy: string;
   };
   review_stats: {
@@ -66,6 +73,7 @@ type Seller = {
     image_quality: number;
     shipping_cost: number;
     shipping_speed: number;
+    is_premium_seller?: boolean;
   };
   recent_reviews: Review[];
 };
@@ -292,12 +300,10 @@ export default function SellerProfileScreen() {
 
   if (loading) {
     return (
-      <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.subLabel}>Loading seller profile…</Text>
-        <ReviewSkeleton  />
-
-
-      </ScrollView>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+        <Text style={[styles.loadingText, { color: colors.textPrimary }]}>Loading seller profile...</Text>
+      </View>
     );
   }
 
@@ -337,7 +343,10 @@ export default function SellerProfileScreen() {
           style={styles.avatar}
         />
         <View style={styles.headerInfo}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>{seller?.username}</Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>
+            {seller?.username}
+
+          </Text>
           {seller?.badge ? <Text style={styles.badge}>{seller.badge}</Text> : null}
           <StarRating
             rating={seller?.review_stats?.avg_rating ?? 0}
@@ -348,11 +357,18 @@ export default function SellerProfileScreen() {
             <Text style={[styles.subLabel, { color: colors.textPrimary }]}>Pricing Power</Text>
           </View>
           <View style={styles.quickRow}>
-            <Text style={[styles.chip, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F3F4F6', color: colors.textPrimary }]}>Sold: {seller?.items_sold}</Text>
-            <Text style={[styles.chip, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F3F4F6', color: colors.textPrimary }]}>Joined: {seller?.joined}</Text>
-            <Text style={[styles.chip, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F3F4F6', color: colors.textPrimary }]}>
-              Positive: {seller?.review_stats?.positive_percent}%
-            </Text>
+            <View style={[styles.statChip, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F3F4F6' }]}>
+              <Text style={[styles.chipLabel, { color: colors.textSecondary }]}>SOLD</Text>
+              <Text style={[styles.chipValue, { color: colors.textPrimary }]}>{seller?.items_sold ?? 0}</Text>
+            </View>
+            <View style={[styles.statChip, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F3F4F6' }]}>
+              <Text style={[styles.chipLabel, { color: colors.textSecondary }]}>JOINED</Text>
+              <Text style={[styles.chipValue, { color: colors.textPrimary }]}>{seller?.joined ?? 'N/A'}</Text>
+            </View>
+            <View style={[styles.statChip, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F3F4F6' }]}>
+              <Text style={[styles.chipLabel, { color: colors.textSecondary }]}>POSITIVE</Text>
+              <Text style={[styles.chipValue, { color: '#10B981' }]}>{seller?.review_stats?.positive_percent ?? 0}%</Text>
+            </View>
           </View>
         </View>
       </View>
@@ -434,6 +450,17 @@ export default function SellerProfileScreen() {
 
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 100,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    fontWeight: '600',
+  },
   scrollContainer: {
     flex: 1,
     backgroundColor: '#F7FAFC',
@@ -601,7 +628,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   headerInfo: { flex: 1, marginLeft: 12 },
   row: { flexDirection: 'row', alignItems: 'center', marginTop: 6, marginRight: 8 },
-  quickRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8, marginRight: 8 },
+  quickRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8, gap: 8 },
   chip: {
     backgroundColor: '#e2e8f0',
     color: '#2d3748',
@@ -610,6 +637,23 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 12,
     fontSize: 12,
+  },
+  statChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  chipLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  chipValue: {
+    fontSize: 14,
+    fontWeight: '700',
   },
   subtleId: { fontSize: 12, color: '#718096', marginBottom: 8 },
   kpiRow: { flexDirection: 'row', gap: 8, marginVertical: 8 },

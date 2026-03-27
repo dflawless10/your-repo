@@ -1,5 +1,5 @@
- import React, { useState } from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { View, Text, Image, StyleSheet, TouchableOpacity, Dimensions, Share, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -7,8 +7,7 @@ import { formatDistanceToNowStrict } from 'date-fns';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '@/config';
 
-const { width } = Dimensions.get('window');
-const CARD_WIDTH = width - 32;
+// Card width is now calculated reactively in the component
 
 type SearchResultItem = {
   item_id: number;
@@ -30,23 +29,30 @@ type SearchResultItem = {
 type Props = {
   item: SearchResultItem;
   onPress?: (itemId: number) => void;
-  onHeartPress?: (itemId: number) => void;
-  isFavorited?: boolean;
   showRelevanceScore?: boolean;
+onHeartPress?: (itemId: number) => void;
+isFavorited?: boolean;
 };
+
 
 export const ElasticsearchResultCard: React.FC<Props> = ({
   item,
   onPress,
-  onHeartPress,
-  isFavorited = false,
   showRelevanceScore = false,
 }) => {
   const router = useRouter();
   const placeholder = require('../../assets/goat-icon.png');
 
-  // Track favorite state internally
-  const [isLocalFavorited, setIsLocalFavorited] = useState(isFavorited);
+  // Reactive card width for landscape support
+  const { width, height } = Dimensions.get('window');
+  const isLandscape = useMemo(() => width > height, [width, height]);
+  const NUM_COLUMNS = isLandscape ? 3 : 1;
+  const CARD_WIDTH = useMemo(() =>
+    isLandscape
+      ? (width - 32 - 12 * (NUM_COLUMNS - 1)) / NUM_COLUMNS
+      : width - 32,
+    [width, isLandscape, NUM_COLUMNS]
+  );
 
   const displayName =
     item.name?.trim() ||
@@ -66,7 +72,7 @@ export const ElasticsearchResultCard: React.FC<Props> = ({
     displayPrice = item.buy_it_now;
     priceLabel = 'BUY NOW';
   } else if (isMustSell) {
-    // Must Sell items: show highest bid if available, otherwise "BEST OFFER"
+    // Must Sell items: show the highest bid if available, otherwise "BEST OFFER"
     if (item.highest_bid && item.highest_bid > 0) {
       displayPrice = item.highest_bid;
       priceLabel = 'CURRENT BID';
@@ -158,43 +164,25 @@ export const ElasticsearchResultCard: React.FC<Props> = ({
     }
   };
 
-  const handleHeartPress = async (e: any) => {
+  const handleSharePress = async (e: any) => {
     e.stopPropagation();
 
     try {
-      const token = await AsyncStorage.getItem('jwtToken');
-      if (!token) {
-        console.warn('🐐 ElasticsearchCard: No token found');
-        return;
-      }
+      const shareUrl = `https://bidgoat.com/listing/${item.item_id}`;
 
-      // Toggle favorite in backend
-      const newFavoriteStatus = !isLocalFavorited;
-
-      // Add or Remove from favorites
-      const fetchUrl = newFavoriteStatus
-        ? `${API_BASE_URL}/api/favorites`
-        : `${API_BASE_URL}/api/favorites/${item.item_id}`;
-      const fetchMethod = newFavoriteStatus ? 'POST' : 'DELETE';
-
-      await fetch(fetchUrl, {
-        method: fetchMethod,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: newFavoriteStatus ? JSON.stringify({ item_id: item.item_id }) : null,
+      const result = await Share.share({
+        title: 'Check out this BidGoat listing!',
+        message: `Take a look at this item on BidGoat 🐐\n${shareUrl}`,
       });
 
-      console.log(`🐐 ElasticsearchCard: Item ${item.item_id} ${newFavoriteStatus ? 'added to' : 'removed from'} favorites`);
-
-      // Call parent handler to update state and local state
-      setIsLocalFavorited(newFavoriteStatus);
-      if (onHeartPress) {
-        onHeartPress(item.item_id);
+      if (result.action === Share.sharedAction) {
+        console.log('🐐 ElasticsearchCard: Item shared successfully');
+      } else if (result.action === Share.dismissedAction) {
+        console.log('🐐 ElasticsearchCard: Share dismissed');
       }
     } catch (err) {
-      console.error('🐐 ElasticsearchCard: Failed to toggle favorite:', err);
+      console.error('🐐 ElasticsearchCard: Failed to share:', err);
+      Alert.alert('Share Failed', 'Unable to share this item. Please try again.');
     }
   };
 
@@ -204,6 +192,7 @@ export const ElasticsearchResultCard: React.FC<Props> = ({
       activeOpacity={0.95}
       style={[
         styles.cardContainer,
+        { width: CARD_WIDTH },
         rarity !== 'common' && {
           borderColor: config.borderColor,
           borderWidth: 2,
@@ -259,22 +248,20 @@ export const ElasticsearchResultCard: React.FC<Props> = ({
           )}
         </View>
 
-        {/* Heart Icon */}
-        {onHeartPress && (
-          <TouchableOpacity
-            onPress={handleHeartPress}
-            style={styles.heartButton}
-            activeOpacity={0.8}
-          >
-            <View style={styles.heartBackground}>
-              <Ionicons
-                name={isLocalFavorited ? 'heart' : 'heart-outline'}
-                size={22}
-                color={isLocalFavorited ? '#FF6B6B' : '#666'}
-              />
-            </View>
-          </TouchableOpacity>
-        )}
+        {/* Share Button */}
+        <TouchableOpacity
+          onPress={handleSharePress}
+          style={styles.shareButton}
+          activeOpacity={0.8}
+        >
+          <View style={styles.shareBackground}>
+            <Ionicons
+              name="share-social-outline"
+              size={22}
+              color="#6A0DAD"
+            />
+          </View>
+        </TouchableOpacity>
 
         {/* Relevance Score (Debug Mode) */}
         {showRelevanceScore && item._score && (
@@ -363,7 +350,6 @@ export const ElasticsearchResultCard: React.FC<Props> = ({
 
 const styles = StyleSheet.create({
   cardContainer: {
-    width: CARD_WIDTH,
     borderRadius: 16,
     backgroundColor: '#fff',
     marginHorizontal: 16,
@@ -475,22 +461,22 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.5,
   },
-  heartButton: {
+  shareButton: {
     position: 'absolute',
     top: 12,
     right: 12,
     zIndex: 2,
   },
-  heartBackground: {
+  shareBackground: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 24,
     width: 44,
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: '#6A0DAD',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 3,
   },

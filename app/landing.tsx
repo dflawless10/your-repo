@@ -26,7 +26,7 @@ export default function LandingPage() {
         >
           <Ionicons name="arrow-back" size={24} color="#1F2937" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Learn Why We're Different</Text>
+        <Text style={styles.headerTitle}>Learn Why We&#39;re Different</Text>
         <View style={{ width: 24 }} />
       </View>
 
@@ -45,6 +45,29 @@ export default function LandingPage() {
           While others run 25-year-old auction systems, we built the future
         </Text>
       </LinearGradient>
+
+      {/* Early CTA Section - After Hero */}
+      <View style={styles.earlyCtaSection}>
+        <Text style={styles.earlyCtaTitle}>Ready to Bid Smarter?</Text>
+        <Text style={styles.earlyCtaSubtitle}>
+          Join thousands who've upgraded from legacy platforms
+        </Text>
+
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={() => router.push('/register')}
+        >
+          <Text style={styles.primaryButtonText}>Get Started Free</Text>
+          <Ionicons name="arrow-forward" size={20} color="#FFF" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.earlySecondaryButton}
+          onPress={() => router.push('/sign-in')}
+        >
+          <Text style={styles.earlySecondaryButtonText}>Sign In</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* The Problem Section */}
       <View style={styles.section}>
@@ -264,6 +287,19 @@ const styles = StyleSheet.create({
   backButton: {
     padding: 8,
   },
+  heroHeader: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 10,
+  marginBottom: 12,
+},
+
+appIcon: {
+  width: 42,
+  height: 42,
+  borderRadius: 8,
+},
+
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
@@ -453,6 +489,40 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6B7280',
     textAlign: 'center',
+  },
+  earlyCtaSection: {
+    paddingHorizontal: 24,
+    paddingVertical: 40,
+    backgroundColor: '#FFF',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  earlyCtaTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#1F2937',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  earlyCtaSubtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginBottom: 32,
+    textAlign: 'center',
+  },
+  earlySecondaryButton: {
+    backgroundColor: 'transparent',
+    paddingVertical: 16,
+    paddingHorizontal: 48,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#6B7280',
+  },
+  earlySecondaryButtonText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
   },
   ctaSection: {
     paddingHorizontal: 24,

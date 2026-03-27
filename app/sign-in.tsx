@@ -27,6 +27,7 @@ const LoginScreen = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const router = useRouter();
   const { login: authLogin } = useAuth();
 
@@ -34,6 +35,65 @@ const LoginScreen = () => {
   const goatAnim = useRef(new Animated.Value(0)).current;
   const stampRotate = useRef(new Animated.Value(0)).current;
   const stampScale = useRef(new Animated.Value(1)).current;
+
+  // Auto-login with remembered token on mount
+  useEffect(() => {
+    const autoLogin = async () => {
+      try {
+        const remembered = await AsyncStorage.getItem('rememberMe');
+        const savedToken = await AsyncStorage.getItem('jwtToken');
+        const savedEmail = await AsyncStorage.getItem('rememberedEmail');
+
+        if (remembered === 'true' && savedToken && savedEmail) {
+          setLoading(true);
+          setRememberMe(true);
+          setEmail(savedEmail);
+
+          try {
+            // Verify token is still valid by fetching user profile
+            const userProfile = await getUserProfile(savedToken);
+
+            if (userProfile?.username) {
+              // Token is valid, auto-login
+              await authLogin(savedToken, userProfile.username);
+
+              // Save full profile
+              await AsyncStorage.setItem('profile', JSON.stringify(userProfile));
+              if (userProfile.id) {
+                await AsyncStorage.setItem('userId', userProfile.id.toString());
+              }
+              if (userProfile.avatar_url) {
+                await AsyncStorage.setItem('avatar_url', userProfile.avatar_url);
+              }
+
+              console.log('🐐 Auto-login successful with remembered token');
+
+              // Navigate to home
+              setTimeout(() => {
+                router.replace('/(tabs)/');
+              }, 300);
+            } else {
+              // Token invalid, clear it
+              await AsyncStorage.removeItem('rememberMe');
+              await AsyncStorage.removeItem('rememberedEmail');
+            }
+          } catch (error) {
+            // Token expired or invalid, clear it
+            console.log('Remembered token invalid, clearing...');
+            await AsyncStorage.removeItem('rememberMe');
+            await AsyncStorage.removeItem('rememberedEmail');
+          } finally {
+            setLoading(false);
+          }
+        }
+      } catch (error) {
+        console.error('Error during auto-login:', error);
+        setLoading(false);
+      }
+    };
+
+    autoLogin();
+  }, []);
 
   // Subtle idle animation for the goat stamp
   useEffect(() => {
@@ -95,6 +155,16 @@ const LoginScreen = () => {
       const token = await loginUser(email.trim(), password.trim());
 
       if (token) {
+        // Save or clear "remember me" preference based on checkbox
+        // Note: We only save the email, NOT the password (token is already saved)
+        if (rememberMe) {
+          await AsyncStorage.setItem('rememberMe', 'true');
+          await AsyncStorage.setItem('rememberedEmail', email.trim());
+        } else {
+          await AsyncStorage.removeItem('rememberMe');
+          await AsyncStorage.removeItem('rememberedEmail');
+        }
+
         await AsyncStorage.setItem('email', email.trim());
 
         const userProfile = await getUserProfile(token);
@@ -153,11 +223,7 @@ const LoginScreen = () => {
 
   const handleForgotPassword = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    Alert.alert(
-      'Reset Password',
-      'Password reset functionality coming soon! Please contact support for assistance.',
-      [{ text: 'OK' }]
-    );
+    router.push('/forgot-password');
   };
 
   const handleEmailChange = (text: string) => {
@@ -259,12 +325,26 @@ const LoginScreen = () => {
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity
-            style={styles.forgotPassword}
-            onPress={handleForgotPassword}
-          >
-            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-          </TouchableOpacity>
+          {/* Remember Me & Forgot Password Row */}
+          <View style={styles.optionsRow}>
+            <TouchableOpacity
+              style={styles.rememberMeContainer}
+              onPress={() => setRememberMe(!rememberMe)}
+              disabled={loading}
+            >
+              <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+                {rememberMe && <Ionicons name="checkmark" size={16} color="#FFF" />}
+              </View>
+              <Text style={styles.rememberMeText}>Remember me</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.forgotPassword}
+              onPress={handleForgotPassword}
+            >
+              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+            </TouchableOpacity>
+          </View>
 
           {/* Sign In Button */}
           <TouchableOpacity
@@ -392,9 +472,38 @@ const styles = StyleSheet.create({
   eyeButton: {
     padding: 8,
   },
-  forgotPassword: {
-    alignSelf: 'flex-end',
+  optionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 24,
+  },
+  rememberMeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF',
+  },
+  checkboxChecked: {
+    backgroundColor: '#8B5CF6',
+    borderColor: '#8B5CF6',
+  },
+  rememberMeText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  forgotPassword: {
+    paddingVertical: 4,
   },
   forgotPasswordText: {
     color: '#8B5CF6',

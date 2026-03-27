@@ -48,69 +48,46 @@ export function useSimilarItemsSearch(currentItem: AuctionItem | null) {
 };
 
   useEffect(() => {
-    if (!currentItem) return;
+    if (!currentItem?.id) return;
 
-    const filters = {
-      categories: [currentItem.category_id.toString()],
-      priceRange: {
-        min: Number(currentItem.price) * 0.8,
-        max: Number(currentItem.price) * 1.2,
-      },
-      condition: currentItem.condition ? [currentItem.condition] : [],
-    };
+    const fetchSimilar = async () => {
+      setLoading(true);
+      try {
+        // Use the dedicated similar items endpoint
+        const res = await fetch(`${API_URL}/items/${currentItem.id}/similar`);
+        const similarItemsData = await res.json();
 
-    const params: SearchParams = {
-      filters,
-      facets: ['categories', 'price_ranges', 'materials', 'conditions'],
-      limit: 10,
-    };
+        // Filter for approved items only (backend should already do this, but double-check)
+        const approvedItems = similarItemsData.filter((i: any) =>
+          i.moderation_status === 'approved'
+        );
 
-    setLoading(true);
-    performSearch(params)
-      .then((res) => {
-        setSimilarItems(res.items.filter((i: AuctionItem) => i.id !== currentItem.id));
-        setFacets(res.facets);
-      })
-      .catch((err) => console.error('Similar items search failed:', err))
-      .finally(() => setLoading(false));
-  }, [currentItem]);
+        setSimilarItems(approvedItems);
+      } catch (err) {
+        console.error('Failed to fetch similar items from /similar endpoint:', err);
 
-   function useSimilarItemsSearch(currentItem: ItemDetails | null) {
-    const [similarItems, setSimilarItems] = useState<AuctionItem[]>([]);
-    const [loading, setLoading] = useState(false);
-
-    useEffect(() => {
-      if (!currentItem?.category) return;
-
-      const fetchSimilar = async () => {
-        setLoading(true);
+        // Fallback to discover endpoint
         try {
           const res = await fetch(`${API_URL}/items/discover`);
           const allItems = await res.json();
           const filtered = allItems
-            .filter((i: any) => i.category === currentItem.category && i.id !== currentItem.id)
-            .slice(0, 5)
-            .map((i: any) => ({
-              id: i.id,
-              title: i.name || i.title,
-              description: i.description || '',
-              image: i.photo_url,
-              price: i.price || 0,
-              mascot: {emoji: '🐐'},
-              isFavorite: false,
-            }));
+            .filter((i: any) =>
+              i.category === currentItem.category &&
+              i.id !== currentItem.id &&
+              i.moderation_status === 'approved'
+            )
+            .slice(0, 12);
           setSimilarItems(filtered);
-        } catch (err) {
-          console.error('Failed to fetch similar items:', err);
-        } finally {
-          setLoading(false);
+        } catch (fallbackErr) {
+          console.error('Failed to fetch from discover fallback:', fallbackErr);
         }
-      };
+      } finally {
+        setLoading(false);
+      }
+    };
 
-      fetchSimilar();
-    }, [currentItem]);
-
-  }
+    fetchSimilar();
+  }, [currentItem])
 
   return {similarItems, facets, loading}
 }

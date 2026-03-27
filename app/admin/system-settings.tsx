@@ -10,6 +10,7 @@ import {
   Switch,
   TextInput,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -36,16 +37,18 @@ export default function SystemSettingsScreen() {
   const headerOpacity = useRef(new Animated.Value(0)).current;
   const headerScale = useRef(new Animated.Value(1)).current;
 
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<Settings>({
     maintenance_mode: false,
     allow_new_registrations: true,
-    max_item_images: 10,
+    max_item_images: 5,
     auction_extension_minutes: 5,
     featured_item_cost: 9.99,
   });
 
   useEffect(() => {
-    loadSettings();
+    checkSuperAdminAccess();
   }, []);
 
   useEffect(() => {
@@ -73,6 +76,44 @@ export default function SystemSettingsScreen() {
       });
     }, 500);
   }, []);
+
+  const checkSuperAdminAccess = async () => {
+    try {
+      const token = await AsyncStorage.getItem('jwtToken');
+      if (!token) {
+        Alert.alert('Access Denied', 'Please sign in to access System Settings.');
+        router.back();
+        return;
+      }
+
+      // Check if user is super admin (chicagofiregaming@gmail.com)
+      const response = await fetch(`${API_BASE_URL}/api/user-profile`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+
+        // Only allow super admin email
+        if (data.email?.toLowerCase() === 'chicagofiregaming@gmail.com' && data.is_admin) {
+          setIsSuperAdmin(true);
+          loadSettings();
+        } else {
+          Alert.alert('Access Denied', 'System Settings are restricted to the platform owner only.');
+          router.back();
+        }
+      } else {
+        Alert.alert('Error', 'Failed to verify access.');
+        router.back();
+      }
+    } catch (error) {
+      console.error('Error checking super admin access:', error);
+      Alert.alert('Error', 'Failed to verify access.');
+      router.back();
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadSettings = async () => {
     try {
@@ -121,6 +162,19 @@ export default function SystemSettingsScreen() {
     </View>
   );
 
+  if (loading) {
+    return (
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={isDark ? '#B794F4' : '#6A0DAD'} />
+        <Text style={[styles.loadingText, { color: colors.textPrimary }]}>Verifying access...</Text>
+      </View>
+    );
+  }
+
+  if (!isSuperAdmin) {
+    return null; // Already redirected
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Stack.Screen options={{ headerShown: false }} />
@@ -150,34 +204,7 @@ export default function SystemSettingsScreen() {
           </Text>
         </LinearGradient>
 
-        {/* Platform Settings */}
-        <View style={[styles.section, { backgroundColor: colors.surface, borderColor: isDark ? '#333' : 'transparent' }]}>
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Platform</Text>
-
-          <SettingRow
-            title="Maintenance Mode"
-            subtitle="Disable site for maintenance"
-          >
-            <Switch
-              value={settings.maintenance_mode}
-              onValueChange={(value) => updateSetting('maintenance_mode', value)}
-              thumbColor={settings.maintenance_mode ? '#6A0DAD' : '#F3F4F6'}
-              trackColor={{ false: isDark ? '#555' : '#ccc', true: '#A78BFA' }}
-            />
-          </SettingRow>
-
-          <SettingRow
-            title="New Registrations"
-            subtitle="Allow new users to register"
-          >
-            <Switch
-              value={settings.allow_new_registrations}
-              onValueChange={(value) => updateSetting('allow_new_registrations', value)}
-              thumbColor={settings.allow_new_registrations ? '#6A0DAD' : '#F3F4F6'}
-              trackColor={{ false: isDark ? '#555' : '#ccc', true: '#A78BFA' }}
-            />
-          </SettingRow>
-        </View>
+        {/* Platform Settings - Removed Maintenance Mode and New Registrations */}
 
         {/* Auction Settings */}
         <View style={[styles.section, { backgroundColor: colors.surface, borderColor: isDark ? '#333' : 'transparent' }]}>
@@ -200,18 +227,10 @@ export default function SystemSettingsScreen() {
             title="Extension Time"
             subtitle="Minutes to extend auction on late bids"
           >
-            <View style={[styles.inputContainer, { backgroundColor: isDark ? '#1a1a1a' : '#F5F5F5' }]}>
-              <TextInput
-                style={[styles.input, { color: colors.textPrimary }]}
-                value={settings.auction_extension_minutes.toString()}
-                onChangeText={(text) => {
-                  const value = parseInt(text) || 0;
-                  setSettings({ ...settings, auction_extension_minutes: value });
-                }}
-                onBlur={() => updateSetting('auction_extension_minutes', settings.auction_extension_minutes)}
-                keyboardType="number-pad"
-                placeholderTextColor={isDark ? '#666' : '#999'}
-              />
+            <View style={[styles.readOnlyContainer, { backgroundColor: isDark ? '#1a1a1a' : '#F5F5F5' }]}>
+              <Text style={[styles.readOnlyValue, { color: colors.textPrimary }]}>
+                {settings.auction_extension_minutes}
+              </Text>
               <Text style={[styles.inputSuffix, { color: colors.textSecondary }]}>min</Text>
             </View>
           </SettingRow>
@@ -225,54 +244,12 @@ export default function SystemSettingsScreen() {
             title="Max Images Per Item"
             subtitle="Maximum photos sellers can upload"
           >
-            <View style={[styles.inputContainer, { backgroundColor: isDark ? '#1a1a1a' : '#F5F5F5' }]}>
-              <TextInput
-                style={[styles.input, { color: colors.textPrimary }]}
-                value={settings.max_item_images.toString()}
-                onChangeText={(text) => {
-                  const value = parseInt(text) || 1;
-                  setSettings({ ...settings, max_item_images: value });
-                }}
-                onBlur={() => updateSetting('max_item_images', settings.max_item_images)}
-                keyboardType="number-pad"
-                placeholderTextColor={isDark ? '#666' : '#999'}
-              />
+            <View style={[styles.readOnlyContainer, { backgroundColor: isDark ? '#1a1a1a' : '#F5F5F5' }]}>
+              <Text style={[styles.readOnlyValue, { color: colors.textPrimary }]}>
+                {settings.max_item_images}
+              </Text>
             </View>
           </SettingRow>
-
-          <SettingRow
-            title="Featured Item Cost"
-            subtitle="Price to feature an item"
-          >
-            <View style={[styles.inputContainer, { backgroundColor: isDark ? '#1a1a1a' : '#F5F5F5' }]}>
-              <Text style={[styles.inputPrefix, { color: colors.textSecondary }]}>$</Text>
-              <TextInput
-                style={[styles.input, { color: colors.textPrimary }]}
-                value={settings.featured_item_cost.toString()}
-                onChangeText={(text) => {
-                  const value = parseFloat(text) || 0;
-                  setSettings({ ...settings, featured_item_cost: value });
-                }}
-                onBlur={() => updateSetting('featured_item_cost', settings.featured_item_cost)}
-                keyboardType="decimal-pad"
-                placeholderTextColor={isDark ? '#666' : '#999'}
-              />
-            </View>
-          </SettingRow>
-        </View>
-
-        {/* Danger Zone */}
-        <View style={[styles.section, styles.dangerSection, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.sectionTitle, { color: '#F44336' }]}>Danger Zone</Text>
-
-          <TouchableOpacity
-            style={[styles.dangerButton, { borderBottomColor: isDark ? '#331111' : '#FFEBEE' }]}
-            onPress={() => Alert.alert('Coming Soon', 'Database backup feature')}
-          >
-            <Ionicons name="save" size={20} color="#F44336" />
-            <Text style={styles.dangerButtonText}>Backup Database</Text>
-            <Ionicons name="chevron-forward" size={20} color="#F44336" />
-          </TouchableOpacity>
         </View>
 
         <View style={{ height: 40 }} />
@@ -284,6 +261,18 @@ export default function SystemSettingsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F9FA' },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1A1A1A',
+  },
   pageHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -368,35 +357,22 @@ const styles = StyleSheet.create({
   settingText: { flex: 1, marginRight: 16 },
   settingTitle: { fontSize: 16, fontWeight: '600', color: '#1A1A1A', marginBottom: 4 },
   settingSubtitle: { fontSize: 13, color: '#666' },
-  inputContainer: {
+  readOnlyContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F5F5F5',
     borderRadius: 8,
     paddingHorizontal: 12,
+    paddingVertical: 10,
     minWidth: 100,
   },
-  input: {
-    padding: 8,
+  readOnlyValue: {
     fontSize: 16,
+    fontWeight: '600',
     color: '#1A1A1A',
     minWidth: 60,
     textAlign: 'right',
   },
   inputPrefix: { fontSize: 16, color: '#666', marginRight: 4 },
   inputSuffix: { fontSize: 14, color: '#666', marginLeft: 4 },
-  dangerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#FFEBEE',
-    gap: 12,
-  },
-  dangerButtonText: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#F44336',
-  },
 });

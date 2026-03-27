@@ -21,6 +21,7 @@ export interface CartItem {
     memberSince: string;
     rating: number;
     reviewCount: number;
+    itemsSold?: number;
     shippingPolicy: string;
     returnPolicyDays: number;
   };
@@ -118,6 +119,15 @@ export default function ReceiptView({
                 </>
               )}
             </View>
+
+            {seller.itemsSold !== undefined && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="checkmark-circle-outline" size={14} color={colors.textSecondary} />
+                <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+                  {seller.itemsSold} sales
+                </Text>
+              </View>
+            )}
 
             {seller.shippingPolicy && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>

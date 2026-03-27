@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Platform, Alert,
+  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -424,11 +425,11 @@ export default function NotificationsScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <EnhancedHeader scrollY={scrollY} onSearch={() => {}} />
 
       {/* Page Header with Back Button */}
-      <Animated.View style={[styles.pageHeader, {
+      <View style={[styles.pageHeader, {
         backgroundColor: colors.background,
         borderBottomColor: theme === 'dark' ? '#333' : '#E5E5E5'
       }]}>
@@ -436,113 +437,114 @@ export default function NotificationsScreen() {
           <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
         </TouchableOpacity>
         <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Notifications</Text>
-      </Animated.View>
+      </View>
 
-      <View style={[styles.content, { backgroundColor: colors.background }]}>
-        {/* Filter Toggle */}
-        <View style={[styles.filterContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
+      {/* Filter Toggle */}
+      <View style={[styles.filterContainer, {
+        backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF',
+        borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0'
+      }]}>
+        <TouchableOpacity
+          onPress={() => setFilter('all')}
+          style={[
+            styles.filterButton,
+            filter === 'all' && { backgroundColor: theme === 'dark' ? '#3730A3' : '#6A0DAD' }
+          ]}
+        >
+          <Text style={[
+            styles.filterButtonText,
+            filter === 'all' ? { color: '#FFF' } : { color: theme === 'dark' ? '#9CA3AF' : '#666' }
+          ]}>
+            All
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setFilter('saved')}
+          style={[
+            styles.filterButton,
+            filter === 'saved' && { backgroundColor: theme === 'dark' ? '#3730A3' : '#6A0DAD' }
+          ]}
+        >
+          <Text style={[
+            styles.filterButtonText,
+            filter === 'saved' ? { color: '#FFF' } : { color: theme === 'dark' ? '#9CA3AF' : '#666' }
+          ]}>
+            Saved
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Header Stats */}
+      {unreadCount > 0 ? (
+        <View style={[styles.statsHeader, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F9FAFB' }]}>
+          <View style={[styles.unreadBadge, { backgroundColor: theme === 'dark' ? '#3730A3' : '#6A0DAD' }]}>
+            <Text style={styles.unreadBadgeText}>{unreadCount} unread</Text>
+          </View>
           <TouchableOpacity
-            onPress={() => setFilter('all')}
-            style={[
-              styles.filterButton,
-              filter === 'all' && { backgroundColor: theme === 'dark' ? '#3730A3' : '#6A0DAD' }
-            ]}
+            onPress={markAllAsRead}
+            style={[styles.markAllButton, { backgroundColor: theme === 'dark' ? '#3730A3' : '#6A0DAD' }]}
           >
-            <Text style={[
-              styles.filterButtonText,
-              filter === 'all' ? { color: '#FFF' } : { color: theme === 'dark' ? '#9CA3AF' : '#666' }
-            ]}>
-              All
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setFilter('saved')}
-            style={[
-              styles.filterButton,
-              filter === 'saved' && { backgroundColor: theme === 'dark' ? '#3730A3' : '#6A0DAD' }
-            ]}
-          >
-            <Text style={[
-              styles.filterButtonText,
-              filter === 'saved' ? { color: '#FFF' } : { color: theme === 'dark' ? '#9CA3AF' : '#666' }
-            ]}>
-              Saved
-            </Text>
+            <Ionicons name="checkmark-done" size={16} color="#FFF" />
+            <Text style={styles.markAllButtonText}>Mark All Read</Text>
           </TouchableOpacity>
         </View>
+      ) : notifications.length > 0 && filter === 'all' && (
+        <View style={[styles.statsHeader, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F9FAFB' }]}>
+          <Text style={[styles.allReadText, { color: theme === 'dark' ? '#9CA3AF' : '#666' }]}>
+            All caught up! 🎉
+          </Text>
+          <TouchableOpacity
+            onPress={() => {
+              Alert.alert(
+                'Delete All Notifications',
+                'Are you sure you want to delete all read notifications?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Delete All',
+                    style: 'destructive',
+                    onPress: deleteAllNotifications,
+                  },
+                ]
+              );
+            }}
+            style={[styles.deleteAllButton, { backgroundColor: '#FF6B35' }]}
+          >
+            <Ionicons name="trash-outline" size={16} color="#FFF" />
+            <Text style={styles.deleteAllButtonText}>Delete All</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
-        {/* Header Stats */}
-        {unreadCount > 0 ? (
-          <View style={[styles.statsHeader, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F9FAFB' }]}>
-            <View style={[styles.unreadBadge, { backgroundColor: theme === 'dark' ? '#3730A3' : '#6A0DAD' }]}>
-              <Text style={styles.unreadBadgeText}>{unreadCount} unread</Text>
-            </View>
-            <TouchableOpacity
-              onPress={markAllAsRead}
-              style={[styles.markAllButton, { backgroundColor: theme === 'dark' ? '#3730A3' : '#6A0DAD' }]}
-            >
-              <Ionicons name="checkmark-done" size={16} color="#FFF" />
-              <Text style={styles.markAllButtonText}>Mark All Read</Text>
-            </TouchableOpacity>
-          </View>
-        ) : notifications.length > 0 && filter === 'all' && (
-          <View style={[styles.statsHeader, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F9FAFB' }]}>
-            <Text style={[styles.allReadText, { color: theme === 'dark' ? '#9CA3AF' : '#666' }]}>
-              All caught up! 🎉
+      <FlatList
+        data={filter === 'saved' ? notifications.filter(n => n.is_saved) : notifications}
+        renderItem={renderNotification}
+        keyExtractor={item => item.id.toString()}
+        contentContainerStyle={styles.listContainer}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#6A0DAD"
+          />
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Ionicons name="notifications-off-outline" size={64} color={theme === 'dark' ? '#666' : '#CCC'} />
+            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No notifications yet</Text>
+            <Text style={[styles.emptySubtitle, { color: theme === 'dark' ? '#9CA3AF' : '#666' }]}>
+              When you have new activity, you&#39;ll see it here
             </Text>
-            <TouchableOpacity
-              onPress={() => {
-                Alert.alert(
-                  'Delete All Notifications',
-                  'Are you sure you want to delete all read notifications?',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Delete All',
-                      style: 'destructive',
-                      onPress: deleteAllNotifications,
-                    },
-                  ]
-                );
-              }}
-              style={[styles.deleteAllButton, { backgroundColor: '#FF6B35' }]}
-            >
-              <Ionicons name="trash-outline" size={16} color="#FFF" />
-              <Text style={styles.deleteAllButtonText}>Delete All</Text>
-            </TouchableOpacity>
           </View>
+        }
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
         )}
-
-        <FlatList
-          data={filter === 'saved' ? notifications.filter(n => n.is_saved) : notifications}
-          renderItem={renderNotification}
-          keyExtractor={item => item.id.toString()}
-          contentContainerStyle={styles.listContainer}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor="#6A0DAD"
-            />
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Ionicons name="notifications-off-outline" size={64} color={theme === 'dark' ? '#666' : '#CCC'} />
-              <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No notifications yet</Text>
-              <Text style={[styles.emptySubtitle, { color: theme === 'dark' ? '#9CA3AF' : '#666' }]}>
-                When you have new activity, you&#39;ll see it here
-              </Text>
-            </View>
-          }
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            { useNativeDriver: false }
-          )}
-          scrollEventThrottle={16}
-        />
-      </View>
-       <GlobalFooter />
-    </View>
+        scrollEventThrottle={16}
+      />
+      <GlobalFooter />
+    </SafeAreaView>
   );
 }
 
@@ -551,27 +553,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   pageHeader: {
-  position: 'absolute',
-  top: HEADER_MAX_HEIGHT,
-  left: 0,
-  right: 0,
-  flexDirection: 'row',
-  alignItems: 'center',
-  paddingHorizontal: 16,
-  paddingVertical: 12,
-  borderBottomWidth: 0,
-  zIndex: 10,
-},
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
   backButton: {
     marginRight: 12,
   },
   pageTitle: {
     fontSize: 20,
     fontWeight: '700',
-  },
-  content: {
-    flex: 1,
-    marginTop: HEADER_MAX_HEIGHT + 48,
   },
   loadingContainer: {
     flex: 1,

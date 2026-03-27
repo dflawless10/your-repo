@@ -81,7 +81,7 @@ export default function DiamondAppraisalScreen() {
 
       <View style={styles.headerTitleContainer}>
         <Text style={styles.headerTitleText}>💎 Diamond Price Calculator</Text>
-        <Text style={styles.headerSubtitle}>Calculate your diamond's market value</Text>
+        <Text style={styles.headerSubtitle}>Calculate your diamond&#39;s market value</Text>
       </View>
 
       <Animated.ScrollView
@@ -186,12 +186,12 @@ export default function DiamondAppraisalScreen() {
               }}
             />
             <Text style={styles.helpText}>
-              💡 Buyers can verify this certificate number on the lab's official website
+              💡 Buyers can verify this certificate number on the lab&#39;s official website
             </Text>
           </>
         ) : (
           <Text style={[styles.helpText, { color: '#999' }]}>
-            Select "Yes - GIA/IGI Certified" above to add certification details
+            Select &#34;Yes - GIA/IGI Certified&#34; above to add certification details
           </Text>
         )}
 
