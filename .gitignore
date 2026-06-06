@@ -51,6 +51,7 @@ GoogleService-Info.plist
 # Build artifacts
 *.apk
 *.aab
+android/app/debug.keystore
 
 # SSL certificates
 *.zip
