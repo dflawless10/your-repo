@@ -31,46 +31,43 @@ export default function ReviewItemScreen() {
   const [loading, setLoading] = useState(true);
   const [timeRemaining, setTimeRemaining] = useState<string>('');
 
-  // Refresh item data when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
-      fetchItem();
+      void fetchItem();
     }, [itemId])
   );
 
   useEffect(() => {
-    // Fade in header title and arrow - wait for screen to fully render first
     setTimeout(() => {
       Animated.timing(headerOpacity, {
         toValue: 1,
-        duration: 2000, // 2 seconds - slow and dramatic
+        duration: 2000,
         useNativeDriver: true,
       }).start(() => {
-        // After fade-in completes, start pulsing animation
         Animated.loop(
           Animated.sequence([
-            Animated.timing(headerScale, {
-              toValue: 1.05,
-              duration: 1500,
-              useNativeDriver: true,
-            }),
-            Animated.timing(headerScale, {
-              toValue: 1,
-              duration: 1500,
-              useNativeDriver: true,
-            }),
+            Animated.timing(headerScale, { toValue: 1.05, duration: 1500, useNativeDriver: true }),
+            Animated.timing(headerScale, { toValue: 1, duration: 1500, useNativeDriver: true }),
           ])
         ).start();
       });
-    }, 500); // 500ms delay - let screen render fully first
+    }, 500);
   }, []);
 
   useEffect(() => {
-    if (item) {
-      updateTimeRemaining(); // Call immediately when item loads
-      const interval = setInterval(updateTimeRemaining, 1000);
-      return () => clearInterval(interval);
-    }
+    if (!item) return;
+    updateTimeRemaining();
+    const interval = setInterval(updateTimeRemaining, 1000);
+    return () => clearInterval(interval);
+  }, [item]);
+
+  // Poll every 30 s once review_ends_at has passed so we detect when backend publishes
+  useEffect(() => {
+    if (!item) return;
+    const reviewEnds = item.review_ends_at ? new Date(item.review_ends_at) : null;
+    if (reviewEnds && new Date() < reviewEnds) return;
+    const poll = setInterval(() => { void fetchItem(); }, 30000);
+    return () => clearInterval(poll);
   }, [item]);
 
   const fetchItem = async () => {
@@ -79,12 +76,13 @@ export default function ReviewItemScreen() {
       const response = await fetch(`${API_URL}/item/${itemId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-
       if (response.ok) {
         const data = await response.json();
-        console.log('🐐 Review Item Data:', data);
-        console.log('🐐 Photo URL:', data.photo_url);
-        console.log('🐐 Additional Photos:', data.additional_photos);
+        // If item is no longer in review, leave this screen
+        if (data.status && data.status !== 'review') {
+          router.replace('/(tabs)/MyAuctionScreen');
+          return;
+        }
         setItem(data);
       } else {
         Alert.alert('Error', 'Could not load item');
@@ -99,35 +97,27 @@ export default function ReviewItemScreen() {
     }
   };
 
-
   const updateTimeRemaining = () => {
     if (!item?.review_ends_at) {
       setTimeRemaining('N/A');
       return;
     }
-
     const now = new Date();
     const reviewEnds = new Date(item.review_ends_at);
     const diffMs = reviewEnds.getTime() - now.getTime();
-
     if (diffMs <= 0) {
-      setTimeRemaining('Publishing now...');
-      setTimeout(fetchItem, 2000); // Refresh to see if published
+      setTimeRemaining('Going live soon…');
       return;
     }
-
     const minutes = Math.floor(diffMs / 60000);
     const seconds = Math.floor((diffMs % 60000) / 1000);
     setTimeRemaining(`${minutes}m ${seconds}s`);
   };
 
   const handleEdit = () => {
-    // Route to the appropriate form based on selling_strategy and item type
     const sellingStrategy = item?.selling_strategy;
 
-    // Check if this is a diamond item
     if (item?.diamond_specifications) {
-      // Route to diamond listing/edit screen with all diamond data
       try {
         const diamondSpecs = JSON.parse(item.diamond_specifications);
         router.push({
@@ -146,7 +136,7 @@ export default function ReviewItemScreen() {
             price: item.price?.toString() || '0',
             rarity: item.rarity || 'rare',
             additionalImages: item.additional_photos ? JSON.stringify(item.additional_photos) : undefined,
-          }
+          },
         });
         return;
       } catch (error) {
@@ -154,20 +144,28 @@ export default function ReviewItemScreen() {
       }
     }
 
+    if (item?.watch_specifications) {
+      router.push({
+        pathname: '/watch-listing',
+        params: {
+          editItemId: itemId,
+          imageUrl: item.photo_url,
+          additionalImages: item.additional_photos ? JSON.stringify(item.additional_photos) : undefined,
+          name: item.name,
+          description: item.description || '',
+          price: item.price?.toString() || '0',
+          reservePrice: item.reserve_price?.toString() || '',
+          watchSpecs: item.watch_specifications || '',
+        },
+      });
+      return;
+    }
+
     if (sellingStrategy === 'must_sell') {
-      // Route to Must Sell form with item data
-      router.push({
-        pathname: '/MustSellScreen',
-        params: { editItemId: itemId }
-      });
+      router.push({ pathname: '/MustSellScreen', params: { editItemId: itemId } });
     } else if (sellingStrategy === 'buy_it_now' || item?.buy_it_now) {
-      // Route to Buy It Now form (list-item) with item data
-      router.push({
-        pathname: '/(tabs)/list-item',
-        params: { editItemId: itemId }
-      });
+      router.push({ pathname: '/(tabs)/list-item', params: { editItemId: itemId } });
     } else {
-      // Default to generic edit screen for other types
       router.push(`/seller/item/${itemId}/edit`);
     }
   };
@@ -188,7 +186,6 @@ export default function ReviewItemScreen() {
                 method: 'DELETE',
                 headers: { Authorization: `Bearer ${token}` },
               });
-
               if (response.ok) {
                 Alert.alert('Deleted', 'Item removed successfully');
                 router.replace('/(tabs)/MyAuctionScreen');
@@ -243,7 +240,7 @@ export default function ReviewItemScreen() {
         <Animated.View style={[styles.pageHeader, {
           opacity: headerOpacity,
           transform: [{ scale: headerScale }],
-          backgroundColor: colors.background
+          backgroundColor: colors.background,
         }]}>
           <TouchableOpacity
             onPress={() => router.replace('/(tabs)/MyAuctionScreen')}
@@ -254,136 +251,143 @@ export default function ReviewItemScreen() {
           <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>Review Your Item</Text>
         </Animated.View>
 
-      {/* Review Status Badge */}
-      <View style={[styles.reviewBanner, {
-        backgroundColor: theme === 'dark' ? '#3D2C1C' : '#FFF8E1',
-        borderColor: theme === 'dark' ? '#5C4A2C' : '#FFB74D'
-      }]}>
-        <Ionicons name="hourglass-outline" size={24} color="#FF9800" />
-        <View style={styles.reviewBannerText}>
-          <Text style={[styles.reviewTitle, { color: colors.textPrimary }]}>🔍 Under Review</Text>
-          <Text style={[styles.reviewSubtitle, { color: theme === 'dark' ? '#FFB74D' : '#F57C00' }]}>
-            Goes live in {timeRemaining}
-          </Text>
-          <Text style={[styles.reviewDescription, { color: theme === 'dark' ? '#999' : '#666' }]}>
-            Your item is being prepared for listing. You can edit or delete it during this time.
-          </Text>
-        </View>
-      </View>
-
-      {/* Item Preview */}
-      <View style={[styles.previewSection, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}>
-        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Preview</Text>
-
-        {item.photo_url ? (
-          <Image
-            source={{ uri: item.photo_url }}
-            style={styles.itemImage}
-            resizeMode="cover"
-            onError={(error) => console.error('🐐 Image load error:', error.nativeEvent)}
-          />
-        ) : (
-          <View style={[styles.itemImage, styles.placeholderImage, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#f0f0f0' }]}>
-            <Ionicons name="image-outline" size={64} color={theme === 'dark' ? '#666' : '#999'} />
-            <Text style={[styles.placeholderText, { color: theme === 'dark' ? '#666' : '#999' }]}>No image available</Text>
-          </View>
-        )}
-
-        <View style={styles.itemDetails}>
-          <Text style={[styles.itemName, { color: colors.textPrimary }]}>{item.name}</Text>
-          <Text style={[styles.itemDescription, { color: theme === 'dark' ? '#999' : '#666' }]}>{item.description}</Text>
-
-          <View style={styles.priceRow}>
-            <Text style={[styles.priceLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Starting Price:</Text>
-            <Text style={[styles.priceValue, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>
-              ${item.price?.toFixed(2)}
+        {/* Review Status Badge */}
+        <View style={[styles.reviewBanner, {
+          backgroundColor: theme === 'dark' ? '#3D2C1C' : '#FFF8E1',
+          borderColor: theme === 'dark' ? '#5C4A2C' : '#FFB74D',
+        }]}>
+          <Ionicons name="hourglass-outline" size={24} color="#FF9800" />
+          <View style={styles.reviewBannerText}>
+            <Text style={[styles.reviewTitle, { color: colors.textPrimary }]}>🔍 Under Review</Text>
+            <Text style={[styles.reviewSubtitle, { color: theme === 'dark' ? '#FFB74D' : '#F57C00' }]}>
+              {timeRemaining === 'Going live soon…' ? timeRemaining : `Goes live in ${timeRemaining}`}
+            </Text>
+            <Text style={[styles.reviewDescription, { color: theme === 'dark' ? '#999' : '#666' }]}>
+              Your item is being prepared for listing. You can edit or delete it during this time.
             </Text>
           </View>
-
-          {item.buy_it_now && (
-            <View style={styles.priceRow}>
-              <Text style={[styles.priceLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Buy It Now:</Text>
-              <Text style={[styles.priceValue, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>
-                ${item.buy_it_now?.toFixed(2)}
-              </Text>
-            </View>
-          )}
-
-          {item.reserve_price && (
-            <View style={styles.priceRow}>
-              <Text style={[styles.priceLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Reserve Price:</Text>
-              <Text style={[styles.priceValue, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>
-                ${item.reserve_price?.toFixed(2)}
-              </Text>
-            </View>
-          )}
-
-          <View style={styles.metaRow}>
-            <Text style={[styles.metaLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Strategy:</Text>
-            <Text style={[styles.metaValue, { color: colors.textPrimary }]}>{item.selling_strategy || 'auction'}</Text>
-          </View>
-
-          <View style={styles.metaRow}>
-            <Text style={[styles.metaLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Auction Ends:</Text>
-            <Text style={[styles.metaValue, { color: colors.textPrimary }]}>
-              {item.auction_ends_at ? new Date(item.auction_ends_at).toLocaleDateString() : 'N/A'}
-            </Text>
-          </View>
-
-          {item.weight_lbs && (
-            <View style={styles.metaRow}>
-              <Text style={[styles.metaLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Shipping Weight:</Text>
-              <Text style={[styles.metaValue, { color: colors.textPrimary }]}>{item.weight_lbs} lbs</Text>
-            </View>
-          )}
-
-          {item.gender && item.gender !== 'unisex' && (
-            <View style={styles.metaRow}>
-              <Text style={[styles.metaLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Gender:</Text>
-              <Text style={[styles.metaValue, { color: colors.textPrimary }]}>
-                {item.gender === 'men' ? "Men's" : item.gender === 'women' ? "Women's" : 'Unisex'}
-              </Text>
-            </View>
-          )}
-
-          {item.return_policy_override && item.return_policy_override !== 'use_default' && (
-            <View style={styles.metaRow}>
-              <Text style={[styles.metaLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Return Policy:</Text>
-              <Text style={[styles.metaValue, { color: colors.textPrimary }]}>
-                {item.return_policy_override === 'no_returns' ? 'No Returns (Final Sale)' :
-                 item.return_policy_override === '30_days' ? '30-day Returns' :
-                 item.return_policy_override === '14_days' ? '14-day Returns' :
-                 item.return_policy_override === '7_days' ? '7-day Returns' :
-                 'Default Policy'}
-              </Text>
-            </View>
-          )}
         </View>
-      </View>
 
-      {/* Action Buttons */}
-      <View style={styles.actionsSection}>
-        <TouchableOpacity style={styles.editButton} onPress={handleEdit}>
-          <Ionicons name="pencil" size={20} color="#fff" />
-          <Text style={styles.editButtonText}>Edit Item</Text>
-        </TouchableOpacity>
+        {/* Item Preview */}
+        <View style={[styles.previewSection, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Preview</Text>
 
-        <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
-          <Ionicons name="trash-outline" size={20} color="#fff" />
-          <Text style={styles.deleteButtonText}>Delete Item</Text>
-        </TouchableOpacity>
-      </View>
+          {item.photo_url ? (
+            <Image
+              source={{ uri: item.photo_url }}
+              style={styles.itemImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={[styles.itemImage, styles.placeholderImage, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#f0f0f0' }]}>
+              <Ionicons name="image-outline" size={64} color={theme === 'dark' ? '#666' : '#999'} />
+              <Text style={[styles.placeholderText, { color: theme === 'dark' ? '#666' : '#999' }]}>No image available</Text>
+            </View>
+          )}
 
-      {/* Info Box */}
-      <View style={[styles.infoBox, {
-        backgroundColor: theme === 'dark' ? '#1C2C3E' : '#E3F2FD',
-        borderColor: theme === 'dark' ? '#2C4A6E' : '#90CAF9'
-      }]}>
-        <Ionicons name="information-circle-outline" size={20} color={theme === 'dark' ? '#64B5F6' : '#4A90E2'} />
-        <Text style={[styles.infoText, { color: theme === 'dark' ? '#90CAF9' : '#1976D2' }]}>
-          During the review period, your item is not visible to buyers. It will automatically go live after {timeRemaining}.
-        </Text>
-      </View>
+          <View style={styles.itemDetails}>
+            <Text style={[styles.itemName, { color: colors.textPrimary }]}>{item.name}</Text>
+            {!!item.description && (
+              <Text style={[styles.itemDescription, { color: theme === 'dark' ? '#999' : '#666' }]}>{item.description}</Text>
+            )}
+
+            {item.selling_strategy !== 'buy_it_now' && !!item.price && (
+              <View style={styles.priceRow}>
+                <Text style={[styles.priceLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>
+                  {item.buy_it_now ? 'Starting Bid:' : 'Starting Price:'}
+                </Text>
+                <Text style={[styles.priceValue, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>
+                  ${item.price?.toFixed(2)}
+                </Text>
+              </View>
+            )}
+
+            {!!item.buy_it_now && (
+              <View style={styles.priceRow}>
+                <Text style={[styles.priceLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Buy It Now:</Text>
+                <Text style={[styles.priceValue, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>
+                  ${Number(item.buy_it_now).toFixed(2)}
+                </Text>
+              </View>
+            )}
+
+            {!!item.reserve_price && (
+              <View style={styles.priceRow}>
+                <Text style={[styles.priceLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Reserve Price:</Text>
+                <Text style={[styles.priceValue, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>
+                  ${Number(item.reserve_price).toFixed(2)}
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.metaRow}>
+              <Text style={[styles.metaLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Strategy:</Text>
+              <Text style={[styles.metaValue, { color: colors.textPrimary }]}>
+                {(item.selling_strategy || 'auction').replace(/_/g, ' ')}
+              </Text>
+            </View>
+
+            <View style={styles.metaRow}>
+              <Text style={[styles.metaLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>
+                {item.selling_strategy === 'buy_it_now' ? 'Expires:' : 'Auction Ends:'}
+              </Text>
+              <Text style={[styles.metaValue, { color: colors.textPrimary }]}>
+                {item.auction_ends_at ? new Date(item.auction_ends_at).toLocaleDateString() : 'N/A'}
+              </Text>
+            </View>
+
+            {!!item.weight_lbs && (
+              <View style={styles.metaRow}>
+                <Text style={[styles.metaLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Shipping Weight:</Text>
+                <Text style={[styles.metaValue, { color: colors.textPrimary }]}>{item.weight_lbs} lbs</Text>
+              </View>
+            )}
+
+            {!!item.gender && item.gender !== 'unisex' && (
+              <View style={styles.metaRow}>
+                <Text style={[styles.metaLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Gender:</Text>
+                <Text style={[styles.metaValue, { color: colors.textPrimary }]}>
+                  {item.gender === 'men' ? "Men's" : "Women's"}
+                </Text>
+              </View>
+            )}
+
+            {!!item.return_policy_override && item.return_policy_override !== 'use_default' && (
+              <View style={styles.metaRow}>
+                <Text style={[styles.metaLabel, { color: theme === 'dark' ? '#999' : '#666' }]}>Return Policy:</Text>
+                <Text style={[styles.metaValue, { color: colors.textPrimary }]}>
+                  {item.return_policy_override === 'no_returns' ? 'No Returns (Final Sale)' :
+                   item.return_policy_override === '30_days' ? '30-day Returns' :
+                   item.return_policy_override === '14_days' ? '14-day Returns' :
+                   item.return_policy_override === '7_days' ? '7-day Returns' : 'Default Policy'}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Action Buttons */}
+        <View style={styles.actionsSection}>
+          <TouchableOpacity style={styles.editButton} onPress={handleEdit}>
+            <Ionicons name="pencil" size={20} color="#fff" />
+            <Text style={styles.editButtonText}>Edit Item</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
+            <Ionicons name="trash-outline" size={20} color="#fff" />
+            <Text style={styles.deleteButtonText}>Delete Item</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Info Box */}
+        <View style={[styles.infoBox, {
+          backgroundColor: theme === 'dark' ? '#1C2C3E' : '#E3F2FD',
+          borderColor: theme === 'dark' ? '#2C4A6E' : '#90CAF9',
+        }]}>
+          <Ionicons name="information-circle-outline" size={20} color={theme === 'dark' ? '#64B5F6' : '#4A90E2'} />
+          <Text style={[styles.infoText, { color: theme === 'dark' ? '#90CAF9' : '#1976D2' }]}>
+            During the review period, your item is not visible to buyers. It will automatically go live when the review completes.
+          </Text>
+        </View>
       </ScrollView>
 
       <GlobalFooter />

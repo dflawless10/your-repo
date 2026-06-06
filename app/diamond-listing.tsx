@@ -22,7 +22,7 @@ import ImageValidationFeedback from '@/app/components/ImageValidationFeedback';
 import Toast from 'react-native-toast-message';
 import { API_BASE_URL } from '@/config';
 import { useTheme } from '@/app/theme/ThemeContext';
-import {Picker} from "@react-native-picker/picker";
+import GlobalFooter from "@/app/components/GlobalFooter";
 
 const AnimatedSvg = Animated.createAnimatedComponent(Svg);
 
@@ -100,10 +100,6 @@ export default function DiamondListingScreen() {
   const [isMustSell, setIsMustSell] = useState(false);
   const [appraisedValue] = useState(getParamString(params.price));
 
-  // Item-level return policy overrides
-  const [returnPolicyOverride, setReturnPolicyOverride] = useState<string>('use_default');
-  const [showPolicyOverride, setShowPolicyOverride] = useState(false);
-
   // Image validation
   const imageValidation = useImageValidation(params.imageUrl as string | null);
 
@@ -159,10 +155,10 @@ export default function DiamondListingScreen() {
       return;
     }
 
-    // Validate Must Sell constraints
+    // Validate Must-Sell constraints
     if (isMustSell) {
-      const duration_Hours = Number.parseInt(duration);
-      if (duration_Hours < 24 || duration_Hours > 72) {
+      const durationNum = parseInt(duration);
+      if (durationNum < 24 || durationNum > 72) {
         Alert.alert('Error', 'Must Sell duration must be 24, 48, or 72 hours');
         return;
       }
@@ -174,8 +170,8 @@ export default function DiamondListingScreen() {
 
     // Validate Reserve Price
     if (hasReserve && reservePrice) {
-      const reserve = Number.parseFloat(reservePrice);
-      const starting = Number.parseFloat(startingBid);
+      const reserve = parseFloat(reservePrice);
+      const starting = parseFloat(startingBid);
       if (reserve < starting) {
         Alert.alert('Error', 'Reserve price must be greater than or equal to starting bid');
         return;
@@ -270,10 +266,6 @@ console.log('diamond_specifications:', diamondSpecs);
         console.log('appraised_value:', parseFloat(appraisedValue));
       }
 
-      // Add return policy override
-      formData.append('return_policy_override', returnPolicyOverride);
-      console.log('return_policy_override:', returnPolicyOverride);
-
       // Handle the main image file
       const imageUri = params.imageUrl as string;
       const filename = imageUri.split('/').pop() || 'diamond.jpg';
@@ -316,7 +308,7 @@ console.log('diamond_specifications:', diamondSpecs);
         ? `${API_BASE_URL}/item/${editItemId}`
         : `${API_BASE_URL}/create_item`;
 
-      const response = await fetch(endpoint, {
+     const response = await fetch(endpoint, {
         method: isEditMode ? 'PUT' : 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -328,7 +320,7 @@ console.log('diamond_specifications:', diamondSpecs);
         const data = await response.json();
         const itemId = isEditMode ? editItemId : data.item_id;
 
-        // Build congratulations message
+        // Build congratulation message
         let text2 = isEditMode
           ? '💎 Your diamond has been updated!'
           : '💎 Your diamond is under review!';
@@ -340,11 +332,8 @@ console.log('diamond_specifications:', diamondSpecs);
           text2 += ` • Buy Now: $${parseFloat(buyItNowPrice).toLocaleString()}`;
         }
         if (isMustSell) {
-  text2 += ` • Must Sell (${duration}h)`;
-  text2 += `\n🔥 Your Must Sell listing ends in ${duration} hours!`;
-  text2 += `\n⏳ It will be live in 1 hour. Want to preview it?`;
-}
-
+          text2 += ` • Must Sell: ${duration}d`;
+        }
 
         // Show celebratory toast
         Toast.show({
@@ -364,7 +353,7 @@ console.log('diamond_specifications:', diamondSpecs);
             'Success! 🎉',
             isEditMode
               ? 'Your diamond has been updated! Want to preview it?'
-              :    `Your Must Sell listing ends in ${duration} hours! It will be live in 1 hour. Want to preview it?`,
+              : 'Your diamond listing will be live in an hour! Want to preview it?',
             [
               {
                 text: 'Preview Now',
@@ -390,19 +379,20 @@ console.log('diamond_specifications:', diamondSpecs);
   };
 
   return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: colors.background }}
+      style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={100}
     >
       <ScrollView
         style={[styles.container, { backgroundColor: colors.background }]}
-        contentContainerStyle={{ paddingBottom: 120 }}
+        contentContainerStyle={{ paddingBottom: 90 }}
         keyboardShouldPersistTaps="handled"
       >
         <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E2E8F0' }]}>
           <TouchableOpacity onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={28} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+            <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
             {isEditMode ? 'Edit Diamond Listing' : 'List Your Diamond'}
@@ -493,25 +483,35 @@ console.log('diamond_specifications:', diamondSpecs);
 
         <Text style={[styles.label, { color: colors.textPrimary }]}>Auction Duration (days) *</Text>
         <View style={styles.durationRow}>
-          {['3', '7', '14', '30'].map((days) => (
-            <TouchableOpacity
-              key={days}
-              style={[
-                styles.durationButton,
-                duration === days && styles.durationButtonActive,
-              ]}
-              onPress={() => setDuration(days)}
-            >
-              <Text
+          {['3', '7', '14', '30'].map((days) => {
+            const isActive = duration === days;
+            return (
+              <TouchableOpacity
+                key={days}
                 style={[
-                  styles.durationText,
-                  duration === days && styles.durationTextActive,
+                  styles.durationButton,
+                  {
+                    backgroundColor: isActive
+                      ? '#6A0DAD'
+                      : (theme === 'dark' ? '#2C2C2E' : '#F7FAFC'),
+                    borderColor: isActive
+                      ? (theme === 'dark' ? '#A78BFA' : '#6A0DAD')
+                      : (theme === 'dark' ? '#3A3A3C' : '#E2E8F0'),
+                  },
                 ]}
+                onPress={() => setDuration(days)}
               >
-                {days} days
-              </Text>
-            </TouchableOpacity>
-          ))}
+                <Text
+                  style={[
+                    styles.durationText,
+                    { color: isActive ? '#FFFFFF' : (theme === 'dark' ? '#E2E8F0' : '#2D3748') },
+                  ]}
+                >
+                  {days} days
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         {/* Advanced Auction Options */}
@@ -528,6 +528,7 @@ console.log('diamond_specifications:', diamondSpecs);
               }
             }}
             disabled={isMustSell || hasBuyItNow}
+            activeOpacity={0.7}
           >
             <View style={styles.checkboxContainer}>
               <View style={[styles.checkbox, hasReserve && styles.checkboxActive, (isMustSell || hasBuyItNow) && styles.checkboxDisabled]}>
@@ -540,11 +541,24 @@ console.log('diamond_specifications:', diamondSpecs);
           {hasReserve && !isMustSell && !hasBuyItNow && (
             <View style={styles.optionInputContainer}>
               <Text style={[styles.optionHelpText, { color: theme === 'dark' ? '#999' : '#718096' }]}>Minimum price you&#39;ll accept (hidden from buyers)</Text>
+              {appraisedValue && (
+                <View style={styles.quickSelectRow}>
+                  {[{ pct: 0.7, label: '70%' }, { pct: 0.8, label: '80%' }, { pct: 0.9, label: '90%' }, { pct: 0.95, label: '95%' }].map(({ pct, label }) => (
+                    <TouchableOpacity
+                      key={label}
+                      style={styles.quickSelectButton}
+                      onPress={() => setReservePrice((parseFloat(appraisedValue) * pct).toFixed(0))}
+                    >
+                      <Text style={styles.quickSelectText}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
               <TextInput
                 style={[styles.optionInput, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC', color: colors.textPrimary, borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
                 value={reservePrice}
                 onChangeText={setReservePrice}
-                placeholder="Enter reserve price"
+                placeholder="0.00"
                 placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
                 keyboardType="decimal-pad"
               />
@@ -567,6 +581,7 @@ console.log('diamond_specifications:', diamondSpecs);
               }
             }}
             disabled={isMustSell}
+            activeOpacity={0.7}
           >
             <View style={styles.checkboxContainer}>
               <View style={[styles.checkbox, hasBuyItNow && styles.checkboxActive, isMustSell && styles.checkboxDisabled]}>
@@ -603,7 +618,7 @@ console.log('diamond_specifications:', diamondSpecs);
             onPress={() => {
               setIsMustSell(!isMustSell);
               if (!isMustSell) {
-                // Disable other options when Must Sell is enabled
+                // Disable other options when Must-Sell is enabled
                 setHasReserve(false);
                 setHasBuyItNow(false);
                 setReservePrice('');
@@ -616,6 +631,7 @@ console.log('diamond_specifications:', diamondSpecs);
                 setDuration('7'); // Reset to 7 days
               }
             }}
+            activeOpacity={0.7}
           >
             <View style={styles.checkboxContainer}>
               <View style={[styles.checkbox, isMustSell && styles.checkboxActive]}>
@@ -626,36 +642,62 @@ console.log('diamond_specifications:', diamondSpecs);
             <Ionicons name="flame" size={20} color="#D97706" />
           </TouchableOpacity>
           {isMustSell && (
-            <View style={styles.optionInputContainer}>
+            <View style={[
+              styles.optionInputContainer,
+              {
+                backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F7FAFC',
+                borderColor: theme === 'dark' ? '#3A3A3C' : '#E2E8F0',
+                borderWidth: 1,
+                borderRadius: 8,
+                padding: 12,
+              },
+            ]}>
               <Text style={[styles.optionHelpText, { color: theme === 'dark' ? '#999' : '#718096' }]}>⚠️ No reserve, no buy-it-now. Creates urgency!</Text>
               <View style={styles.mustSellDurationRow}>
-                {[{label: '24h', hours: '24'}, {label: '48h', hours: '48'}, {label: '72h', hours: '72'}].map((option) => (
-                  <TouchableOpacity
-                    key={option.hours}
-                    style={[
-                      styles.mustSellDurationButton,
-                      duration === option.hours && styles.mustSellDurationButtonActive,
-                    ]}
-                    onPress={() => setDuration(option.hours)}
-                  >
-                    <Text style={[
-                      styles.mustSellDurationText,
-                      duration === option.hours && styles.mustSellDurationTextActive,
-                    ]}>
-                      {option.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                {[{ label: '24h', hours: '24' }, { label: '48h', hours: '48' }, { label: '72h', hours: '72' }].map((option) => {
+                  const isActive = duration === option.hours;
+                  return (
+                    <TouchableOpacity
+                      key={option.hours}
+                      style={[
+                        styles.mustSellDurationButton,
+                        {
+                          backgroundColor: isActive ? '#6A0DAD' : theme === 'dark' ? '#2C2C2E' : '#F7FAFC',
+                          borderColor: isActive ? '#A78BFA' : theme === 'dark' ? '#3A3A3C' : '#E2E8F0',
+                        },
+                      ]}
+                      onPress={() => setDuration(option.hours)}
+                    >
+                      <Text
+                        style={[
+                          styles.mustSellDurationText,
+                          { color: isActive ? '#FFFFFF' : theme === 'dark' ? '#E2E8F0' : '#2D3748' },
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
               <TouchableOpacity
-                style={styles.cancelMustSellButton}
+                style={[
+                  styles.cancelMustSellButton,
+                  {
+                    backgroundColor: theme === 'dark' ? '#3A3A3C' : '#EDF2F7',
+                    borderColor: theme === 'dark' ? '#4A4A4C' : '#CBD5E0',
+                    borderWidth: 1,
+                  },
+                ]}
                 onPress={() => {
                   setIsMustSell(false);
                   setDuration('7');
                   setStartingBid(appraisedValue);
                 }}
               >
-                <Text style={styles.cancelMustSellText}>Cancel Must Sell</Text>
+                <Text style={[styles.cancelMustSellText, { color: theme === 'dark' ? '#E2E8F0' : '#2D3748' }]}>
+                  Cancel Must Sell
+                </Text>
               </TouchableOpacity>
             </View>
           )}
@@ -700,45 +742,6 @@ console.log('diamond_specifications:', diamondSpecs);
             <Text style={[styles.cancelButtonText, { color: theme === 'dark' ? '#999' : '#718096' }]}>Cancel</Text>
           </TouchableOpacity>
 
-          {/* Return Policy Override */}
-          <TouchableOpacity
-            style={[styles.overrideToggle, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F8F9FA', borderColor: theme === 'dark' ? '#3C3C3E' : '#E0E0E0' }]}
-            onPress={() => setShowPolicyOverride(!showPolicyOverride)}
-            activeOpacity={0.7}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.overrideToggleText, { color: colors.textPrimary }]}>
-                {returnPolicyOverride === 'use_default' ? '📋 Use My Default Return Policy' : '⚠️ Override Return Policy for This Item'}
-              </Text>
-              {returnPolicyOverride !== 'use_default' && (
-                <Text style={[styles.overrideSubtext, { color: theme === 'dark' ? '#999' : '#666' }]}>
-                  This item: {returnPolicyOverride === 'no_returns' ? 'No Returns (Final Sale)' : returnPolicyOverride.replace('_', '-')}
-                </Text>
-              )}
-            </View>
-            <Ionicons name={showPolicyOverride ? 'chevron-up' : 'chevron-down'} size={20} color="#6A0DAD" />
-          </TouchableOpacity>
-
-          {showPolicyOverride && (
-            <View style={[styles.overridePanel, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#3C3C3E' : '#E0E0E0' }]}>
-              <Text style={[styles.overrideLabel, { color: colors.textPrimary }]}>Return Policy for THIS Item Only:</Text>
-              <Picker
-                selectedValue={returnPolicyOverride}
-                onValueChange={(value) => setReturnPolicyOverride(value)}
-                style={[styles.picker, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: colors.textPrimary }]}
-              >
-                <Picker.Item label="📋 Use My Default Return Policy" value="use_default" />
-                <Picker.Item label="30-day Returns" value="30_days" />
-                <Picker.Item label="14-day Returns" value="14_days" />
-                <Picker.Item label="7-day Returns" value="7_days" />
-                <Picker.Item label="🚫 No Returns (Final Sale)" value="no_returns" />
-              </Picker>
-              <Text style={[styles.overrideHint, { color: theme === 'dark' ? '#999' : '#666' }]}>
-                ℹ️ This override only applies to this listing. To change your default return policy, go to Settings → My Store.
-              </Text>
-            </View>
-          )}
-
           <TouchableOpacity
             style={styles.submitButton}
             onPress={handleCreateListing}
@@ -751,7 +754,9 @@ console.log('diamond_specifications:', diamondSpecs);
         </View>
       </View>
     </ScrollView>
+    <GlobalFooter />
     </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -764,22 +769,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 60,
     paddingVertical: 16,
     borderBottomWidth: 1,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '600',
   },
   previewImage: {
     width: '100%',
     height: 250,
     backgroundColor: '#E2E8F0',
   },
-  picker: {
-    padding: 0,
-    },
   form: {
     padding: 16,
   },
@@ -840,11 +841,13 @@ const styles = StyleSheet.create({
     color: '#4A5568',
   },
   buttonContainer: {
-    marginTop: 24,
-    marginBottom: 40,
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+    paddingBottom: 24,
   },
   submitButton: {
-    flexDirection: 'row',
+    flex: 1,
     backgroundColor: '#FF6B35',
     paddingVertical: 16,
     borderRadius: 12,
@@ -915,6 +918,7 @@ const styles = StyleSheet.create({
   optionLabel: {
     fontSize: 15,
     fontWeight: '600',
+    color: '#2D3748',
   },
   optionLabelDisabled: {
     color: '#A0AEC0',
@@ -929,6 +933,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginBottom: 8,
     fontStyle: 'italic',
+  },
+  quickSelectRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  quickSelectButton: {
+    flex: 1,
+    backgroundColor: '#6A0DAD',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  quickSelectText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '600',
   },
   optionInput: {
     borderWidth: 1,
@@ -1058,7 +1080,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F7FAFC',
     paddingVertical: 16,
     borderRadius: 12,
-    marginRight: 8,
     borderWidth: 2,
     borderColor: '#E2E8F0',
     gap: 6,
@@ -1067,45 +1088,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#718096',
-  },
-  overrideToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F7FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-  },
-  overrideToggleText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#2D3748',
-  },
-  overrideSubtext: {
-    fontSize: 13,
-    color: '#718096',
-    marginTop: 4,
-  },
-  overridePanel: {
-    backgroundColor: '#FFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-  },
-  overrideLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#2D3748',
-    marginBottom: 8,
-  },
-  overrideHint: {
-    fontSize: 13,
-    color: '#718096',
-    fontStyle: 'italic',
-    marginTop: 8,
   },
 });

@@ -43,7 +43,7 @@ export default function SentOffersScreen() {
         duration: 2000, // 2 seconds - slow and dramatic
         useNativeDriver: true,
       }).start(() => {
-        // After fade-in completes, start pulsing animation
+        // After fade-in stops, start pulsing animation
         Animated.loop(
           Animated.sequence([
             Animated.timing(headerScale, {
@@ -61,7 +61,7 @@ export default function SentOffersScreen() {
       });
     }, 500); // 500ms delay - let screen render fully first
 
-    fetchOffers();
+    void fetchOffers();
   }, []);
 
   const fetchOffers = async () => {
@@ -75,7 +75,7 @@ export default function SentOffersScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchOffers();
+   void fetchOffers();
   };
 
   const handleOfferPress = (offer: Offer) => {

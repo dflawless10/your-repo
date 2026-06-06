@@ -3,14 +3,13 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Animated,
   Platform,
   Alert,
   RefreshControl,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import {Stack, useRouter} from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '@/config';
@@ -76,7 +75,7 @@ export default function AdminOnDutyScreen() {
   }, []);
 
   useEffect(() => {
-    checkAdminAccess();
+    void checkAdminAccess();
   }, []);
 
   const checkAdminAccess = async () => {
@@ -98,7 +97,7 @@ export default function AdminOnDutyScreen() {
         const data = await response.json();
         if (data.is_admin) {
           setIsAdmin(true);
-          loadAdminStats();
+          void loadAdminStats();
         } else {
           Alert.alert('Access Denied', 'You do not have admin privileges.');
           router.back();
@@ -136,7 +135,7 @@ export default function AdminOnDutyScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadAdminStats();
+    void loadAdminStats();
   };
 
   const adminActions = [
@@ -160,7 +159,7 @@ export default function AdminOnDutyScreen() {
       title: 'Auction Management',
       subtitle: 'Manage active auctions',
       icon: 'hammer' as keyof typeof Ionicons.glyphMap,
-      color: '#FF9800',
+      color: '#4CAF50',
       badge: 0,
       onPress: () => router.push('/admin/auction-management' as any),
     },
@@ -168,7 +167,7 @@ export default function AdminOnDutyScreen() {
       title: 'Reports & Analytics',
       subtitle: 'View platform analytics',
       icon: 'stats-chart' as keyof typeof Ionicons.glyphMap,
-      color: '#4CAF50',
+      color: '#F57C00',
       badge: 0,
       onPress: () => router.push('/admin/reports-analytics' as any),
     },
@@ -196,21 +195,8 @@ export default function AdminOnDutyScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+       <Stack.Screen options={{ headerShown: false }} />
       <EnhancedHeader scrollY={scrollY} />
-
-      {/* Title with Back Arrow */}
-      <Animated.View style={[styles.headerTitleContainer, { backgroundColor: colors.background, borderBottomColor: isDark ? '#333' : '#E5E5E5', opacity: headerOpacity, transform: [{ scale: headerScale }] }]}>
-        <View style={styles.titleWithArrow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
-            <Ionicons name="arrow-back" size={28} color={isDark ? '#B794F4' : '#6A0DAD'} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}></Text>
-         <View style={styles.adminBadge}>
-            <Text style={styles.adminBadgeText}>ADMIN</Text>
-          </View>
-        </View>
-      </Animated.View>
-
 
       <Animated.ScrollView
         style={styles.content}
@@ -219,10 +205,8 @@ export default function AdminOnDutyScreen() {
           { useNativeDriver: false }
         )}
         scrollEventThrottle={16}
-         contentContainerStyle={{
-    paddingTop: 240,
-    paddingBottom: 40,
-  }}
+         contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 10 }}
+
 
         refreshControl={
           <RefreshControl
@@ -231,41 +215,67 @@ export default function AdminOnDutyScreen() {
             tintColor="#6A0DAD"
           />
         }
+
       >
+         {/* Header Title with Back Arrow */}
+        <Animated.View style={[styles.headerRow, {
+          opacity: headerOpacity,
+          transform: [{ scale: headerScale }],
+          backgroundColor: colors.background,
+          borderBottomColor: theme === 'dark' ? '#333' : '#E5E5E5'
+        }]}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backButton}
+          >
+            <Ionicons name="arrow-back" size={28} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}></Text>
+          <View style={styles.adminBadge}>
+            <Text style={styles.adminBadgeText}>ADMIN</Text>
+          </View>
+        </Animated.View>
+
         {/* Admin Stats Grid */}
         <View style={styles.statsGrid}>
-          <View style={[styles.statCard, { backgroundColor: isDark ? '#1E3A5F' : '#E3F2FD' }]}>
+          <View style={[styles.statCard, { backgroundColor: isDark ? '#1976D2' : '#E3F2FD' }]}>
             <Ionicons name="people" size={32} color="#2196F3" />
             <Text style={[styles.statValue, { color: colors.textPrimary }]}>{stats.total_users}</Text>
             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Total Users</Text>
           </View>
 
-          <View style={[styles.statCard, { backgroundColor: isDark ? '#3D2817' : '#FFF3E0' }]}>
-            <Ionicons name="hammer" size={32} color="#FF9800" />
+          <View style={[styles.statCard, { backgroundColor: isDark ? '#0097A7' : '#E3F2FD' }]}>
+            <Ionicons name="hammer" size={32} color="#4CAF50" />
             <Text style={[styles.statValue, { color: colors.textPrimary }]}>{stats.active_auctions}</Text>
             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Active Auctions</Text>
           </View>
 
-          <View style={[styles.statCard, { backgroundColor: isDark ? '#3D1F1F' : '#FFEBEE' }]}>
-            <Ionicons name="flag" size={32} color="#F44336" />
+          <TouchableOpacity
+            style={[styles.statCard, { backgroundColor: isDark ? '#D97706' : '#E3F2FD' }]}
+            onPress={() => router.push('/admin/moderate-content' as any)}
+          >
+            <Ionicons name="alert-circle" size={32} color="#1976D2" />
             <Text style={[styles.statValue, { color: colors.textPrimary }]}>{stats.pending_reports}</Text>
             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Pending Reports</Text>
-          </View>
+          </TouchableOpacity>
 
-          <View style={[styles.statCard, { backgroundColor: isDark ? '#2D1F3D' : '#F3E5F5' }]}>
-            <Ionicons name="alert-circle" size={32} color="#9C27B0" />
+          <TouchableOpacity
+            style={[styles.statCard, { backgroundColor: isDark ? '#6A0DAD' : '#E3F2FD' }]}
+            onPress={() => router.push('/admin/moderate-content' as any)}
+          >
+            <Ionicons name="flag" size={32} color="#DC2626" />
             <Text style={[styles.statValue, { color: colors.textPrimary }]}>{stats.flagged_items}</Text>
             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Flagged Items</Text>
-          </View>
+          </TouchableOpacity>
 
-          <View style={[styles.statCard, { backgroundColor: isDark ? '#1F3D28' : '#E8F5E9' }]}>
-            <Ionicons name="cash" size={32} color="#4CAF50" />
+          <View style={[styles.statCard, { backgroundColor: isDark ? '#4CAF50' : '#E3F2FD' }]}>
+            <Ionicons name="cash" size={32} color="#388E3C" />
             <Text style={[styles.statValue, { color: colors.textPrimary }]}>${stats.total_sales_today}</Text>
             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Sales Today</Text>
           </View>
 
-          <View style={[styles.statCard, { backgroundColor: isDark ? '#3D3517' : '#FFF9C4' }]}>
-            <Ionicons name="add-circle" size={32} color="#FBC02D" />
+          <View style={[styles.statCard, { backgroundColor: isDark ? '#FFD700' : '#E3F2FD' }]}>
+            <Ionicons name="add-circle" size={32} color="#4CAF50" />
             <Text style={[styles.statValue, { color: colors.textPrimary }]}>{stats.new_listings_today}</Text>
             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>New Listings</Text>
           </View>
@@ -316,47 +326,47 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8F9FA',
   },
-  titleWithArrow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  headerTitleContainer: {
-    position: 'absolute',
-    top: HEADER_MAX_HEIGHT + 40,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    zIndex: 100,
-  },
- backArrow: {
+  headerRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+},
+  backArrow: {
    marginRight: 16,
     padding: 4,
   },
-
-
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  backButton: {
+    marginRight: 8,
+    padding: 4,
+    paddingTop: 20,
   },
+  titleContainer: {
+   flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+
   headerTitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
     color: '#1A1A1A',
     marginRight: 8,
+    paddingTop: 50,
   },
   adminBadge: {
     backgroundColor: '#F44336',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
+    paddingTop: 2,
   },
   adminBadgeText: {
     color: '#FFF',
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,
+    paddingTop: 20,
   },
   content: {
     flex: 1,

@@ -1,21 +1,18 @@
 import { API_BASE_URL } from '@/config';
-
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, {useState, useCallback, useEffect, useRef, useMemo} from 'react';
 import {
   FlatList, View, Text, Image, TouchableOpacity, RefreshControl,
-  ActivityIndicator, StyleSheet, Dimensions, Platform, Animated as RNAnimated
+  ActivityIndicator, StyleSheet, Platform, Animated as RNAnimated, useWindowDimensions
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import Animated from 'react-native-reanimated';
-
 import { playGoatSoundByName } from 'assets/sounds/officialGoatSoundsSoundtrack';
 import { useFocusEffect } from '@react-navigation/native';
-import {BlurView} from "expo-blur";
-import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
+import {  Ionicons } from "@expo/vector-icons";
 import {formatTimeWithSeconds} from "@/utils/time";
 import {useWishlist} from "app/wishlistContext"; // ✅ External header component
-import { useAppDispatch } from 'hooks/reduxHooks';
+import { useAppDispatch, useAppSelector } from 'hooks/reduxHooks';
 import {addToWishlist} from 'app/wishlistslice';
 import GoatGenieBadge from 'app/GoatGenieBadge';
 import useThemeColor from '@/hooks/useThemeColor';
@@ -25,10 +22,7 @@ import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHead
 
 
 
-const { width } = Dimensions.get('window');
 const COLUMN_GAP = 12;
-const NUM_COLUMNS = 2;
-const ITEM_WIDTH = (width - 32 - COLUMN_GAP) / NUM_COLUMNS;
 
 interface AuctionItem {
   id: string;
@@ -76,7 +70,7 @@ interface AuctionItem {
   seller?: {
     id: number;
     username: string;
-    avatar?: string;
+    avatar_url?: string;
     avg_rating?: number;
     total_reviews?: number;
     positive_percent?: number;
@@ -100,16 +94,29 @@ export default function Discover() {
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<AuctionItem[]>([]);
   const scrollY = useRef(new RNAnimated.Value(0)).current;
+  const cartItems = useAppSelector((state) => state.cart.items);
+  const cartItemIds = useMemo(() => new Set(cartItems.map(i => String(i.id))), [cartItems]);
+
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
+  const NUM_COLUMNS = isLandscape ? 3 : 2;
+  const ITEM_WIDTH = useMemo(
+    () => (width - 32 - COLUMN_GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS,
+    [width, NUM_COLUMNS]
+  );
 
   useEffect(() => {
-    fetchItems();
+   void fetchItems();
   }, []);
 
   useFocusEffect(
     useCallback(() => {
-      fetchItems();
+     void fetchItems();
     }, [])
   );
+
+
+
 
   const normalizeAuctionEndsAt = (it: AuctionItem) => {
   const raw = it.auction_ends_at || it.end_time || "";
@@ -121,7 +128,7 @@ export default function Discover() {
 const fetchItems = async () => {
   let data: AuctionItem[] = [];
   try {
-    const res = await fetch('http://10.0.0.170:5000/items/discover');
+    const res = await fetch(`${API_BASE_URL}/items/discover`);
     data = await res.json();
     console.log('🔍 Raw discover data:', data);
     console.log('🔍 First item buy_it_now:', data[0]?.buy_it_now);
@@ -217,7 +224,8 @@ const backgroundColor = useThemeColor({}, 'background');
   const renderItem = ({ item }: { item: AuctionItem }) => {
     const isAuctionEnded = new Date(item.auction_ends_at).getTime() <= Date.now();
     const timeLeftMs = new Date(item.auction_ends_at).getTime() - Date.now();
-    const isUrgent = timeLeftMs > 1 && timeLeftMs <= 7200000; // Less than 2 hours
+    const isUrgent = timeLeftMs > 1 && timeLeftMs <= 7200000; // ≤2h: red + bold
+    const isWarning = timeLeftMs > 7200000 && timeLeftMs <= 86400000; // ≤24h: red
 
     // Debug: Log buy_it_now value for each item
     if (item.buy_it_now) {
@@ -227,7 +235,7 @@ const backgroundColor = useThemeColor({}, 'background');
     return (
 
          <TouchableOpacity
-          style={styles.itemContainer}
+          style={[styles.itemContainer, { width: ITEM_WIDTH }]}
           onPress={() => handleItemPress(item)}
           activeOpacity={0.9}
         >
@@ -260,8 +268,9 @@ const backgroundColor = useThemeColor({}, 'background');
 
           <View style={styles.priceRow}>
             <Text style={styles.cardPrice}>
-              ${(item.highest_bid ?? item.price ?? 0).toFixed(2)}
-            </Text>
+            ${Number(item.highest_bid ?? item.buy_it_now ?? item.price ?? 0).toFixed(2)}
+          </Text>
+
             {(item.bidCount ?? 0) > 0 && (
               <Text style={styles.bidBadge}>{item.bidCount} BIDS</Text>
             )}
@@ -269,17 +278,20 @@ const backgroundColor = useThemeColor({}, 'background');
 
             <View style={styles.statsContainer}>
               <Text style={styles.statsText}>👀 {Math.floor(Math.random() * 20) + 5} watching</Text>
-              <MaterialCommunityIcons name="clock-outline" size={14} color={isUrgent ? '#c62828' : '#2e7d32'} style={{marginHorizontal: 4}}/>
-             <Text style={[styles.statsText, isUrgent ? styles.urgentText : styles.timeText]}>
-              {item.auction_ends_at ? formatTimeWithSeconds(item.auction_ends_at, now) : 'Not auctioned'}
-             </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="time-outline" size={14} color={isUrgent ? '#E53E3E' : isWarning ? '#DD6B20' : '#38A169'} style={{ marginHorizontal: 4 }} />
+                <Text style={[styles.statsText, isUrgent ? styles.urgentText : isWarning ? styles.warningText : styles.timeText]}>
+                  {item.auction_ends_at ? formatTimeWithSeconds(item.auction_ends_at, now) : 'Not auctioned'}
+                </Text>
+              </View>
             </View>
 
            {item.seller && (
              <View style={styles.sellerRow}>
-               {!!(item.seller.avatar) && (
-                 <Image source={{ uri: item.seller.avatar }} style={styles.sellerAvatar} />
-               )}
+              {!!item.seller.avatar_url && (
+              <Image source={{ uri: item.seller.avatar_url }} style={styles.sellerAvatar} />
+                 )}
+
                <TouchableOpacity
                  style={styles.sellerNameContainer}
                  onPress={() => {
@@ -315,10 +327,12 @@ const backgroundColor = useThemeColor({}, 'background');
   <View style={{ flex: 1, backgroundColor }}>
     <EnhancedHeader scrollY={scrollY} onSearch={() => {}} />
     <FlatList
-      data={items}
+      data={items.filter(item => !cartItemIds.has(String(item.id)))}
       renderItem={renderItem}
       keyExtractor={(item) => `discover-${item.id}`}
-      numColumns={2}
+
+      key={`grid-${NUM_COLUMNS}`}
+      numColumns={NUM_COLUMNS}
       contentContainerStyle={styles.list}
       columnWrapperStyle={styles.columnWrapper}
 
@@ -326,28 +340,33 @@ const backgroundColor = useThemeColor({}, 'background');
         <View style={{ backgroundColor }}>
           <View style={{ padding: 16, paddingTop: 32, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme === 'dark' ? '#333' : '#eee', flexDirection: 'row', alignItems: 'center' }}>
             <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 12 }}>
-              <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+              <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
             </TouchableOpacity>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 24, fontWeight: '700', color: colors.textPrimary }}>Discover Treasures</Text>
-              <Text style={{ fontSize: 14, color: theme === 'dark' ? '#999' : '#666' }}>Find unique pieces from verified sellers</Text>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: colors.textPrimary }}>Discover Treasures</Text>
+              <Text style={{ fontSize: 10, color: theme === 'dark' ? '#999' : '#666' }}>Find unique pieces from verified sellers</Text>
             </View>
           </View>
         </View>
 
       }
-      stickyHeaderIndices={[0]}
+
 
       ListFooterComponent={
-        <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+        <View style={{ paddingVertical: 12, alignItems: 'center' }}>
           {loading ? (
-            <ActivityIndicator size="large" style={styles.loader} />
+            <ActivityIndicator size="large" color="#6A0DAD" />
           ) : (
-            <Text style={{ color: '#666' }}>You&#39;ve reached the end 🐐</Text>
+            <Text style={{ color: '#666', fontSize: 13, fontWeight: '500' }}>You&#39;ve reached the end 🐐</Text>
           )}
         </View>
       }
 
+      onScroll={RNAnimated.event(
+        [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+        { useNativeDriver: false }
+      )}
+      scrollEventThrottle={16}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#007AFF" />}
       onEndReached={async () => {
         setLoading(true);
@@ -364,7 +383,7 @@ const styles = StyleSheet.create({
   list: {
     padding: 16,
     paddingTop: HEADER_MAX_HEIGHT + 16,
-    paddingBottom: 100,
+    paddingBottom: 60,
   },
   wishlistIconWrapper: {
     position: 'absolute',
@@ -380,12 +399,16 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
   },
   timeText: {
-    color: '#38a169',
+    color: '#38A169',
     fontWeight: '600',
   },
   urgentText: {
-    color: '#c62828',
+    color: '#E53E3E',
     fontWeight: '700',
+  },
+  warningText: {
+    color: '#DD6B20',
+    fontWeight: '600',
   },
   mustSellBadge: {
   position: 'absolute',
@@ -406,10 +429,9 @@ mustSellText: {
 
   columnWrapper: {
     gap: COLUMN_GAP,
-    justifyContent: 'space-between',
+    justifyContent: 'center',
   },
   itemContainer: {
-    width: ITEM_WIDTH,
     marginBottom: 16,
     borderRadius: 16,
     backgroundColor: '#fff',
@@ -450,7 +472,7 @@ mustSellText: {
   },
   image: {
     width: '100%',
-    height: ITEM_WIDTH * 1.2,
+    aspectRatio: 1 / 1.2,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
   },

@@ -101,7 +101,7 @@ export default function AccountSettingsScreen() {
   ];
 
   useEffect(() => {
-    loadUserSettings();
+   void loadUserSettings();
   }, []);
 
   const loadUserSettings = async () => {
@@ -517,15 +517,6 @@ export default function AccountSettingsScreen() {
 
           <TouchableOpacity
             style={[styles.actionButton, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}
-            onPress={() => router.push('/account/payment-methods' as any)}
-          >
-            <Ionicons name="card-outline" size={22} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
-            <Text style={[styles.actionButtonText, { color: colors.textPrimary }]}>Payment Methods</Text>
-            <Ionicons name="chevron-forward" size={20} color={theme === 'dark' ? '#666' : '#CCC'} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}
             onPress={handleSignOut}
           >
             <Ionicons name="log-out-outline" size={22} color="#F59E0B" />
@@ -559,7 +550,7 @@ export default function AccountSettingsScreen() {
         {/* App Info */}
         <View style={styles.section}>
           <Text style={[styles.versionText, { color: theme === 'dark' ? '#999' : '#999' }]}>
-            BidGoat v{Constants.expoConfig?.version || '2.1.0'}
+            BidGoat v{(Constants.expoConfig?.android?.runtimeVersion as string) || Constants.expoConfig?.version || '2.1.0'}
           </Text>
           <Text style={[styles.copyrightText, { color: theme === 'dark' ? '#666' : '#CCC' }]}>© 2024 BidGoat. All rights reserved.</Text>
         </View>

@@ -41,7 +41,7 @@ interface BidItem {
   loss_reason?: 'reserve_not_met' | 'outbid' | 'other' | null;
   auto_bid_enabled?: boolean;
   auto_bid_max?: number;
-  auto_bid_strategy?: 'aggressive' | 'moderate' | 'passive';
+  auto_bid_strategy?: 'snipe' | 'active' | 'late';
 }
 
 type TabType = 'active' | 'won' | 'lost';
@@ -63,7 +63,7 @@ export default function MyBidsScreen() {
   // Auto-bid settings
   const [autoBidEnabled, setAutoBidEnabled] = useState(false);
   const [autoBidMax, setAutoBidMax] = useState('');
-  const [autoBidStrategy, setAutoBidStrategy] = useState<'aggressive' | 'moderate' | 'passive'>('moderate');
+  const [autoBidStrategy, setAutoBidStrategy] = useState<'snipe' | 'active' | 'late'>('late');
 
   useEffect(() => {
     // Fade in header title and arrow - wait for screen to fully render first
@@ -136,7 +136,7 @@ export default function MyBidsScreen() {
     setSelectedBidItem(item);
     setAutoBidEnabled(item.auto_bid_enabled || false);
     setAutoBidMax(item.auto_bid_max?.toString() || '');
-    setAutoBidStrategy(item.auto_bid_strategy || 'moderate');
+    setAutoBidStrategy(item.auto_bid_strategy || 'late');
     setShowAutoBidModal(true);
   };
 
@@ -243,7 +243,7 @@ if (Number.isNaN(maxBid) || maxBid <= selectedBidItem.current_highest_bid) {
         <View style={styles.autoBidInfo}>
           <Ionicons name="flash" size={14} color="#FFA500" />
           <Text style={styles.autoBidText}>
-            Auto-bid ON (Max: ${item.auto_bid_max || '0.00'}) • {item.auto_bid_strategy || 'Standard'}
+            Auto-bid ON (Max: ${item.auto_bid_max || '0.00'}) • {item.auto_bid_strategy ? item.auto_bid_strategy.charAt(0).toUpperCase() + item.auto_bid_strategy.slice(1) : 'Late'}
           </Text>
         </View>
         <TouchableOpacity
@@ -652,11 +652,11 @@ if (Number.isNaN(maxBid) || maxBid <= selectedBidItem.current_highest_bid) {
         onRequestClose={() => setShowAutoBidModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>⚡ Auto-Bid Setup</Text>
+          <View style={[styles.modalContent, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>⚡ Auto-Bid Setup</Text>
               <TouchableOpacity onPress={() => setShowAutoBidModal(false)}>
-                <Ionicons name="close" size={28} color="#333" />
+                <Ionicons name="close" size={28} color={theme === 'dark' ? '#CCC' : '#333'} />
               </TouchableOpacity>
             </View>
             <ScrollView>
@@ -665,13 +665,13 @@ if (Number.isNaN(maxBid) || maxBid <= selectedBidItem.current_highest_bid) {
                   {/* Item Info */}
                   <View style={styles.modalItemInfo}>
                     <Image source={{ uri: selectedBidItem.item_image }} style={styles.modalItemImage} />
-                    <Text style={styles.modalItemName}>{selectedBidItem.item_name}</Text>
-                    <Text style={styles.modalItemPrice}>Current: ${selectedBidItem.current_highest_bid.toFixed(2)}</Text>
+                    <Text style={[styles.modalItemName, { color: colors.textPrimary }]}>{selectedBidItem.item_name}</Text>
+                    <Text style={[styles.modalItemPrice, { color: colors.textSecondary }]}>Current: ${selectedBidItem.current_highest_bid.toFixed(2)}</Text>
                   </View>
 
                   {/* Enable/Disable Toggle */}
-                  <View style={styles.settingRow}>
-                    <Text style={styles.settingLabel}>Enable Auto-Bid</Text>
+                  <View style={[styles.settingRow, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F5F5' }]}>
+                    <Text style={[styles.settingLabel, { color: colors.textPrimary }]}>Enable Auto-Bid</Text>
                     <Switch
                       value={autoBidEnabled}
                       onValueChange={setAutoBidEnabled}
@@ -683,64 +683,88 @@ if (Number.isNaN(maxBid) || maxBid <= selectedBidItem.current_highest_bid) {
                     <>
                       {/* Max Bid Input */}
                       <View style={styles.inputContainer}>
-                        <Text style={styles.inputLabel}>Maximum Bid Amount</Text>
-                        <View style={styles.inputWrapper}>
-                          <Text style={styles.dollarSign}>$</Text>
+                        <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>Maximum Bid Amount</Text>
+                        <View style={[styles.inputWrapper, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#FFF', borderColor: theme === 'dark' ? '#555' : '#CCC' }]}>
+                          <Text style={[styles.dollarSign, { color: colors.textSecondary }]}>$</Text>
                           <TextInput
                             keyboardType="numeric"
                             value={autoBidMax}
                             onChangeText={setAutoBidMax}
                             placeholder="0.00"
-                            style={styles.input}
-                           />
-
+                            placeholderTextColor={theme === 'dark' ? '#666' : '#AAA'}
+                            style={[styles.input, { color: colors.textPrimary }]}
+                          />
                         </View>
-                        <Text style={styles.inputHint}>
+                        <Text style={[styles.inputHint, { color: theme === 'dark' ? '#888' : '#999' }]}>
                           Must be higher than current bid (${selectedBidItem.current_highest_bid.toFixed(2)})
                         </Text>
                       </View>
 
                       {/* Strategy Selection */}
                       <View style={styles.strategyContainer}>
-                        <Text style={styles.strategyTitle}>Bidding Strategy</Text>
+                        <Text style={[styles.strategyTitle, { color: colors.textPrimary }]}>Bidding Strategy</Text>
 
                         <TouchableOpacity
-                          style={[styles.strategyCard, autoBidStrategy === 'aggressive' && styles.strategyCardActive]}
-                          onPress={() => setAutoBidStrategy('aggressive')}
+                          style={[
+                            styles.strategyCard,
+                            {
+                              backgroundColor: autoBidStrategy === 'snipe'
+                                ? (theme === 'dark' ? '#2D1B4E' : '#F3E5F5')
+                                : (theme === 'dark' ? '#2C2C2E' : '#FFF'),
+                              borderColor: autoBidStrategy === 'snipe' ? '#6A0DAD' : (theme === 'dark' ? '#444' : '#E0E0E0'),
+                            },
+                          ]}
+                          onPress={() => setAutoBidStrategy('snipe')}
                         >
                           <View style={styles.strategyHeader}>
-                            <Ionicons name="flash" size={24} color={autoBidStrategy === 'aggressive' ? '#FF6B6B' : '#666'} />
-                            <Text style={[styles.strategyName, autoBidStrategy === 'aggressive' && styles.strategyNameActive]}>
-                              AGGRESSIVE
+                            <Ionicons name="flash" size={24} color={autoBidStrategy === 'snipe' ? '#FF6B6B' : (theme === 'dark' ? '#888' : '#666')} />
+                            <Text style={[styles.strategyName, { color: theme === 'dark' ? '#AAA' : '#666' }, autoBidStrategy === 'snipe' && styles.strategyNameActive]}>
+                              SNIPE
                             </Text>
                           </View>
-                          <Text style={styles.strategyDesc}>Waits until last 2 minutes, then bids every 30 seconds. Best for high-competition items.</Text>
+                          <Text style={[styles.strategyDesc, { color: colors.textSecondary }]}>Waits silently, then fires every 30 seconds in the final 2 minutes. Best for winning at the last moment.</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                          style={[styles.strategyCard, autoBidStrategy === 'moderate' && styles.strategyCardActive]}
-                          onPress={() => setAutoBidStrategy('moderate')}
+                          style={[
+                            styles.strategyCard,
+                            {
+                              backgroundColor: autoBidStrategy === 'active'
+                                ? (theme === 'dark' ? '#2D1B4E' : '#F3E5F5')
+                                : (theme === 'dark' ? '#2C2C2E' : '#FFF'),
+                              borderColor: autoBidStrategy === 'active' ? '#6A0DAD' : (theme === 'dark' ? '#444' : '#E0E0E0'),
+                            },
+                          ]}
+                          onPress={() => setAutoBidStrategy('active')}
                         >
                           <View style={styles.strategyHeader}>
-                            <Ionicons name="pulse" size={24} color={autoBidStrategy === 'moderate' ? '#6A0DAD' : '#666'} />
-                            <Text style={[styles.strategyName, autoBidStrategy === 'moderate' && styles.strategyNameActive]}>
-                              MODERATE
+                            <Ionicons name="pulse" size={24} color={autoBidStrategy === 'active' ? '#6A0DAD' : (theme === 'dark' ? '#888' : '#666')} />
+                            <Text style={[styles.strategyName, { color: theme === 'dark' ? '#AAA' : '#666' }, autoBidStrategy === 'active' && styles.strategyNameActive]}>
+                              ACTIVE
                             </Text>
                           </View>
-                          <Text style={styles.strategyDesc}>Bids every 5 minutes when outbid. Balanced approach for most auctions.</Text>
+                          <Text style={[styles.strategyDesc, { color: colors.textSecondary }]}>Bids throughout the entire auction every 5 minutes when outbid. Great for staying in the lead.</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                          style={[styles.strategyCard, autoBidStrategy === 'passive' && styles.strategyCardActive]}
-                          onPress={() => setAutoBidStrategy('passive')}
+                          style={[
+                            styles.strategyCard,
+                            {
+                              backgroundColor: autoBidStrategy === 'late'
+                                ? (theme === 'dark' ? '#2D1B4E' : '#F3E5F5')
+                                : (theme === 'dark' ? '#2C2C2E' : '#FFF'),
+                              borderColor: autoBidStrategy === 'late' ? '#6A0DAD' : (theme === 'dark' ? '#444' : '#E0E0E0'),
+                            },
+                          ]}
+                          onPress={() => setAutoBidStrategy('late')}
                         >
                           <View style={styles.strategyHeader}>
-                            <Ionicons name="moon" size={24} color={autoBidStrategy === 'passive' ? '#4CAF50' : '#666'} />
-                            <Text style={[styles.strategyName, autoBidStrategy === 'passive' && styles.strategyNameActive]}>
-                              PASSIVE
+                            <Ionicons name="moon" size={24} color={autoBidStrategy === 'late' ? '#4CAF50' : (theme === 'dark' ? '#888' : '#666')} />
+                            <Text style={[styles.strategyName, { color: theme === 'dark' ? '#AAA' : '#666' }, autoBidStrategy === 'late' && styles.strategyNameActive]}>
+                              LATE
                             </Text>
                           </View>
-                          <Text style={styles.strategyDesc}>Only bids in final 30 minutes every 10 minutes. Stays under radar.</Text>
+                          <Text style={[styles.strategyDesc, { color: colors.textSecondary }]}>Holds back, then bids every 10 minutes in the final 30 minutes. Stays under the radar.</Text>
                         </TouchableOpacity>
                       </View>
                     </>
@@ -778,8 +802,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingTop: 60,
     backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+
   },
   headerTitleRow: {
     flexDirection: 'row',
@@ -1225,7 +1248,6 @@ const styles = StyleSheet.create({
   },
   strategyCardActive: {
     borderColor: '#6A0DAD',
-    backgroundColor: '#F3E5F5',
   },
   strategyHeader: {
     flexDirection: 'row',

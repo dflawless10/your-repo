@@ -26,6 +26,9 @@ import { getUserProfile } from '@/api/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/app/theme/ThemeContext';
+import { NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
+
+
 
 export default function JewelryBoxScreen() {
   const { theme, colors } = useTheme();
@@ -44,6 +47,20 @@ export default function JewelryBoxScreen() {
   const headerOpacity = useRef(new Animated.Value(0)).current;
   const headerScale = useRef(new Animated.Value(1)).current;
   const dispatch = useAppDispatch();
+  const [loadingMore, setLoadingMore] = useState(false);
+
+   const loadMoreItems = async () => {
+  setLoadingMore(true);
+
+  // simulate real loading OR fetch more items
+  await new Promise(resolve => setTimeout(resolve, 1500));
+
+  // if you had pagination, append items here
+  // setFilteredItems(prev => [...prev, ...newItems]);
+
+  setLoadingMore(false);
+};
+
 
   // Reactive dimensions for landscape support
   const { width, height } = useWindowDimensions();
@@ -93,17 +110,17 @@ export default function JewelryBoxScreen() {
 
   useEffect(() => {
     if (token) {
-      refreshWishlist();
+     void refreshWishlist();
     }
   }, [token, refreshWishlist]);
 
   useEffect(() => {
-    fetchFavoritesFromBackend();
+  void  fetchFavoritesFromBackend();
   }, [fetchFavoritesFromBackend]);
 
   useFocusEffect(
     React.useCallback(() => {
-      fetchFavoritesFromBackend();
+    void  fetchFavoritesFromBackend();
     }, [fetchFavoritesFromBackend])
   );
 
@@ -116,75 +133,53 @@ export default function JewelryBoxScreen() {
         }
       }
     };
-    hydrateUser();
+  void  hydrateUser();
   }, [token, dispatch]);
 
-  // Fade in header title - wait for screen to fully render first
+  // Fade in header title
   useEffect(() => {
-    setTimeout(() => {
-      Animated.timing(headerOpacity, {
-        toValue: 1,
-        duration: 2000, // 2 seconds - slow and dramatic
-        useNativeDriver: true,
-      }).start(() => {
-        // After fade-in completes, start pulsing animation
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(headerScale, {
-              toValue: 1.05,
-              duration: 1500,
-              useNativeDriver: true,
-            }),
-            Animated.timing(headerScale, {
-              toValue: 1,
-              duration: 1500,
-              useNativeDriver: true,
-            }),
-          ])
-        ).start();
-      });
-    }, 500); // 500ms delay - let screen render fully first
+    Animated.timing(headerOpacity, {
+      toValue: 1,
+      duration: 400,
+      useNativeDriver: true,
+    }).start(() => {
+      // After fade-in completing, start pulsing animation
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(headerScale, {
+            toValue: 1.05,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(headerScale, {
+            toValue: 1,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    });
   }, []);
 
   // Apply sorting and filtering
   useEffect(() => {
     let items = [...allItems];
 
-    // Filter by category
+    // Filter by category — use getCategoryBadge so filter matches badge display exactly
     if (filterCategory !== 'all') {
       items = items.filter(item => {
-        const tags = item.tags?.toLowerCase() || '';
-        const name = item.name?.toLowerCase() || '';
-        const category = item.category?.toLowerCase() || '';
-        const searchText = `${tags} ${name} ${category}`;
-
-        // Use word boundary regex to avoid partial matches (e.g., "ring" shouldn't match "earring")
-        const pattern = new RegExp(`\\b${filterCategory}s?\\b`, 'i');
-        const matches = pattern.test(searchText);
-
-        // Debug logging for item #723
-        if (item.id === 723) {
-          console.log('🐐 JewelryBox Filter Debug - Item #723:');
-          console.log('  Filter:', filterCategory);
-          console.log('  Name:', name);
-          console.log('  Tags:', tags);
-          console.log('  Category:', category);
-          console.log('  Search text:', searchText);
-          console.log('  Pattern:', pattern.source);
-          console.log('  Match result:', matches);
-        }
-
-        return matches;
+        const badge = getCategoryBadge(item);
+        return badge.label.toLowerCase().startsWith(filterCategory);
       });
     }
 
     // Sort
     switch (sortBy) {
       case 'price_low':
-        items.sort((a, b) => (a.highest_bid || a.price || 0) - (b.highest_bid || b.price || 0));
+        items.sort((a, b) => (a.highest_bid || a.buy_it_now || a.price || 0) - (b.highest_bid || b.buy_it_now || b.price || 0));
         break;
       case 'price_high':
-        items.sort((a, b) => (b.highest_bid || b.price || 0) - (a.highest_bid || a.price || 0));
+        items.sort((a, b) => (b.highest_bid || b.buy_it_now || b.price || 0) - (a.highest_bid || a.buy_it_now || a.price || 0));
         break;
       case 'ending_soon':
         items.sort((a, b) => {
@@ -344,11 +339,14 @@ export default function JewelryBoxScreen() {
 
   const renderItem = (item: ListedItem, index: number) => {
     const category = getCategoryBadge(item);
-    const price = item.highest_bid || item.price || 0;
+    const price = item.highest_bid || item.buy_it_now || item.price || 0;
 
     // Check if auction ended or item sold
     const auctionEnded = item.auction_ends_at && new Date(item.auction_ends_at).getTime() < Date.now();
     const isHeartBroken = auctionEnded || item.status === 'sold';
+
+
+
 
     return (
       <TouchableOpacity
@@ -406,61 +404,65 @@ export default function JewelryBoxScreen() {
 
           {/* Content */}
           <View style={styles.cardContent}>
+            {/* Title pinned to top */}
             <Text style={styles.itemName} numberOfLines={2}>
               {item.name}
             </Text>
 
-            <View style={styles.priceRow}>
-              <Text style={styles.price}>${price.toLocaleString()}</Text>
-              {(item.bidCount ?? 0) > 0 && (
-                <View style={styles.bidBadge}>
-                  <MaterialCommunityIcons name="gavel" size={10} color="#FFF" />
-                  <Text style={styles.bidCount}>{item.bidCount}</Text>
+            {/* Price / countdown / seller pinned to bottom */}
+            <View style={styles.cardBottom}>
+              <View style={styles.priceRow}>
+                <Text style={styles.price}>${price.toLocaleString()}</Text>
+                {(item.bidCount ?? 0) > 0 && (
+                  <View style={styles.bidBadge}>
+                    <MaterialCommunityIcons name="gavel" size={10} color="#FFF" />
+                    <Text style={styles.bidCount}>{item.bidCount}</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Countdown Timer */}
+              {item.auction_ends_at && (
+                <View style={styles.countdownRow}>
+                  <Ionicons name="time-outline" size={14} color={getCountdownColor(item.auction_ends_at)} />
+                  <Text style={[styles.countdownText, { color: getCountdownColor(item.auction_ends_at) }]}>
+                    {formatTimeWithSeconds(item.auction_ends_at, Date.now())}
+                  </Text>
+                </View>
+              )}
+
+              {/* Seller Info */}
+              {item.seller && (
+                <View style={styles.sellerRatingRow}>
+                  {item.seller?.avatar_url && (
+                    <Image source={{ uri: item.seller.avatar_url }} style={styles.sellerAvatar} />
+                  )}
+                  <TouchableOpacity
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      router.push(`/seller/${item.seller?.id}` as const);
+                    }}
+                    activeOpacity={0.7}
+                    style={styles.sellerNameContainer}
+                  >
+                    <Text style={styles.sellerName} numberOfLines={1}>
+                      {item.seller?.username}
+                    </Text>
+                  </TouchableOpacity>
+                  {(item.seller?.avg_rating || 0) > 0 || (item.seller?.total_reviews || 0) > 0 ? (
+                    <View style={styles.ratingRow}>
+                      <Ionicons name="star" size={12} color="#FFD700" />
+                      <Text style={styles.ratingText}>
+                        {(item.seller?.avg_rating || 0).toFixed(1)}{' '}
+                      </Text>
+                      <Text style={styles.reviewCount}>
+                        ({item.seller?.total_reviews || 0})
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
               )}
             </View>
-
-            {/* Countdown Timer */}
-            {item.auction_ends_at && (
-              <View style={styles.countdownRow}>
-                <Ionicons name="time-outline" size={14} color={getCountdownColor(item.auction_ends_at)} />
-                <Text style={[styles.countdownText, { color: getCountdownColor(item.auction_ends_at) }]}>
-                  {formatTimeWithSeconds(item.auction_ends_at, Date.now())}
-                </Text>
-              </View>
-            )}
-
-            {/* Seller Info */}
-            {item.seller && (
-              <View style={styles.sellerRatingRow}>
-                {item.seller?.avatar_url && (
-                  <Image source={{ uri: item.seller.avatar_url }} style={styles.sellerAvatar} />
-                )}
-                <TouchableOpacity
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    router.push(`/seller/${item.seller?.id}` as const);
-                  }}
-                  activeOpacity={0.7}
-                  style={styles.sellerNameContainer}
-                >
-                  <Text style={styles.sellerName} numberOfLines={1}>
-                    {item.seller?.username}
-                  </Text>
-                </TouchableOpacity>
-                {(item.seller?.avg_rating || 0) > 0 || (item.seller?.total_reviews || 0) > 0 ? (
-                  <View style={styles.ratingRow}>
-                    <Ionicons name="star" size={12} color="#FFD700" />
-                    <Text style={styles.ratingText}>
-                      {(item.seller?.avg_rating || 0).toFixed(1)}{' '}
-                    </Text>
-                    <Text style={styles.reviewCount}>
-                      ({item.seller?.total_reviews || 0})
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-            )}
           </View>
         </View>
       </TouchableOpacity>
@@ -470,18 +472,31 @@ export default function JewelryBoxScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Animated.ScrollView
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false }
-        )}
-        scrollEventThrottle={16}
-        contentContainerStyle={{
-          paddingTop: HEADER_MAX_HEIGHT,
-          paddingBottom: 160,
-          paddingHorizontal: 16,
-        }}
-        showsVerticalScrollIndicator={false}
-      >
+  onScroll={Animated.event(
+    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+    {
+      useNativeDriver: false,
+      listener: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+        const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+
+        const isBottom =
+          layoutMeasurement.height + contentOffset.y >= contentSize.height - 50;
+
+        if (isBottom && !loadingMore) {
+          loadMoreItems();
+        }
+      }
+    }
+  )}
+  scrollEventThrottle={16}
+  contentContainerStyle={{
+    paddingTop: HEADER_MAX_HEIGHT,
+    paddingBottom: 60,
+    paddingHorizontal: 16,
+  }}
+  showsVerticalScrollIndicator={false}
+>
+
         {loading && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#6A0DAD" />
@@ -494,14 +509,24 @@ export default function JewelryBoxScreen() {
         {!loading && !(filteredItems.length === 0 && allItems.length === 0) && (
           <>
             {/* Header Stats */}
-            <Animated.View style={[styles.headerStats, { opacity: headerOpacity, transform: [{ scale: headerScale }] }]}>
-              <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
-                💖 My Favorites
-              </Text>
-              <Text style={[styles.headerCount, { color: theme === 'dark' ? '#999' : '#666' }]}>
-                {filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'}
-              </Text>
-            </Animated.View>
+            <Animated.View
+  style={[
+    styles.headerStats,
+    {
+      opacity: headerOpacity,
+      transform: [{ scale: headerScale }],
+      marginTop: 24, // ← THIS IS THE FIX
+    },
+  ]}
+>
+  <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
+    💖 My Favorites
+  </Text>
+  <Text style={[styles.headerCount, { color: theme === 'dark' ? '#999' : '#666' }]}>
+    {filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'}
+  </Text>
+</Animated.View>
+
 
             {/* Filters */}
             <ScrollView
@@ -546,11 +571,30 @@ export default function JewelryBoxScreen() {
             {/* Items Grid */}
             <View style={[styles.grid, { gap: GAP }]}>
               {filteredItems.map((item, index) => (
-                <View key={item.id} style={{ width: CARD_WIDTH, marginBottom: GAP }}>
+                <View key={item.id} style={{ width: CARD_WIDTH }}>
                   {renderItem(item, index)}
                 </View>
               ))}
             </View>
+
+            {/* End of list footer */}
+            {filteredItems.length > 0 && (
+  <View style={styles.listFooter}>
+    {loadingMore ? (
+      <ActivityIndicator size="large" color="#6A0DAD" />
+    ) : (
+      <Text
+        style={[
+          styles.listFooterText,
+          { color: theme === 'dark' ? '#555' : '#999' }
+        ]}
+      >
+        You&apos;ve reached the end 🐐
+      </Text>
+    )}
+  </View>
+)}
+
           </>
         )}
       </Animated.ScrollView>
@@ -680,11 +724,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1a202c',
-    marginBottom: 4,
-  },
+  fontSize: 20,
+  fontWeight: '700',
+  marginTop: 4,
+  marginBottom: 2,
+},
   headerCount: {
     fontSize: 14,
     color: '#666',
@@ -730,14 +774,15 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: 16,
+    alignItems: 'stretch',
     gap: 12,
     marginTop: 8,
   },
   cardWrapper: {
-    marginBottom: 12,
+    flex: 1,
   },
   card: {
+    flex: 1,
     backgroundColor: '#FFF',
     borderRadius: 16,
     overflow: 'hidden',
@@ -833,8 +878,13 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   cardContent: {
+    flex: 1,
     padding: 12,
     paddingBottom: 14,
+    justifyContent: 'space-between',
+  },
+  cardBottom: {
+    gap: 4,
   },
   itemName: {
     fontSize: 15,
@@ -842,12 +892,12 @@ const styles = StyleSheet.create({
     color: '#2d3748',
     marginBottom: 6,
     lineHeight: 20,
+    minHeight: 40,
   },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
   },
   price: {
     fontSize: 20,
@@ -872,7 +922,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 4,
   },
   countdownText: {
     fontSize: 12,
@@ -985,6 +1034,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#4a5568',
     lineHeight: 20,
+  },
+  listFooter: {
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+  listFooterText: {
+    fontSize: 13,
+    fontWeight: '500',
   },
   sellerRatingRow: {
     flexDirection: 'row',

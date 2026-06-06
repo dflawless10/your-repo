@@ -138,7 +138,7 @@ const PriceBreakdown = ({ order, theme, colors }: { order: Order; theme: string;
     </View>
     {order.bidgoat_commission != null && (
       <View style={styles.priceRow}>
-        <Text style={styles.feeLabel}>BidGoat Fee (8%)</Text>
+        <Text style={styles.feeLabel}>BidGoat Fee ({order.commission_rate != null ? `${Math.round(order.commission_rate * 100)}%` : '8%'})</Text>
         <Text style={styles.feeValue}>-${order.bidgoat_commission.toFixed(2)}</Text>
       </View>
     )}
@@ -227,6 +227,7 @@ type Order = {
   insurance_cost?: number;
   total_amount: number;
   bidgoat_commission?: number;
+  commission_rate?: number;
   seller_payout?: number;
   seller_username: string;
   buyer: {
@@ -418,7 +419,7 @@ export default function SellerOrdersScreen() {
         <View style={[styles.headerTitleContainer, { backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
           <View style={styles.titleWithArrow}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
-              <Ionicons name="arrow-back" size={28} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+              <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#6A0DAD' : '#6A0DAD'} />
             </TouchableOpacity>
             <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Selling Orders</Text>
           </View>
@@ -432,23 +433,13 @@ export default function SellerOrdersScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <EnhancedHeader scrollY={scrollY} username={username} onSearch={() => {}} />
 
-      {/* Title with Back Arrow */}
-      <Animated.View style={[styles.headerTitleContainer, { opacity: headerOpacity, transform: [{ scale: headerScale }], backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
-        <View style={styles.titleWithArrow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
-            <Ionicons name="arrow-back" size={28} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Selling Orders</Text>
-        </View>
-      </Animated.View>
-
       <Animated.ScrollView
         style={[styles.container, { backgroundColor: colors.background }]}
         contentContainerStyle={{
-    paddingTop: 240,
-    paddingBottom: 40,
-    backgroundColor: colors.background,
-  }}
+          paddingTop: HEADER_MAX_HEIGHT,
+          paddingBottom: 40,
+          backgroundColor: colors.background,
+        }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
@@ -458,6 +449,15 @@ export default function SellerOrdersScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
+        {/* Title with Back Arrow — scrolls with content */}
+        <Animated.View style={[styles.headerTitleContainer, { opacity: headerOpacity, transform: [{ scale: headerScale }], backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
+          <View style={styles.titleWithArrow}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
+              <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#6A0DAD' : '#6A0DAD'} />
+            </TouchableOpacity>
+            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Selling Orders</Text>
+          </View>
+        </Animated.View>
 
         {/* Stats */}
         <View style={styles.statsContainer}>
@@ -650,14 +650,9 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   headerTitleContainer: {
-    position: 'absolute',
-    top: HEADER_MAX_HEIGHT + 48,
-    left: 0,
-    right: 0,
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor:'#F7FAFC',
-    zIndex: 100,
+    paddingTop: 48,
+    paddingBottom: 16,
   },
   titleWithArrow: {
     flexDirection: 'row',

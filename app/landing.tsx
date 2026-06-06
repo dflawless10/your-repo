@@ -1,20 +1,89 @@
-import React from 'react';
+import React, {useEffect, useRef} from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Dimensions,
+  Dimensions, Animated,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 
 const { width } = Dimensions.get('window');
 
+
 export default function LandingPage() {
   const router = useRouter();
+  const scrollViewRef = useRef<ScrollView>(null);
+  const goatAnim = useRef(new Animated.Value(0)).current;
+  const stampRotate = useRef(new Animated.Value(0)).current;
+  const stampScale = useRef(new Animated.Value(1)).current;
+
+
+  // Subtle idle animation for the goat stamp
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.parallel([
+          Animated.timing(stampRotate, {
+            toValue: 1,
+            duration: 3000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(stampScale, {
+            toValue: 1.05,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.parallel([
+          Animated.timing(stampRotate, {
+            toValue: 0,
+            duration: 3000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(stampScale, {
+            toValue: 1,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+        ]),
+      ])
+    ).start();
+  }, []);
+
+
+
+
+  const triggerGoatBounce = () => {
+    Animated.sequence([
+      Animated.timing(goatAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(goatAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  useEffect(() => {
+  const runIntro = async () => {
+    triggerGoatBounce(); // 🐐 Ritual bounce
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  runIntro();
+}, []);
+
+
+
 
   return (
     <View style={styles.container}>
@@ -33,24 +102,90 @@ export default function LandingPage() {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Hero Section */}
       <LinearGradient
-        colors={['#4CAF50', '#6A0DAD']}
-        style={styles.hero}
-      >
-        <Text style={styles.goatEmoji}>🐐</Text>
-        <Text style={styles.heroTitle}>BidGoat</Text>
-        <Text style={styles.heroSubtitle}>
-          The Most Intelligent Auction Platform Ever Built
-        </Text>
-        <Text style={styles.heroDescription}>
-          While others run 25-year-old auction systems, we built the future
-        </Text>
+          colors={['#4CAF50', '#6A0DAD']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.header}
+        >
+          <Animated.Image
+            source={require('@/assets/goat-stamp.png')}
+            style={[
+              styles.goatStamp,
+              {
+                transform: [
+                  {
+                    scale: Animated.multiply(
+                      stampScale,
+                      goatAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [1, 1.2],
+                      })
+                    ),
+                  },
+                  {
+                    rotate: stampRotate.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: ['-5deg', '5deg'],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          />
+        <Animated.Text
+  style={[
+    styles.heroTitle,
+    {
+      color: '#6A0DAD',
+      transform: [
+        {
+          scale: Animated.multiply(
+            stampScale,
+            goatAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [1, 1.1],
+            })
+          ),
+        },
+      ],
+    },
+  ]}
+>
+  Bid
+</Animated.Text>
+
+<Animated.Text
+  style={[
+    styles.heroTitle,
+    {
+      color: '#4CAF50',
+      transform: [
+        {
+          scale: Animated.multiply(
+            stampScale,
+            goatAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [1, 1.1],
+            })
+          ),
+        },
+      ],
+    },
+  ]}
+>
+  Goat
+</Animated.Text>
+
+
+
+        
       </LinearGradient>
 
       {/* Early CTA Section - After Hero */}
       <View style={styles.earlyCtaSection}>
         <Text style={styles.earlyCtaTitle}>Ready to Bid Smarter?</Text>
         <Text style={styles.earlyCtaSubtitle}>
-          Join thousands who've upgraded from legacy platforms
+          Join thousands who&#39;ve upgraded from legacy platforms
         </Text>
 
         <TouchableOpacity
@@ -311,9 +446,10 @@ appIcon: {
     paddingHorizontal: 24,
     alignItems: 'center',
   },
-  goatEmoji: {
-    fontSize: 80,
-    marginBottom: 16,
+  goatStamp: {
+    width: 100,
+    height: 100,
+    marginBottom: 20,
   },
   heroTitle: {
     fontSize: 48,

@@ -2,7 +2,7 @@
   "expo": {
     "name": "BidGoat",
     "slug": "BidGoatMobile",
-    "version": "5.5.5",
+    "version": "5.6.6",
     "icon": "./assets/images/icon.png",
     "scheme": "bidgoat",
     "userInterfaceStyle": "automatic",
@@ -38,8 +38,8 @@
         "android.permission.WRITE_EXTERNAL_STORAGE"
       ],
       "package": "com.dflawless.BidGoatMobile",
-      "versionCode": 43,
-      "runtimeVersion": "5.5.5",
+      "versionCode": 161,
+      "runtimeVersion": "14.3.2",
       "googleServicesFile": "./google-services.json",
       "intentFilters": [
         {
@@ -68,8 +68,7 @@
       }
     },
     "plugins": [
-      "./plugins/withFirebaseInit.js",
-      "./plugins/withStripeVersion.js",
+"./plugins/withStripeVersion.js",
       "expo-router",
       [
         "expo-splash-screen",
@@ -102,7 +101,14 @@
           "enableGooglePay": false
         }
       ],
-      "expo-build-properties"
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

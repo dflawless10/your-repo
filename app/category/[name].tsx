@@ -68,7 +68,7 @@ export default function CategoryScreen() {
   };
 
   useEffect(() => {
-    fetchItems();
+   void fetchItems();
   }, [name, selectedGender]);
 
   const fetchItems = async () => {

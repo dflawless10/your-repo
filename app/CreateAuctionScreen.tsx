@@ -1,5 +1,4 @@
 import { API_BASE_URL } from '@/config';
-
 import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
@@ -9,17 +8,13 @@ import {
   StyleSheet,
   ScrollView,
   Animated,
-  KeyboardAvoidingView,
-  Platform,
   TouchableOpacity,
-  Keyboard,
+  Pressable,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
-import ImageUploader from '@/components/ImageUploader';
-import {triggerGoat} from "@/utils/goatFeedback";
 import { CharacterCounterInput, CHARACTER_LIMITS, validateCharacterCount } from 'app/components/CharacterCounterInput';
 import { handleListingSuccess } from 'app/utils/formHelpers';
 import { validateContentQuick } from 'app/utils/contentModeration';
@@ -29,7 +24,8 @@ import ImageValidationFeedback from '@/app/components/ImageValidationFeedback';
 import GlobalFooter from "@/app/components/GlobalFooter";
 import CategorySelector, { QUICK_CATEGORIES } from '@/app/components/CategorySelector';
 import { useTheme } from '@/app/theme/ThemeContext';
-
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 
 const API_URL = API_BASE_URL;
 
@@ -56,6 +52,7 @@ const API_URL = API_BASE_URL;
   const [categoryName, setCategoryName] = useState('');
   const [gender, setGender] = useState<string>('unisex');
   const [loading, setLoading] = useState(false);
+  const [coverIndex, setCoverIndex] = useState(0);
 
   // Item-level return policy overrides
   const [returnPolicyOverride, setReturnPolicyOverride] = useState<string>('use_default');
@@ -73,6 +70,40 @@ const API_URL = API_BASE_URL;
   // Image validation for first image
   const imageValidation = useImageValidation(imageUris.length > 0 ? imageUris[0] : null);
 
+  const pickImages = async () => {
+  if (imageUris.length >= 5) {
+    Alert.alert('Maximum Images Reached', 'You can upload up to 5 images.');
+    return;
+  }
+
+  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (status !== 'granted') {
+    Alert.alert('Permission Required', 'Please allow access to your photos.');
+    return;
+  }
+
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    allowsMultipleSelection: true,
+    quality: 1,
+  });
+
+  if (!result.canceled) {
+    const newUris = result.assets.map(a => a.uri);
+
+    const remaining = 5 - imageUris.length;
+    const toAdd = newUris.slice(0, remaining);
+
+    setImageUris(prev => [...prev, ...toAdd]);
+
+    if (newUris.length > remaining) {
+      Alert.alert('Limit Reached', `Only ${remaining} image(s) were added.`);
+    }
+  }
+};
+
+
+
   useEffect(() => {
     // Fade in header title and arrow - wait for screen to fully render first
     setTimeout(() => {
@@ -81,7 +112,7 @@ const API_URL = API_BASE_URL;
         duration: 2000, // 2 seconds - slow and dramatic
         useNativeDriver: true,
       }).start(() => {
-        // After fade-in completes, start pulsing animation
+        // After fade-in stops, start pulsing animation
         Animated.loop(
           Animated.sequence([
             Animated.timing(headerScale, {
@@ -100,7 +131,7 @@ const API_URL = API_BASE_URL;
     }, 500); // 500ms delay - let screen render fully first
 
     if (editItemId) {
-      loadItemForEdit();
+     void loadItemForEdit();
     }
   }, [editItemId]);
 
@@ -229,20 +260,23 @@ const API_URL = API_BASE_URL;
     formData.append('return_policy_override', returnPolicyOverride);
 
     // Main image (first image)
-    formData.append('photo', {
-      uri: imageUris[0],
-      name: 'photo.jpg',
-      type: 'image/jpeg',
-    } as any);
+   const primary = imageUris[coverIndex];
+const additional = imageUris.filter((_, i) => i !== coverIndex);
 
-    // Additional images
-    for (let i = 1; i < imageUris.length; i++) {
-      formData.append(`additional_photo_${i - 1}`, {
-        uri: imageUris[i],
-        name: `extra_${i - 1}.jpg`,
-        type: 'image/jpeg',
-      } as any);
-    }
+formData.append('photo', {
+  uri: primary,
+  name: 'photo.jpg',
+  type: 'image/jpeg',
+} as any);
+
+additional.forEach((uri, i) => {
+  formData.append(`additional_photo_${i}`, {
+    uri,
+    name: `extra_${i}.jpg`,
+    type: 'image/jpeg',
+  } as any);
+});
+
 
 
     try {
@@ -323,7 +357,7 @@ const API_URL = API_BASE_URL;
 
       <ScrollView
         style={[styles.container, { backgroundColor: colors.background }]}
-        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT, paddingBottom: 120, backgroundColor: colors.background }}
+        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT, backgroundColor: colors.background }}
         scrollEventThrottle={16}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={true}
@@ -339,16 +373,15 @@ const API_URL = API_BASE_URL;
             opacity: headerOpacity,
             transform: [{ scale: headerScale }],
             backgroundColor: colors.background,
-            borderBottomColor: theme === 'dark' ? '#333' : '#E5E5E5'
           }
         ]}>
           <View style={styles.titleWithArrow}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
-               <Ionicons name="arrow-back" size={28} color="#B794F4"  />
+               <Ionicons name="arrow-back" size={24} color="#6A0DAD"  />
             </TouchableOpacity>
             <View>
-              <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{editItemId ? 'Edit Auction' : 'Create Auction'}</Text>
-              {editItemId && <Text style={[styles.headerSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]}>Update your listing details</Text>}
+              <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{editItemId ? 'Edit Auction' : 'Create 🆕 Auction'}</Text>
+              {editItemId && <Text style={[styles.headerSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]}>📝 Update your listing details</Text>}
             </View>
           </View>
         </Animated.View>
@@ -362,23 +395,123 @@ const API_URL = API_BASE_URL;
           showSelectedBanner={true}
         />
 
-        <ImageUploader
-          maxImages={5}
-          imageUris={imageUris}
-          onImagesChange={(uris) => {
-            setImageUris(uris);
-            if (uris.length > 0) {
-              triggerGoat('UploadConfirmed');
-            }
-          }}
-          title="Upload Auction Photos"
-          subtitle="Add up to 5 photos"
-        />
+        {/* ------------------ IMAGE SECTION (Diamond Behavior) ------------------ */}
 
-        {/* Image Validation Feedback */}
-        {imageUris.length > 0 && (
-          <ImageValidationFeedback validation={imageValidation} />
-        )}
+<Text
+  style={[
+    styles.label,
+    { color: theme === 'dark' ? '#E2E8F0' : '#2D3748' }
+  ]}
+>
+  📸 {imageUris.length}/5️⃣  Photos Uploaded
+</Text>
+
+
+<ScrollView
+  horizontal
+  showsHorizontalScrollIndicator={false}
+  style={{ marginBottom: 16, height: 240 }}
+  contentContainerStyle={{ flexGrow: 1, justifyContent: imageUris.length === 0 ? 'center' : 'flex-start', alignItems: 'center' }}
+>
+  {imageUris.map((uri, index) => (
+    <View key={index} style={styles.imageWrapper}>
+      <Image
+        source={{ uri }}
+        style={styles.image}
+        contentFit="cover"
+      />
+
+      {/* Delete Button */}
+      <TouchableOpacity
+        style={styles.deleteButton}
+        onPress={() => {
+          Alert.alert(
+            'Delete Image',
+            'Are you sure you want to remove this image?',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: () => {
+                  const updated = imageUris.filter((_, i) => i !== index);
+                  setImageUris(updated);
+
+                  if (coverIndex === index) setCoverIndex(0);
+                  else if (coverIndex > index) setCoverIndex(coverIndex - 1);
+                }
+              }
+            ]
+          );
+        }}
+      >
+        <Ionicons name="close-circle" size={24} color="#FF3B30" />
+      </TouchableOpacity>
+
+      {/* Cover Toggle */}
+      <TouchableOpacity
+        style={[
+          styles.coverToggle,
+          coverIndex === index && styles.coverToggleActive,
+        ]}
+        onPress={() => {
+          setCoverIndex(index);
+          Alert.alert('Cover Image Set', `Image ${index + 1} is now your cover.`);
+        }}
+      >
+        <Text style={styles.coverToggleText}>
+          {coverIndex === index ? '✅ Cover Image' : 'Set as Cover'}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  ))}
+
+  {imageUris.length < 5 && (
+  <View
+    style={[
+     styles.uploadBadgeContainer,
+    {
+      backgroundColor: colors.background,
+      borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0'
+    }
+  ]}
+  >
+    <Pressable onPress={pickImages} style={styles.uploadBadgeWrapper}>
+      <Image
+        source={require('assets/images/upload-your-gallery.png')}
+        style={{ width: 120, height: 120, resizeMode: 'contain' }}
+      />
+    </Pressable>
+  </View>
+)}
+
+
+</ScrollView>
+
+{/* Fullscreen Viewer */}
+{imageUris.length > 0 && (
+  <TouchableOpacity
+    style={styles.fullscreenButton}
+    onPress={() =>
+      router.push({
+        pathname: '/FullImageScreen',
+        params: {
+          mediaArray: JSON.stringify(imageUris),
+          index: coverIndex.toString(),
+          title: name || 'Item Photos',
+        },
+      })
+    }
+  >
+    <Text style={styles.fullscreenText}>🔍 View Fullscreen</Text>
+  </TouchableOpacity>
+)}
+
+{/* Validation */}
+{imageUris.length > 0 && (
+  <ImageValidationFeedback validation={imageValidation} />
+)}
+
 
         <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>🎯 Auction Details</Text>
 
@@ -574,23 +707,50 @@ const API_URL = API_BASE_URL;
           </View>
         )}
 
-        <TouchableOpacity
-          style={[styles.buttonContainer, loading && styles.buttonDisabled]}
-          onPress={handleSubmit}
-          disabled={loading}
-        >
-          {loading ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={styles.buttonTitle}>Creating...</Text>
-              <Ionicons name="hourglass-outline" size={20} color="#FFF" />
-            </View>
-          ) : (
-            <Text style={styles.buttonTitle}>Create Auction</Text>
-          )}
-        </TouchableOpacity>
+        {/* BUTTON ROW */}
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={[styles.cancelButton, {
+              backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC',
+              borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0'
+            }]}
+            onPress={() => {
+              Alert.alert(
+                'Cancel Listing',
+                'Are you sure you want to cancel? Your entered information will be lost.',
+                [
+                  { text: 'Keep Editing', style: 'cancel' },
+                  {
+                    text: 'Yes, Cancel',
+                    style: 'destructive',
+                    onPress: () => router.back()
+                  }
+                ]
+              );
+            }}
+          >
+            <Ionicons name="close-circle" size={20} color={theme === 'dark' ? '#999' : '#718096'} />
+            <Text style={[styles.cancelButtonText, { color: theme === 'dark' ? '#999' : '#718096' }]}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.submitButton, loading && styles.buttonDisabled]}
+            onPress={handleSubmit}
+            disabled={loading}
+          >
+            {loading ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={styles.submitButtonText}>Creating...</Text>
+                <Ionicons name="hourglass-outline" size={20} color="#FFF" />
+              </View>
+            ) : (
+              <Text style={styles.submitButtonText}>Create Auction</Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </ScrollView>
       <GlobalFooter />
     </View>
+
   );
 }
 
@@ -603,7 +763,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     paddingTop: 60,
-    borderBottomWidth: 1,
+
   },
   titleWithArrow: {
     flexDirection: 'row',
@@ -618,7 +778,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
   },
   label: {
@@ -700,12 +860,31 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+    paddingBottom: 24,
+  },
+  submitButton: {
+    flex: 1,
+    backgroundColor: '#FF6B35',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
   buttonDisabled: {
     backgroundColor: '#CCCCCC',
     opacity: 0.6,
   },
 
-buttonTitle: {
+submitButtonText: {
     color: '#fff',
     fontSize: 18,
     fontWeight: '700',
@@ -801,6 +980,113 @@ buttonTitle: {
     fontStyle: 'italic',
     marginTop: 8,
   },
+  imageWrapper: {
+  width: 220,
+  height: 220,
+  borderRadius: 16,
+  backgroundColor: '#e0e0e0',
+  marginRight: 12,
+  overflow: 'hidden',
+  position: 'relative',
+},
+image: {
+  width: '100%',
+  height: '100%',
+  borderRadius: 16,
+},
+deleteButton: {
+  position: 'absolute',
+  top: 8,
+  right: 8,
+  backgroundColor: '#ffffffee',
+  borderRadius: 12,
+  padding: 2,
+},
+coverToggle: {
+  position: 'absolute',
+  bottom: 8,
+  left: 8,
+  backgroundColor: '#ffffffcc',
+  paddingVertical: 4,
+  paddingHorizontal: 8,
+  borderRadius: 6,
+},
+coverToggleActive: {
+  backgroundColor: '#0077cc',
+},
+coverToggleText: {
+  fontSize: 12,
+  fontWeight: '600',
+  color: '#2c3e50',
+},
+addMoreImageCard: {
+  width: 220,
+  height: 220,
+  borderRadius: 16,
+  backgroundColor: '#F7FAFC',
+  borderWidth: 2,
+  borderColor: '#6A0DAD',
+  borderStyle: 'dashed',
+  marginRight: 12,
+  justifyContent: 'center',
+  alignItems: 'center',
+},
+addMoreCardText: {
+  fontSize: 16,
+  fontWeight: '600',
+  color: '#6A0DAD',
+  marginTop: 8,
+},
+fullscreenButton: {
+  marginTop: 12,
+  alignSelf: 'center',
+  backgroundColor: '#EDF2F7',
+  paddingVertical: 8,
+  paddingHorizontal: 16,
+  borderRadius: 8,
+},
+fullscreenText: {
+  fontSize: 14,
+  fontWeight: '600',
+  color: '#718096',
+},
+  cancelButtonWrapper: {
+  marginTop: 24,
+  marginBottom: 12,
+},
+
+cancelButton: {
+  flex: 1,
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  backgroundColor: '#F7FAFC',
+  paddingVertical: 16,
+  borderRadius: 12,
+  borderWidth: 2,
+  borderColor: '#E2E8F0',
+  gap: 6,
+},
+cancelButtonText: {
+  fontSize: 16,
+  fontWeight: '700',
+  color: '#718096',
+},
+
+
+  uploadBadgeWrapper: {
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+  uploadBadgeContainer: {
+  width: 160,
+  height: 200,
+  borderRadius: 12,
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginRight: 12,
+  borderWidth: 2,
+},
 });
 
 export default CreateAuctionForm;

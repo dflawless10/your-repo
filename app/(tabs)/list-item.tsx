@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
-  View, Text, TextInput, Button, StyleSheet,
-  Alert, ScrollView, Animated, TouchableOpacity, KeyboardAvoidingView, Platform, Keyboard
+  View, Text, TextInput, StyleSheet,
+  Alert, ScrollView, Animated, TouchableOpacity, Keyboard, Pressable
 } from 'react-native';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Picker } from "@react-native-picker/picker";
@@ -9,7 +9,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useGoatBid } from "@/hooks/useGoatBid";
 import { GoatFlip } from "@/components/GoatAnimator/goatFlip";
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import ImageUploader from '@/components/ImageUploader';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
 import { CharacterCounterInput, CHARACTER_LIMITS, validateCharacterCount } from 'app/components/CharacterCounterInput';
 import { handleListingSuccess } from 'app/utils/formHelpers';
@@ -19,6 +18,9 @@ import ImageValidationFeedback from '@/app/components/ImageValidationFeedback';
 import { API_BASE_URL } from '@/config';
 import CategorySelector, { QUICK_CATEGORIES } from '@/app/components/CategorySelector';
 import { useTheme } from '@/app/theme/ThemeContext';
+import GlobalFooter from "@/app/components/GlobalFooter";
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 
 
 const API_URL = API_BASE_URL;
@@ -47,9 +49,10 @@ function ItemScreen() {
   const [rarity, setRarity] = useState('common');
   const [weightLbs, setWeightLbs] = useState('1.0');
   const [gender, setGender] = useState<string>('unisex');
-  const [durationDays, setDurationDays] = useState(10);
+  const [durationDays, setDurationDays] = useState(7);
   const [loading, setLoading] = useState(false);
-   const [isMustSell, setIsMustSell] = useState(10);
+  const [isMustSell, setIsMustSell] = useState(false);
+  const [coverIndex, setCoverIndex] = useState(0);
 
 
 
@@ -62,6 +65,42 @@ function ItemScreen() {
   // Image validation for first image
   const imageValidation = useImageValidation(imageUris.length > 0 ? imageUris[0] : null);
 
+  const pickImages = async () => {
+  if (imageUris.length >= 5) {
+    Alert.alert('Maximum Images Reached', 'You can upload up to 5 images.');
+    return;
+  }
+
+  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (status !== 'granted') {
+    Alert.alert('Permission Required', 'Please allow access to your photos.');
+    return;
+  }
+
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    allowsMultipleSelection: true,
+    quality: 1,
+  });
+
+  if (!result.canceled) {
+    const newUris = result.assets.map(
+      (a: ImagePicker.ImagePickerAsset) => a.uri
+    );
+
+    const remaining = 5 - imageUris.length;
+    const toAdd = newUris.slice(0, remaining);
+
+    setImageUris(prev => [...prev, ...toAdd]);
+
+    if (newUris.length > remaining) {
+      Alert.alert('Limit Reached', `Only ${remaining} image(s) were added.`);
+    }
+  }
+};
+
+
+
   useEffect(() => {
     // Fade in header title and arrow - wait for screen to fully render first
     setTimeout(() => {
@@ -70,7 +109,7 @@ function ItemScreen() {
         duration: 2000, // 2 seconds - slow and dramatic
         useNativeDriver: true,
       }).start(() => {
-        // After fade-in completes, start pulsing animation
+        // After fade-in completing, start pulsing animation
         Animated.loop(
           Animated.sequence([
             Animated.timing(headerScale, {
@@ -89,7 +128,7 @@ function ItemScreen() {
     }, 500); // 500ms delay - let screen render fully first
 
     if (editItemId) {
-      loadItemForEdit();
+     void loadItemForEdit();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editItemId]);
@@ -216,22 +255,25 @@ if (isMustSell) {
   if (returnPolicyOverride !== 'use_default') {
     formData.append('return_policy_override', returnPolicyOverride);
   }
+const primary = imageUris[coverIndex];
+const additional = imageUris.filter((_, i) => i !== coverIndex);
 
-  // Main image (first image)
-  formData.append('photo', {
-    uri: imageUris[0],
-    name: 'photo.jpg',
+// Main image
+formData.append('photo', {
+  uri: primary,
+  name: 'photo.jpg',
+  type: 'image/jpeg',
+} as any);
+
+// Additional images
+additional.forEach((uri, i) => {
+  formData.append(`additional_photo_${i}`, {
+    uri,
+    name: `extra_${i}.jpg`,
     type: 'image/jpeg',
   } as any);
+});
 
-  // Additional images
-  for (let i = 1; i < imageUris.length; i++) {
-    formData.append(`additional_photo_${i - 1}`, {
-      uri: imageUris[i],
-      name: `extra_${i - 1}.jpg`,
-      type: 'image/jpeg',
-    } as any);
-  }
   try {
     let res;
 
@@ -290,7 +332,7 @@ if (isMustSell) {
         setImageUris([]);
 
         // Show success and redirect
-        handleListingSuccess(itemId, router, 'Buy It Now listing');
+        handleListingSuccess(itemId, router, 'Buy It Now listing💲');
       }
       setLoading(false);
     } else {
@@ -306,40 +348,46 @@ if (isMustSell) {
 };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <EnhancedHeader scrollY={scrollY} />
+  <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <EnhancedHeader scrollY={scrollY} />
 
-      <Animated.View style={[
-        styles.headerTitleContainer,
-        {
+    <Animated.ScrollView
+      ref={scrollViewRef}
+      style={{ backgroundColor: colors.background }}
+      contentContainerStyle={{
+        paddingTop: HEADER_MAX_HEIGHT + 20,   // ← only offset needed
+        
+      }}
+      keyboardShouldPersistTaps="handled"
+      onScroll={Animated.event(
+        [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+        { useNativeDriver: false }
+      )}
+      scrollEventThrottle={16}
+    >
+
+      {/* Title + arrow now scroll with content */}
+      <Animated.View
+        style={{
           opacity: headerOpacity,
           transform: [{ scale: headerScale }],
-          backgroundColor: colors.background,
-          borderBottomColor: theme === 'dark' ? '#333' : '#E5E5E5'
-        }
-      ]}>
+        }}
+      >
         <View style={styles.titleWithArrow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
-            <Ionicons name="arrow-back" size={28} color={colors.textPrimary} />
+            <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
           </TouchableOpacity>
+
           <View>
-            <Text style={[styles.headerTitleText, { color: colors.textPrimary }]}>{editItemId ? 'Edit Buy It Now' : 'Buy It Now'}</Text>
-            <Text style={[styles.headerSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]}>{editItemId ? 'Update your listing details' : 'List your item for instant purchase'}</Text>
+            <Text style={[styles.headerTitleText, { color: colors.textPrimary }]}>
+              {editItemId ? 'Edit Buy It Now💲' : 'Buy It Now💲'}
+            </Text>
+            <Text style={[styles.headerSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]}>
+              {editItemId ? 'Update your listing details' : 'List your item for instant purchase'}
+            </Text>
           </View>
         </View>
       </Animated.View>
-
-      <Animated.ScrollView
-        ref={scrollViewRef}
-        style={{ backgroundColor: colors.background }}
-        contentContainerStyle={[styles.container, { paddingBottom: 120, backgroundColor: colors.background }]}
-        keyboardShouldPersistTaps="handled"
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false }
-        )}
-        scrollEventThrottle={16}
-      >
       <CategorySelector
         selectedCategory={categoryId}
         onSelectCategory={(id, name) => {
@@ -355,28 +403,134 @@ if (isMustSell) {
         showSelectedBanner={true}
       />
 
-      <ImageUploader
-        maxImages={5}
-        imageUris={imageUris}
-        onImagesChange={(uris) => {
-          setImageUris(uris);
-          if (uris.length > 0) {
-            triggerGoat(Number(price));
+      {/* ------------------ IMAGE SECTION (Diamond Behavior) ------------------ */}
 
-            // Auto-scroll to Item Name after first photo is uploaded
-            setTimeout(() => {
-              scrollViewRef.current?.scrollTo({ y: 400, animated: true });
-            }, 500);
-          }
-        }}
-        title="Upload Item Photos"
-        subtitle="Add up to 5 photos"
+<Text
+  style={[
+    styles.label,
+    { color: theme === 'dark' ? '#E2E8F0' : '#2D3748' }
+  ]}
+>
+  📸 {imageUris.length}/5️⃣  Photos Uploaded
+</Text>
+
+
+
+<ScrollView
+  horizontal
+  showsHorizontalScrollIndicator={false}
+  style={{ marginBottom: 16, height: 240 }}
+  contentContainerStyle={{ flexGrow: 1, justifyContent: imageUris.length === 0 ? 'center' : 'flex-start', alignItems: 'center' }}
+>
+  {imageUris.map((uri, index) => (
+    <View key={index} style={styles.imageWrapper}>
+      <Image
+        source={{ uri }}
+        style={styles.image}
+        contentFit="cover"
       />
 
-      {/* Image Validation Feedback */}
-      {imageUris.length > 0 && (
-        <ImageValidationFeedback validation={imageValidation} />
-      )}
+      {/* Delete Button */}
+      <TouchableOpacity
+        style={styles.deleteButton}
+        onPress={() => {
+          Alert.alert(
+            'Delete Image',
+            'Are you sure you want to remove this image?',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: () => {
+                  const updated = imageUris.filter((_, i) => i !== index);
+                  setImageUris(updated);
+
+                  // Adjust cover index
+                  if (coverIndex === index) setCoverIndex(0);
+                  else if (coverIndex > index) setCoverIndex(coverIndex - 1);
+                }
+              }
+            ]
+          );
+        }}
+      >
+        <Ionicons name="close-circle" size={24} color="#FF3B30" />
+      </TouchableOpacity>
+
+
+      {/* Cover Toggle */}
+<TouchableOpacity
+  style={[
+    styles.coverToggle,
+    coverIndex === index && styles.coverToggleActive,
+  ]}
+  onPress={() => {
+    setCoverIndex(index);
+    Alert.alert('Cover Image Set', `Image ${index + 1} is now your cover.`);
+  }}
+>
+  {/* Shredded Cheese Badge */}
+  {coverIndex === index && (
+    <View style={styles.coverBadge}>
+      <Text style={styles.coverBadgeText}>COVER</Text>
+    </View>
+  )}
+
+  {/* Label Text */}
+  <Text style={styles.coverToggleText}>
+    {coverIndex === index ? '✅ Cover Image' : 'Set as Cover'}
+  </Text>
+</TouchableOpacity>
+
+    </View>
+  ))}
+
+  {/* Add More Button */}
+  {imageUris.length < 5 && (
+  <View
+    style={[
+     styles.uploadBadgeContainer,
+    {
+      backgroundColor: colors.background,
+      borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0'
+    }
+  ]}
+  >
+    <Pressable onPress={pickImages} style={styles.uploadBadgeWrapper}>
+      <Image
+        source={require('assets/images/upload-your-gallery.png')}
+        style={{ width: 120, height: 120, resizeMode: 'contain' }}
+      />
+    </Pressable>
+  </View>
+)}
+</ScrollView>
+
+{/* Fullscreen Viewer */}
+{imageUris.length > 0 && (
+  <TouchableOpacity
+    style={styles.fullscreenButton}
+    onPress={() =>
+      router.push({
+        pathname: '/FullImageScreen',
+        params: {
+          mediaArray: JSON.stringify(imageUris),
+          index: coverIndex.toString(),
+          title: name || 'Item Photos',
+        },
+      })
+    }
+  >
+    <Text style={styles.fullscreenText}>🔍 View Fullscreen</Text>
+  </TouchableOpacity>
+)}
+
+{/* Validation */}
+{imageUris.length > 0 && (
+  <ImageValidationFeedback validation={imageValidation} />
+)}
+
 
       <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>💰 Buy It Now Listing</Text>
 
@@ -410,7 +564,7 @@ if (isMustSell) {
         }}
       />
 
-      <Text style={[styles.label, { color: colors.textPrimary }]}>Buy It Now Price</Text>
+      <Text style={[styles.label, { color: colors.textPrimary }]}>💲Buy It Now Price</Text>
       <TextInput
         placeholder="Price ($)"
         placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
@@ -466,7 +620,7 @@ if (isMustSell) {
         <Picker.Item label="Extremely Rare" value="extremely_rare" />
       </Picker>
 
-      <Text style={[styles.label, { color: colors.textPrimary }]}>Shipping Weight</Text>
+      <Text style={[styles.label, { color: colors.textPrimary }]}>🚚 Shipping Weight</Text>
       <TextInput
         placeholder="Weight (lbs) - for shipping"
         placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
@@ -479,8 +633,12 @@ if (isMustSell) {
       {/* Only show Gender picker for wearable items (jewelry, accessories, watches, clothing) */}
       {categoryName && (() => {
         const catName = categoryName.toLowerCase();
-        const isWearable = ['accessories', 'body jewelry', 'bracelets', 'brooches', 'chains', 'earrings',
-                           'engagement', 'necklaces', 'pendants', 'rings', 'watches', 'hat pins'].includes(catName);
+        const isWearable = ['accessories,👜', 'body jewelry,💫', 'bracelets,🧿', 'brooches,📌',
+          'chains,⛓️', 'coins,🪙', 'cushion,🛋️', 'diamond,💎', 'earrings,👂', 'emerald,🟢',
+          'engagement,💘', 'gemstones,🔮', 'gold,🥇', 'hat pins,🎩', 'metals,⚙️', 'necklaces,📿',
+          'pendants,🪙', 'platinum,⚪', 'watches,⌚', 'round,⭕', 'sapphire,🔷', 'shapes,🌀', 'silverware,🍴',
+          'special moments,🎁', 'statement,🌟', 'rings,💍', 'women♀️', '♂️', ].includes(catName);
+
 
         return isWearable ? (
           <>
@@ -492,7 +650,7 @@ if (isMustSell) {
               dropdownIconColor={theme === 'dark' ? '#B794F4' : '#6A0DAD'}
               mode="dropdown"
             >
-              <Picker.Item label="Unisex / Not Specified" value="unisex" />
+              <Picker.Item label="Unisex 🧑‍🤝‍🧑 Not Specified" value="unisex" />
               <Picker.Item label="👨 Men's" value="men" />
               <Picker.Item label="👩 Women's" value="women" />
             </Picker>
@@ -549,21 +707,48 @@ if (isMustSell) {
         <GoatFlip trigger={goatTrigger || showGoat} bidAmount={lastBidAmount || Number(price)} />
       </View>
 
-      <TouchableOpacity
-        style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-        onPress={handleSubmit}
-        disabled={loading}
-      >
-        {loading ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={styles.submitButtonText}>Creating...</Text>
-            <Ionicons name="hourglass-outline" size={20} color="#FFF" />
+        {/* BUTTON ROW */}
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity
+              style={[styles.cancelButton, {
+                backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC',
+                borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0'
+              }]}
+              onPress={() => {
+                Alert.alert(
+                  'Cancel Listing',
+                  'Are you sure you want to cancel? Your entered information will be lost.',
+                  [
+                    { text: 'Keep Editing', style: 'cancel' },
+                    {
+                      text: 'Yes, Cancel',
+                      style: 'destructive',
+                      onPress: () => router.back()
+                    }
+                  ]
+                );
+              }}
+            >
+              <Ionicons name="close-circle" size={20} color={theme === 'dark' ? '#999' : '#718096'} />
+              <Text style={[styles.cancelButtonText, { color: theme === 'dark' ? '#999' : '#718096' }]}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+              onPress={handleSubmit}
+              disabled={loading}
+            >
+              {loading ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Text style={styles.submitButtonText}>Creating...</Text>
+                  <Ionicons name="hourglass-outline" size={20} color="#FFF" />
+                </View>
+              ) : (
+                <Text style={styles.submitButtonText}>List Buy It Now</Text>
+              )}
+            </TouchableOpacity>
           </View>
-        ) : (
-          <Text style={styles.submitButtonText}>List Buy It Now</Text>
-        )}
-      </TouchableOpacity>
       </Animated.ScrollView>
+      <GlobalFooter />
     </View>
   );
 }
@@ -574,21 +759,17 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 40,
   },
-  headerTitleContainer: {
-    position: 'absolute',
-    top: HEADER_MAX_HEIGHT + 34,
-    left: 0,
-    right: 0,
+   headerTitleContainer: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 16,
+    paddingTop: 60,
     backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-    zIndex: 100,
+     zIndex: 100,
   },
   titleWithArrow: {
     flexDirection: 'row',
     alignItems: 'center',
+
   },
   backArrow: {
     marginRight: 12,
@@ -689,11 +870,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   submitButton: {
+    flex: 1,
     backgroundColor: '#FF6B35',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
-    marginVertical: 16,
+    justifyContent: 'center',
     shadowColor: '#000',
     shadowOpacity: 0.2,
     shadowRadius: 4,
@@ -760,5 +942,130 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     lineHeight: 16,
   },
+  imageWrapper: {
+  width: 220,
+  height: 220,
+  borderRadius: 16,
+  backgroundColor: '#e0e0e0',
+  marginRight: 12,
+  overflow: 'hidden',
+  position: 'relative',
+},
+image: {
+  width: '100%',
+  height: '100%',
+  borderRadius: 16,
+},
+deleteButton: {
+  position: 'absolute',
+  top: 8,
+  right: 8,
+  backgroundColor: '#ffffffee',
+  borderRadius: 12,
+  padding: 2,
+},
+coverToggle: {
+  position: 'absolute',
+  bottom: 8,
+  left: 8,
+  backgroundColor: '#ffffffcc',
+  paddingVertical: 4,
+  paddingHorizontal: 8,
+  borderRadius: 6,
+},
+coverToggleActive: {
+  backgroundColor: '#0077cc',
+},
+coverToggleText: {
+  fontSize: 12,
+  fontWeight: '600',
+  color: '#2c3e50',
+},
+addMoreImageCard: {
+  width: 220,
+  height: 220,
+  borderRadius: 16,
+  backgroundColor: '#F7FAFC',
+  borderWidth: 2,
+  borderColor: '#6A0DAD',
+  borderStyle: 'dashed',
+  marginRight: 12,
+  justifyContent: 'center',
+  alignItems: 'center',
+},
+addMoreCardText: {
+  fontSize: 16,
+  fontWeight: '600',
+  color: '#6A0DAD',
+  marginTop: 8,
+},
+fullscreenButton: {
+  marginTop: 12,
+  alignSelf: 'center',
+  backgroundColor: '#EDF2F7',
+  paddingVertical: 8,
+  paddingHorizontal: 16,
+  borderRadius: 8,
+},
+fullscreenText: {
+  fontSize: 14,
+  fontWeight: '600',
+  color: '#2D3748',
+},
+   uploadBadgeWrapper: {
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+  uploadBadgeContainer: {
+  width: 160,
+  height: 200,
+  borderRadius: 12,
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginRight: 12,
+  borderWidth: 2,
+},
+  coverBadge: {
+  position: 'absolute',
+  top: -10,
+  left: -10,
+  paddingVertical: 4,
+  paddingHorizontal: 12,
+  borderRadius: 10,
+  backgroundColor: 'rgba(255, 255, 255, 0.18)',
+  borderWidth: 1,
+  borderColor: 'rgba(255, 255, 255, 0.35)',
+  zIndex: 20,
+},
+buttonContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+    paddingBottom: 24,
+  },
+coverBadgeText: {
+  color: '#fff',
+  fontSize: 10,
+  fontWeight: '700',
+  letterSpacing: 0.5,
+},
+cancelButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F7FAFC',
+    paddingVertical: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+    gap: 6,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#718096',
+  },
+
 });
 export default ItemScreen;

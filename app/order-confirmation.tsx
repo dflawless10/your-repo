@@ -78,10 +78,6 @@ function OrderConfirmationScreen() {
             <Text style={[styles.detailText, { color: colors.textPrimary }]}>Estimated Delivery: {deliveryDate}</Text>
           </View>
 
-          <View style={styles.detailRow}>
-            <Ionicons name="location-outline" size={20} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
-            <Text style={[styles.detailText, { color: colors.textPrimary }]}>Shipping To: {address}</Text>
-          </View>
         </View>
 
         {/* Receipt */}

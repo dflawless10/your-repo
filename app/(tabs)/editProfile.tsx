@@ -6,7 +6,6 @@ import {
   TextInput,
   TouchableOpacity,
   Alert,
-  ScrollView,
   ActivityIndicator,
   Animated,
 } from 'react-native';
@@ -20,6 +19,7 @@ import { validateContentQuick } from 'app/utils/contentModeration';
 import { Ionicons } from '@expo/vector-icons';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
 import { useTheme } from 'app/theme/ThemeContext';
+import {useSafeAreaInsets} from "react-native-safe-area-context";
 
 function EditProfileScreen() {
   const router = useRouter();
@@ -41,6 +41,7 @@ function EditProfileScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [isPremium, setIsPremium] = useState(false);
   const [profile, setProfile] = useState({
     username: '',
     email: '',
@@ -54,6 +55,8 @@ function EditProfileScreen() {
     avatar_url: null,
     created_at: '',
   });
+
+  const insets = useSafeAreaInsets();
 
   const handleImagePick = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -180,6 +183,7 @@ function EditProfileScreen() {
         setState(data.state || '');
         setZip(data.zip || '');
         setAvatarUrl(data.avatar_url || null);
+        setIsPremium(!!data.is_premium_seller);
       }
       setLoading(false);
     };
@@ -217,7 +221,6 @@ function EditProfileScreen() {
     !!profile.created_at && !isNaN(Date.parse(profile.created_at));
 
   const isDark = theme === 'dark';
-  let arrowColor = isDark ? '#ECEDEE' : '#333';
   const titleColor = isDark ? '#ECEDEE' : '#1A202C';
 
   if (loading) {
@@ -229,12 +232,14 @@ function EditProfileScreen() {
     );
   }
 
+
+
   return (
     <View style={[{ flex: 1 }, { backgroundColor: colors.background }]}>
       <EnhancedHeader scrollY={scrollY} onSearch={() => {}} />
       <Animated.ScrollView
         style={[styles.scrollContainer, { backgroundColor: colors.background }]}
-        contentContainerStyle={[styles.scrollContent, { paddingTop: HEADER_MAX_HEIGHT + 20 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: HEADER_MAX_HEIGHT + 20, paddingBottom: insets.bottom + 40, }]}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
@@ -243,7 +248,7 @@ function EditProfileScreen() {
       >
         <Animated.View style={[styles.pageHeader, { backgroundColor: colors.surface, opacity: headerOpacity, transform: [{ scale: headerScale }] }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={28} color="#B794F4"  />
+            <Ionicons name="arrow-back" size={24} color="#6A0DAD"  />
           </TouchableOpacity>
           <Text style={[styles.pageTitle, { color: titleColor }]}>Edit Profile</Text>
         </Animated.View>
@@ -261,6 +266,12 @@ function EditProfileScreen() {
           <View style={styles.avatarEditBadge}>
             <Ionicons name="camera" size={18} color="#fff" />
           </View>
+          {isPremium && (
+            <Image
+              source={require('@/assets/Premium_Seller_Badge.png')}
+              style={styles.premiumBadge}
+            />
+          )}
         </TouchableOpacity>
         <Text style={[styles.avatarLabel, { color: colors.textSecondary }]}>Tap to change photo</Text>
         {isValidDate && (
@@ -457,7 +468,7 @@ const styles = StyleSheet.create({
   },
 
   pageTitle: {
-    fontSize: 24,
+    fontSize: 16,
     fontWeight: '700',
     color: '#1A202C',
     flex: 1,
@@ -500,6 +511,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 3,
     borderColor: '#fff',
+  },
+  premiumBadge: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    width: 40,
+    height: 40,
   },
   avatarLabel: {
     marginTop: 12,

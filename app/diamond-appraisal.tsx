@@ -8,6 +8,7 @@ import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHead
 import { appraiseDiamond, formatPrice } from '@/api/appraisal';
 import GlobalFooter from "@/app/components/GlobalFooter";
 import { useTheme } from '@/app/theme/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type ColorGrade = 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K' | 'L' | 'M' | 'N';
 type ClarityGrade = 'FL' | 'IF' | 'VVS1' | 'VVS2' | 'VS1' | 'VS2' | 'SI1' | 'SI2' | 'I1' | 'I2';
@@ -35,6 +36,7 @@ const shapeFactorByShape: Record<Shape, number> = {
 export default function DiamondAppraisalScreen() {
   const router = useRouter();
   const { theme, colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const scrollY = useRef(new Animated.Value(0)).current;
   const headerOpacity = useRef(new Animated.Value(0)).current;
   const headerScale = useRef(new Animated.Value(1)).current;
@@ -62,7 +64,7 @@ export default function DiamondAppraisalScreen() {
         duration: 2000,
         useNativeDriver: true,
       }).start(() => {
-        // After fade-in completes, start pulsing animation
+        // After fade-in completing, start pulsing animation
         Animated.loop(
           Animated.sequence([
             Animated.timing(headerScale, {
@@ -170,20 +172,9 @@ export default function DiamondAppraisalScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <EnhancedHeader scrollY={scrollY} />
 
-      <Animated.View style={[styles.headerTitleContainer, { opacity: headerOpacity, transform: [{ scale: headerScale }], backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
-        <View style={styles.titleWithArrow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
-            <Ionicons name="arrow-back" size={28} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
-          </TouchableOpacity>
-          <View>
-            <Text style={[styles.headerTitleText, { color: colors.textPrimary }]}>Calculate your diamond&#39;s market value</Text>
-          </View>
-        </View>
-      </Animated.View>
-
       <Animated.ScrollView
         style={[styles.container, { backgroundColor: colors.background }]}
-        contentContainerStyle={{ ...styles.scrollContent, backgroundColor: colors.background }}
+        contentContainerStyle={{ ...styles.scrollContent, backgroundColor: colors.background, paddingTop: HEADER_MAX_HEIGHT + insets.top + 16 }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
@@ -191,6 +182,15 @@ export default function DiamondAppraisalScreen() {
         scrollEventThrottle={16}
         keyboardShouldPersistTaps="handled"
       >
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4, paddingBottom: 12 }}>
+          <TouchableOpacity onPress={() => router.back()} style={{ padding: 4, marginRight: 12 }}>
+            <Ionicons name="arrow-back" size={28} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitleText, { color: colors.textPrimary }]}>
+            Calculate your diamond&#39;s market value
+          </Text>
+        </View>
+
         <Text style={[styles.label, { color: colors.textPrimary }]}>Carat Weight</Text>
         <TextInput
           style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : 'white', color: colors.textPrimary, borderColor: theme === 'dark' ? '#3C3C3E' : '#ccc' }]}
@@ -364,7 +364,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   scrollContent: {
-    paddingTop: 260,
     paddingHorizontal: 20,
     paddingBottom: 40,
   },
@@ -389,11 +388,13 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   headerTitleText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#1A202C',
-    marginBottom: 2,
-  },
+  fontSize: 14,
+  fontWeight: '700',
+  color: '#1A202C',
+  marginTop: 0,      // hugs EnhancedHeader
+  marginBottom: 1,   // tiny breathing room below
+},
+
   input: {
     borderWidth: 1,
     borderColor: '#ccc',

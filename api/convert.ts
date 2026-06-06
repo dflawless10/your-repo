@@ -5,6 +5,7 @@ const API_URL = API_BASE_URL;
 
 export interface ConvertToBuyNowRequest {
   buy_it_now_price: number;
+  duration_days: number;
 }
 
 export interface ConvertToBuyNowResponse {
@@ -22,7 +23,8 @@ export interface ConvertToBuyNowResponse {
  */
 export const convertToBuyNow = async (
   itemId: number | string,
-  buyItNowPrice: number
+  buyItNowPrice: number,
+  durationDays: number = 7
 ): Promise<ConvertToBuyNowResponse | null> => {
   try {
     const token = await AsyncStorage.getItem('jwtToken');
@@ -39,6 +41,7 @@ export const convertToBuyNow = async (
       },
       body: JSON.stringify({
         buy_it_now_price: buyItNowPrice,
+        duration_days: durationDays,
       }),
     });
 

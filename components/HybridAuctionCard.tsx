@@ -80,7 +80,7 @@ export const HybridAuctionCard: React.FC<Props> = ({
   const itemId = item.id || item.auction_id || item.item_id;
   const title = item.name || item.title || 'Unnamed Item';
   const imageUrl = item.photo_url || item.imageUrl || 'https://your-image-url.com/goat.png';
-  const displayPrice = item.highest_bid || item.current_bid || item.price || item.starting_bid || 0;
+  const displayPrice = item.highest_bid || item.current_bid || item.buy_it_now || item.price || item.starting_bid || 0;
   const auctionEnds = item.auction_ends_at || item.end_time;
   const sellerName = item.seller?.username || item.seller?.name || item.seller_username;
 

@@ -60,6 +60,8 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
       'isSeller',
       'userId',
       'pushToken',
+      'favoritedItems',
+      'cart_items',
     ]);
     setToken(null);
     setUsername(null);

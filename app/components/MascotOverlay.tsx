@@ -9,8 +9,9 @@ export interface MascotOverlayProps {
   message: string;
   animate?: boolean;
   position?: 'top' | 'bottom' | 'center';
+  topOffset?: number;
   visible?: boolean;
-  onDismiss?: () => void; // ✅ Add this
+  onDismiss?: () => void;
 }
 
 
@@ -18,9 +19,10 @@ const MascotOverlay: React.FC<MascotOverlayProps> = ({
   mood,
   message,
   position = 'bottom',
+  topOffset,
   visible = true,
   animate,
-  onDismiss, // ✅ THIS LINE IS CRUCIAL
+  onDismiss,
 }) => {
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -43,9 +45,9 @@ const MascotOverlay: React.FC<MascotOverlayProps> = ({
 
 
   const positionStyle: Partial<ViewStyle> = {
-    ...(position === 'top' && {top: 24}),
+    ...(position === 'top' && {top: topOffset ?? 24}),
     ...(position === 'bottom' && {bottom: 24}),
-    ...(position === 'center' && {justifyContent: 'center' as ViewStyle['justifyContent']}),
+    ...(position === 'center' && {top: topOffset ?? undefined, justifyContent: topOffset ? undefined : 'center' as ViewStyle['justifyContent']}),
   };
 
   const moodStyles: Record<string, TextStyle> = {
@@ -98,7 +100,7 @@ const styles = StyleSheet.create({
     padding: 12,
     backgroundColor: '#f0f8ff',
     borderRadius: 8,
-    elevation: 4,
+    elevation: 999,
     alignItems: 'center',
     zIndex: 999,
   },

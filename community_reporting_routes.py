@@ -19,7 +19,7 @@ class UserTrustProfile:
 
 def get_user_trust_profile(user_id: int, conn) -> UserTrustProfile:
     """
-    Get user's complete trust profile from database
+    Get a user's complete trust profile from database
 
     Args:
         user_id: User ID

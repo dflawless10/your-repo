@@ -1,6 +1,7 @@
 import { API_BASE_URL } from '@/config';
 
 import React, { useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View,
   Text,
@@ -29,13 +30,16 @@ interface ReportReason {
 const REPORT_REASONS: ReportReason[] = [
   { value: 'misleading', label: 'Misleading or False Description', severity: 'high' },
   { value: 'counterfeit', label: 'Suspected Counterfeit Item', severity: 'high' },
-  { value: 'inappropriate_photo', label: 'Inappropriate Photo', severity: 'high' },
-  { value: 'wrong_category', label: 'Wrong Category', severity: 'low' },
-  { value: 'spam', label: 'Spam or Irrelevant Content', severity: 'medium' },
-  { value: 'offensive', label: 'Offensive Content', severity: 'high' },
+  { value: 'stolen', label: 'Suspected Stolen Item', severity: 'high' },
+  { value: 'prohibited_item', label: 'Prohibited Item (weapons, drugs, hazmat, etc.)', severity: 'high' },
+  { value: 'wildlife_product', label: 'Illegal Wildlife Product (ivory, live animals, etc.)', severity: 'high' },
+  { value: 'inappropriate_photo', label: 'Inappropriate or Explicit Photo', severity: 'high' },
+  { value: 'offensive', label: 'Offensive or Hateful Content', severity: 'high' },
   { value: 'contact_info', label: 'Contains Contact Information', severity: 'high' },
   { value: 'price_manipulation', label: 'Price Manipulation', severity: 'medium' },
-  { value: 'stolen', label: 'Suspected Stolen Item', severity: 'high' },
+  { value: 'spam', label: 'Spam or Irrelevant Content', severity: 'medium' },
+  { value: 'off_platform_item', label: 'Item Not Allowed on BidGoat (not jewelry/accessories)', severity: 'medium' },
+  { value: 'wrong_category', label: 'Wrong Category', severity: 'low' },
   { value: 'other', label: 'Other (Specify)', severity: 'medium' },
 ];
 
@@ -64,13 +68,20 @@ export default function ReportItemModal({
     setIsSubmitting(true);
 
     try {
+      const token = await AsyncStorage.getItem('jwtToken');
+      if (!token) {
+        Alert.alert('Sign In Required', 'You must be signed in to report a listing.');
+        setIsSubmitting(false);
+        return;
+      }
+
       const response = await fetch(
         `${API_BASE_URL}/api/report/item/${itemId}`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            // TODO: Add auth token from secure storage
+            'Authorization': `Bearer ${token}`,
           },
           body: JSON.stringify({
             reason: selectedReason,

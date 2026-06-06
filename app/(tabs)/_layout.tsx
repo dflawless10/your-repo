@@ -87,6 +87,14 @@ function CustomTabIcon({
           color={color}
         />
       );
+    case 'messages':
+      return (
+        <Ionicons
+          name={focused ? 'chatbubbles' : 'chatbubbles-outline'}
+          size={size}
+          color={color}
+        />
+      );
     case 'wishlist': {
       const hasReminder = wishlistItems.some(item => item.reminder_active);
       const hasPriceAlert = wishlistItems.some(item => item.price_alert_active);
@@ -191,10 +199,11 @@ export default function AppLayout() {
           })}
         >
           {/* Visible Tabs */}
-          <Tabs.Screen name="index" options={{ title: 'Home' }} />
+          <Tabs.Screen name="index" options={{ title: 'Home', headerShown: false }} />
           <Tabs.Screen name="explore" options={{ title: 'Explore' }} />
           <Tabs.Screen name="discover" options={{ title: 'Discover' }} />
           <Tabs.Screen name="wishlist" options={{ title: 'Wishlist' }} />
+          <Tabs.Screen name="messages" options={{ title: 'Messages', headerShown: false }} />
 
           {/* Hidden Routes */}
           <Tabs.Screen name="jewelry-box" options={{ href: null, headerShown: false }} />
@@ -213,6 +222,8 @@ export default function AppLayout() {
           <Tabs.Screen name="navigation/OnboardingNavigator" options={{ href: null }} />
           <Tabs.Screen name="navigation/TabNavigator" options={{ href: null }} />
           <Tabs.Screen name="item/[itemId]" options={{ href: null }} />
+           <Tabs.Screen name="message-seller/[sellerId]" options={{ href: null }} />
+           <Tabs.Screen name="seller-items/[sellerId]" options={{ href: null }} />
         </Tabs>
 
         {/* ⭐ Floating CTA Overlay — THIS is where it belongs */}

@@ -8,15 +8,15 @@ import {
   ActivityIndicator,
   StyleSheet,
   TextInput,
-  Button,
   Alert,
   FlatList,
   ScrollView,
   TouchableOpacity,
   Dimensions,
+  useWindowDimensions,
   Share,
   Modal,
-  Animated as RNAnimated
+  Animated as RNAnimated, Switch
 } from 'react-native';
 import { Image } from 'expo-image';
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -36,7 +36,8 @@ import Toast from "react-native-toast-message";
 
 import React from "react";
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
-import { EbayStylePoliciesCard } from '@/app/components/EbayStylePoliciesCard';
+import { LinearGradient } from 'expo-linear-gradient';
+
 import { useTheme } from '@/app/theme/ThemeContext';
 
 
@@ -53,13 +54,14 @@ function safeFormat(dateString: string | undefined, formatStr: string): string {
 }
 
 // Helper to get countdown color based on time remaining
-const getCountdownColor = (endTime: string): string => {
+const getCountdownColor = (endTime: string): { color: string; fontWeight: '600' | 'bold' } => {
   const now = Date.now();
   const end = new Date(endTime).getTime();
   const diffHours = (end - now) / (1000 * 60 * 60);
 
-  if (diffHours <= 2) return '#e53e3e';
-  return '#38a169';
+  if (diffHours <= 2) return { color: '#e53e3e', fontWeight: 'bold' };
+  if (diffHours <= 24) return { color: '#e53e3e', fontWeight: '600' };
+  return { color: '#38a169', fontWeight: '600' };
 };
 
 
@@ -84,6 +86,7 @@ type Bid = {
   amount: number;
   user_id: number;
   username?: string;
+  highest_bid?: number;
   timestamp: string;
 };
 
@@ -131,6 +134,7 @@ type ItemDetail = {
   watch_specifications?: string;
   seller?: {
     id?: number;
+    name?: string;
     avatar_url?: string;
     email?: string;
     username: string;
@@ -164,6 +168,7 @@ const THUMB_SIZE = 72;
 
 const API_URL = API_BASE_URL;
 const fallbackImage = 'https://via.placeholder.com/300x200.png?text=No+Image+Available';
+const { width, height } = Dimensions.get("window");
 
 // Helper functions for similarity calculation
 const gemstones = ['diamond', 'sapphire', 'ruby', 'emerald', 'pearl', 'opal', 'topaz', 'amethyst', 'aquamarine', 'tanzanite'];
@@ -249,7 +254,10 @@ const calculateWatchScore = (itemName: string, itemTags: string, itemCategory: s
 export default function ItemScreen() {
   const { itemId } = useLocalSearchParams();
   const { theme, colors } = useTheme();
+  const { height: screenHeight } = useWindowDimensions();
   const [item, setItem] = useState<ItemDetail | null>(null);
+  const [itemLoadError, setItemLoadError] = useState<string | null>(null);
+  const noOpSearch = useCallback(() => {}, []);
   const [bidAmount, setBidAmount] = useState<string>('');
   const [showGoatBah, setShowGoatBah] = useState(false);
   const router = useRouter(); // ✅ Inside component
@@ -280,12 +288,20 @@ export default function ItemScreen() {
   const [showAuctionHelp, setShowAuctionHelp] = useState(false);
   const [showBuyItNowHelp, setShowBuyItNowHelp] = useState(false);
   const [showMustSellHelp, setShowMustSellHelp] = useState(false);
+  const [moreOptionsVisible, setMoreOptionsVisible] = useState(false);
+  const [reportVisible, setReportVisible] = useState(false);
+  const [selectedViolation, setSelectedViolation] = useState('');
+  const [reportNotes, setReportNotes] = useState('');
+  const [reportSubmitting, setReportSubmitting] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [sellerInfoExpanded, setSellerInfoExpanded] = useState(false);
   // Modals removed - policies now route to seller profile
   const scrollY = useRef(new RNAnimated.Value(0)).current;
   const scrollViewRef = useRef<ScrollView>(null);
   const fadeAnim = useRef(new RNAnimated.Value(0)).current;
+  const [includeInsurance, setIncludeInsurance] = useState(false);
+  const [shippingPriority, setShippingPriority] =
+  useState<'standard' | 'expedited' | 'overnight'>('standard');
 
 
 const { cartItems, addToCart, isInCart } = useCartBackend();
@@ -309,6 +325,9 @@ const { cartItems, addToCart, isInCart } = useCartBackend();
 
   useEffect(() => {
     if (itemId) {
+      // Reset state for new item
+      setItem(null);
+      setItemLoadError(null);
       void fetchItem();
       // Scroll to top when itemId changes (similar item navigation)
       scrollViewRef.current?.scrollTo({ y: 0, animated: false });
@@ -520,7 +539,7 @@ const { cartItems, addToCart, isInCart } = useCartBackend();
             return scored.score > 0 && itemId !== currentItemId && !isPreview && !isInReview;
           })
           .sort((a: any, b: any) => b.score - a.score)
-          .slice(0, 6);
+          .slice(0, 30);
 
         const filtered = scoredItems.map((scored: any) => mapToAuctionItem(scored.item));
         console.log('🐐 Similar items (fallback):', filtered.length, '(excluded current item', currentItemId, 'preview items, and items in review)');
@@ -560,6 +579,9 @@ const { cartItems, addToCart, isInCart } = useCartBackend();
       }
 
       const res = await fetch(`${API_URL}/item/${itemId}`, { headers });
+      if (!res.ok) {
+        throw new Error(res.status === 404 ? 'Item not found' : `Failed to load item (${res.status})`);
+      }
       const data = await res.json();
       console.log('🔍 Item data received:', { reserve_price: data.reserve_price, buy_it_now: data.buy_it_now, item_id: data.item_id });
 
@@ -584,10 +606,19 @@ const { cartItems, addToCart, isInCart } = useCartBackend();
         // Non-critical error, continue with item data
       }
 
+      // Cross-check AsyncStorage so hearts favorited on other screens are reflected immediately
+      const stored = await AsyncStorage.getItem('favoritedItems');
+      if (stored) {
+        const favMap = JSON.parse(stored);
+        if (favMap[data.id] === true && !data.is_favorited) {
+          data.is_favorited = true;
+        }
+      }
       setItem(data);
       await fetchSimilarItems(data);
     } catch (error) {
       console.error('Error fetching item:', error);
+      setItemLoadError(error instanceof Error ? error.message : 'Failed to load item');
     }
   };
 
@@ -656,6 +687,8 @@ const { cartItems, addToCart, isInCart } = useCartBackend();
       });
 
       if (res.ok) {
+        const resData = await res.json().catch(() => ({}));
+
         // Trigger celebration
         triggerGoatBah();
         await playGoatSoundByName('Victory Baa');
@@ -663,10 +696,10 @@ const { cartItems, addToCart, isInCart } = useCartBackend();
         // Clear bid input
         setBidAmount('');
 
-        // Refresh item to show updated state
+        // Refresh item to show updated state (gets the new end time if extended)
         await fetchItem();
 
-        // Calculate time remaining
+        // Calculate time remaining (uses refreshed item data)
         const getTimeRemaining = () => {
           if (!item?.auction_ends_at) return 'Unknown';
           const endsAt = new Date(item.auction_ends_at);
@@ -686,26 +719,28 @@ const { cartItems, addToCart, isInCart } = useCartBackend();
 
         const timeLeft = getTimeRemaining();
 
-        // Show enhanced success toast with time remaining
-        Toast.show({
-          type: 'success',
-          text1: '🎉 You\'re the High Bidder!',
-          text2: `Current bid: $${numericBid.toLocaleString()} • ${timeLeft}\n✨ We'll notify you if you're outbid`,
-          visibilityTime: 8000,
-          position: 'top',
-          onPress: () => {
-            // Navigate to My Bids screen when user taps the toast
-            router.push('/my-bids' as any);
-          },
-          text1Style: {
-            fontSize: 16,
-            fontWeight: '700',
-          },
-          text2Style: {
-            fontSize: 13,
-            lineHeight: 18,
-          },
-        });
+        if (resData.anti_snipe) {
+          Toast.show({
+            type: 'info',
+            text1: '⏱️ Auction Extended!',
+            text2: `Your bid of $${numericBid.toLocaleString()} triggered anti-snipe protection. +5 minutes added.`,
+            visibilityTime: 10000,
+            position: 'top',
+            text1Style: { fontSize: 16, fontWeight: '700' },
+            text2Style: { fontSize: 13, lineHeight: 18 },
+          });
+        } else {
+          Toast.show({
+            type: 'success',
+            text1: '🎉 You\'re the High Bidder!',
+            text2: `Current bid: $${numericBid.toLocaleString()} • ${timeLeft}\n✨ We'll notify you if you're outbid`,
+            visibilityTime: 8000,
+            position: 'top',
+            onPress: () => router.push('/my-bids' as any),
+            text1Style: { fontSize: 16, fontWeight: '700' },
+            text2Style: { fontSize: 13, lineHeight: 18 },
+          });
+        }
         
       } else {
         const errorData = await res.json().catch(() => ({ error: 'Failed to place bid' }));
@@ -744,81 +779,40 @@ const { cartItems, addToCart, isInCart } = useCartBackend();
 const handleBuyNow = async () => {
   if (!item?.buy_it_now) return;
 
-  console.log('🛒 Buy It Now tapped for item:', item.id);
-  console.log('🛒 User ID:', user?.id, 'Seller ID:', item.seller?.id);
-
   // CHECK: Is this the seller's own item?
   if (user && item.seller && Number(user.id) === Number(item.seller.id)) {
-    console.log('🛒 BLOCKING: User is trying to buy their own item');
     Alert.alert('Cannot Purchase', 'Sorry, buyers cannot buy their own items');
     return;
   }
 
-  console.log('🛒 Showing Confirm Purchase dialog');
-  Alert.alert(
-    'Confirm Purchase',
-    `Buy this item now for $${item.buy_it_now}?\n\nNote: Full Stripe checkout requires Expo development build. This is a demo.`,
-    [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Confirm Purchase',
-        onPress: () => {
-          void (async () => {
-            try {
-              const token = await AsyncStorage.getItem('jwtToken');
-              if (!token) {
-                Alert.alert('Please sign in', 'You need to be signed in to purchase');
-                return;
-              }
+  try {
+    const token = await AsyncStorage.getItem('jwtToken');
+    if (!token) {
+      Alert.alert('Please sign in', 'You need to be signed in to purchase');
+      return;
+    }
 
-              // Create an immediate purchase order
-              const response = await fetch(`${API_BASE_URL}/api/buy-now`, {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  item_id: item.id,
-                  sale_price: item.buy_it_now,
-                }),
-              });
-
-              if (!response.ok) {
-                const result = await response.json();
-                Alert.alert('Purchase Failed', result.error || 'Unable to complete purchase');
-                return;
-              }
-
-              const result = await response.json();
-
-              // 🎉 Play goat sound on success
-              try {
-                const { playGoatSound } = await import('@/components/ui/GoatSound');
-                await playGoatSound();
-              } catch (err) {
-                console.log('Could not play goat sound:', err);
-              }
-
-              // 🎊 Show success toast
-              try {
-                const { showToast } = await import('@/utils/toast');
-                showToast('success', '🎉 Purchase Successful!', `You bought ${item.name} for $${item.buy_it_now}`);
-              } catch (err) {
-                console.log('Could not show toast:', err);
-              }
-
-              // Navigate to the buyer orders screen to see the new order
-              router.push('/orders');
-
-            } catch (error) {
-              Alert.alert('Error', 'Purchase failed. Please try again.');
-            }
-          })();
-        },
+    // Add to cart first, then go straight to checkout
+    const response = await fetch(`${API_BASE_URL}/api/cart`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
       },
-    ]
-  );
+      body: JSON.stringify({ item_id: item.id }),
+    });
+
+    if (!response.ok) {
+      const result = await response.json();
+      Alert.alert('Error', result.error || 'Unable to add item to cart');
+      return;
+    }
+
+    // Go to cart so user can add Buyer Protection before checkout
+    router.push('/(tabs)/cart');
+  } catch (error) {
+    Alert.alert('Error', 'Something went wrong. Please try again.');
+  }
 };
 
 const handlePriceAdjustment = async () => {
@@ -948,31 +942,102 @@ const handleAddToCart = async () => {
         return;
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/favorites`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ item_id: item.id }),
-      });
+      const isCurrentlyFavorited = item.is_favorited;
 
-      if (response.ok) {
-        Alert.alert('Added to Jewelry Box! 💎', 'View it in your Jewelry Box tab', [
-          { text: 'OK' },
-          { text: 'View Jewelry Box', onPress: () => router.push('/(tabs)/JewelryBoxScreen') }
-        ]);
-        // Update local state to hide the favorite button
-        if (item) {
+      if (!isCurrentlyFavorited) {
+        // Add to favorites
+        const response = await fetch(`${API_BASE_URL}/api/favorites`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ item_id: item.id }),
+        });
+
+        if (response.ok) {
           setItem({ ...item, is_favorited: true });
+          // Sync with the platform-wide AsyncStorage favorites map
+          const stored = await AsyncStorage.getItem('favoritedItems');
+          const favMap = stored ? JSON.parse(stored) : {};
+          favMap[item.id] = true;
+          await AsyncStorage.setItem('favoritedItems', JSON.stringify(favMap));
+          Alert.alert('Added to Your Favorites! 💎', 'View it in My Favorites', [
+            { text: 'OK' },
+            { text: 'View My Favorites', onPress: () => router.push('/(tabs)/JewelryBoxScreen') }
+          ]);
+        } else {
+          const error = await response.json();
+          Alert.alert('Error', error.message || 'Failed to add to favorites');
         }
       } else {
-        const error = await response.json();
-        Alert.alert('Error', error.message || 'Failed to add to favorites');
+        // Remove from favorites
+        const response = await fetch(`${API_BASE_URL}/api/favorites/${item.id}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (response.ok) {
+          setItem({ ...item, is_favorited: false });
+          // Sync with the platform-wide AsyncStorage favorites map
+          const stored = await AsyncStorage.getItem('favoritedItems');
+          const favMap = stored ? JSON.parse(stored) : {};
+          favMap[item.id] = false;
+          await AsyncStorage.setItem('favoritedItems', JSON.stringify(favMap));
+        } else {
+          Alert.alert('Error', 'Failed to remove from favorites');
+        }
       }
     } catch (error) {
       console.error('Favorite error:', error);
-      Alert.alert('Error', 'Could not add to favorites. Please try again.');
+      Alert.alert('Error', 'Could not update favorites. Please try again.');
+    }
+  };
+
+  const VIOLATION_TYPES = [
+    { key: 'counterfeit',        label: 'List counterfeit, replica, or fake items',                        severity: 'high' },
+    { key: 'misleading',         label: 'Post misleading photos or descriptions',                          severity: 'high' },
+    { key: 'contact_info',       label: 'Share contact information or external links',                     severity: 'high' },
+    { key: 'harassment',         label: 'Harass, threaten, or intimidate other users',                     severity: 'high' },
+    { key: 'price_manipulation', label: 'Manipulate prices or solicit off-platform payments',              severity: 'high' },
+    { key: 'profanity',          label: 'Use profanity or offensive language',                             severity: 'high' },
+    { key: 'stock_photos',       label: 'Use stock photos or images not of the actual item',               severity: 'medium' },
+    { key: 'pressure_tactics',   label: 'Use high-pressure sales tactics',                                 severity: 'medium' },
+  ] as const;
+
+  const handleReportItem = async () => {
+    if (!selectedViolation) {
+      Alert.alert('Select a reason', 'Please choose a violation type before submitting.');
+      return;
+    }
+
+    try {
+      setReportSubmitting(true);
+      const token = await AsyncStorage.getItem('jwtToken');
+      const res = await fetch(`${API_BASE_URL}/api/items/${item?.id}/report`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ violation_type: selectedViolation, notes: reportNotes.trim() }),
+      });
+
+      if (res.ok) {
+        setReportVisible(false);
+        setMoreOptionsVisible(false);
+        setSelectedViolation('');
+        setReportNotes('');
+        Alert.alert('Report submitted', 'Thank you. Our team will review this listing.');
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        const msg = errData.error || 'Unable to submit report. Please try again.';
+        Alert.alert('Unable to Report', msg);
+      }
+    } catch {
+      Alert.alert('Error', 'Unable to submit report. Please try again.');
+    } finally {
+      setReportSubmitting(false);
     }
   };
 
@@ -1035,6 +1100,25 @@ const handleAddToCart = async () => {
   };
 
 
+  if (itemLoadError) return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, backgroundColor: colors.background }}>
+      <Ionicons name="alert-circle-outline" size={64} color={theme === 'dark' ? '#666' : '#ccc'} />
+      <Text style={{ fontSize: 18, fontWeight: '600', color: colors.textPrimary, textAlign: 'center', marginTop: 16 }}>
+        {itemLoadError === 'Item not found' ? 'Listing No Longer Available' : 'Unable to Load Item'}
+      </Text>
+      <Text style={{ fontSize: 14, color: theme === 'dark' ? '#999' : '#666', textAlign: 'center', marginTop: 8 }}>
+        {itemLoadError === 'Item not found'
+          ? 'This listing may have been removed, sold, or is no longer active.'
+          : itemLoadError}
+      </Text>
+      <TouchableOpacity
+        onPress={() => router.back()}
+        style={{ marginTop: 24, backgroundColor: '#6A0DAD', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }}
+      >
+        <Text style={{ color: '#fff', fontWeight: '600', fontSize: 15 }}>Go Back</Text>
+      </TouchableOpacity>
+    </View>
+  );
   if (!item) return <ActivityIndicator style={{ marginTop: 20 }} />;
 
   // Prepare data
@@ -1057,6 +1141,30 @@ const handleAddToCart = async () => {
       Alert.alert('Invalid Seller', 'This item has no valid seller profile.');
     }
   };
+
+  const handleViewSellerItems = () => {
+  const sellerId = item?.seller?.id;
+
+  if (typeof sellerId === "number" && sellerId > 0) {
+    router.push(`/seller-items/${sellerId}`);
+  } else {
+    Alert.alert("Invalid Seller", "This seller has no valid item list.");
+  }
+};
+
+  const handleMessageSeller = () => {
+  const sellerId = item?.seller?.id;
+
+  if (typeof sellerId === "number" && sellerId > 0) {
+    const sellerName = encodeURIComponent(item?.seller?.name ?? '');
+    router.push(`/message-seller/${sellerId}?itemId=${item.id}&sellerName=${sellerName}`);
+  } else {
+    Alert.alert("Invalid Seller", "Unable to message this seller.");
+  }
+};
+
+
+
 
   const renderAuctionEndedContent = () => {
     // User won the auction
@@ -1155,6 +1263,7 @@ const handleAddToCart = async () => {
 
   const displayPrice = getDisplayPrice();
 
+
   const renderSimilarItemsContent = () => {
     if (loading) {
       return <ShimmerPlaceholder />;
@@ -1170,6 +1279,7 @@ const handleAddToCart = async () => {
             horizontal
             keyExtractor={(item) => item.id.toString()}
             renderItem={({ item: similarItem }) => {
+             const bids: any = (similarItem as any).bid_count ?? (similarItem as any).bidCount ?? 0;
               // Determine strategy badge - Priority: Must Sell > Price Drop > Buy Now
               const isMustSell = similarItem.is_must_sell || similarItem.selling_strategy === 'must_sell';
               const hasPriceDrop = similarItem.original_price && similarItem.price < similarItem.original_price;
@@ -1224,6 +1334,7 @@ const handleAddToCart = async () => {
                     )}
                   </View>
 
+                  {/* Bid Count */}
                   <View style={[styles.similarCardContent, { backgroundColor: theme === 'dark' ? '#1a1a1a' : '#fff' }]}>
                     <Text style={[styles.similarCardTitle, { color: colors.textPrimary }]} numberOfLines={2}>
                       {similarItem.name}
@@ -1231,14 +1342,16 @@ const handleAddToCart = async () => {
 
                     <View style={styles.similarPriceRow}>
                       <Text style={[styles.similarCardPrice, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>
-                        ${(similarItem.price ?? 0).toFixed(2)}
-                      </Text>
-                      {(similarItem.bidCount ?? 0) > 0 && (
-                        <Text style={[styles.bidBadge, { color: theme === 'dark' ? '#BB86FC' : '#6A0DAD' }]}>
-                          {similarItem.bidCount} BIDS
-                        </Text>
-                      )}
-                    </View>
+                       ${Number(similarItem.highest_bid ?? similarItem.buy_it_now ?? similarItem.price ?? 0).toFixed(2)}
+                       </Text>
+
+                       {bids > 0 && (
+  <Text style={styles.bidBadge}>
+    {bids} {bids === 1 ? 'BID' : 'BIDS'}
+  </Text>
+)}
+                        </View>
+
 
                     {hasPriceDrop && similarItem.original_price && (
                       <Text style={[styles.originalPrice, { color: colors.textSecondary, textDecorationLine: 'line-through', fontSize: 12 }]}>
@@ -1246,15 +1359,20 @@ const handleAddToCart = async () => {
                       </Text>
                     )}
 
+
+
                     {/* Countdown Timer */}
-                    {similarItem.auction_ends_at && (
-                      <View style={styles.countdownRow}>
-                        <Ionicons name="time-outline" size={14} color={getCountdownColor(similarItem.auction_ends_at)} />
-                        <Text style={[styles.countdownText, { color: getCountdownColor(similarItem.auction_ends_at) }]}>
-                          {formatTimeWithSeconds(similarItem.auction_ends_at, Date.now())}
-                        </Text>
-                      </View>
-                    )}
+                    {similarItem.auction_ends_at && (() => {
+                      const { color, fontWeight } = getCountdownColor(similarItem.auction_ends_at);
+                      return (
+                        <View style={styles.countdownRow}>
+                          <Ionicons name="time-outline" size={14} color={color} />
+                          <Text style={[styles.countdownText, { color, fontWeight }]}>
+                            {formatTimeWithSeconds(similarItem.auction_ends_at, Date.now())}
+                          </Text>
+                        </View>
+                      );
+                    })()}
 
                     {/* Seller Info */}
                     {similarItem.seller && (
@@ -1313,40 +1431,14 @@ const handleAddToCart = async () => {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <EnhancedHeader scrollY={scrollY} onSearch={() => {}} />
-        {/* Back Button */}
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backButtonText}>← Back</Text>
-          </TouchableOpacity>
-       <TouchableOpacity
-    onPress={() => router.back()}
-    style={{
-      position: 'absolute',
-      top: HEADER_MAX_HEIGHT + 8,
-      left: 16,
-      zIndex: 999,
-      backgroundColor: theme === 'dark' ? '#1C1C1E' : 'white',
-      paddingVertical: 6,
-      paddingHorizontal: 12,
-      borderRadius: 8,
-      shadowColor: '#000',
-      shadowOpacity: 0.1,
-      shadowOffset: { width: 0, height: 2 },
-      shadowRadius: 4,
-      elevation: 3,
-    }}
-  >
-    <Text style={{ fontSize: 16, color: theme === 'dark' ? '#B794F4' : '#4b3f72', fontWeight: '600' }}>← Back</Text>
-  </TouchableOpacity>
-       {/* Cart Button */}
-  <View style={styles.floatingCart}>
-    <TouchableOpacity onPress={() => router.push('/cart')} style={{ flexDirection: 'row', alignItems: 'center' }}>
-      <Ionicons name="cart" size={28} color="#6A0DAD" />
-      <Text style={styles.cartBadge}>{cartItems.length}</Text>
-    </TouchableOpacity>
-  </View>
-      <ScrollView
+      <EnhancedHeader scrollY={scrollY} onSearch={noOpSearch} />
+      <RNAnimated.ScrollView
         ref={scrollViewRef}
+        onScroll={RNAnimated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
+        scrollEventThrottle={16}
         contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT, paddingBottom: 60 }}
       >
         {/* Image Gallery */}
@@ -1389,7 +1481,7 @@ const handleAddToCart = async () => {
                 );
               }
 
-              // 2. RESERVE NOT MET - Auction ended with bids but didn't meet reserve
+              // 2. RESERVE ISN'T MET - Auction ended with bids but didn't meet reserve
               if (auctionEnded && hasBids && hasReserve && !reserveMet) {
                 return (
                   <View style={styles.soldBannerOverlay}>
@@ -1580,13 +1672,14 @@ const handleAddToCart = async () => {
             {!item.buy_it_now && (
               <View style={[
                 styles.priceCard,
-                { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' },
-                (item.highest_bid && item.highest_bid > item.price) ? styles.highestBidCard : null
+                (item.highest_bid && item.highest_bid > item.price)
+                  ? (theme === 'dark' ? styles.highestBidCardDark : styles.highestBidCard)
+                  : { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' },
               ]}>
                 {item.highest_bid && item.highest_bid > item.price ? (
                   <>
-                    <Text style={[styles.priceLabel, { color: colors.textPrimary }]}>💰 Highest Bid</Text>
-                    <Text style={[styles.priceValue, styles.highestBidValue]}>${item.highest_bid}</Text>
+                    <Text style={[styles.priceLabel, { color: theme === 'dark' ? '#A7F3B0' : '#2E7D32' }]}>💰 Highest Bid</Text>
+                    <Text style={[styles.priceValue, theme === 'dark' ? styles.highestBidValueDark : styles.highestBidValue]}>${item.highest_bid}</Text>
 
                   </>
                 ) : (
@@ -1612,7 +1705,7 @@ const handleAddToCart = async () => {
                         </View>
                       ) : (
                         <Text style={styles.noBidsText}>
-                          {(item.is_must_sell || item.selling_strategy === 'must_sell') ? 'Highest bidder wins!' : 'No bids yet'}
+                          {(item.is_must_sell || item.selling_strategy === 'must_sell') ? ' 🔥Highest bidder wins!' : 'No bids yet'}
                         </Text>
                       )}
                     </View>
@@ -1622,7 +1715,7 @@ const handleAddToCart = async () => {
             )}
             {!!item.buy_it_now && (
               <View style={[styles.priceCard, styles.buyNowCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
-                <Text style={[styles.priceLabel, { color: colors.textPrimary }]}>Buy It Now</Text>
+                <Text style={[styles.priceLabel, { color: colors.textPrimary }]}>💲Buy It Now</Text>
                 <Text style={[styles.priceValue, styles.buyNowPrice, { color: colors.textPrimary }]}>${item.buy_it_now}</Text>
 
                 {/* Show old price if this was converted from auction with price drop */}
@@ -1641,7 +1734,7 @@ const handleAddToCart = async () => {
             }]}>
               <View style={styles.dealCardHeader}>
                 <Ionicons name="pricetag" size={28} color="#FF6B35" />
-                <Text style={[styles.dealCardTitle, { color: colors.textPrimary }]}>💰 Price Drop Special!</Text>
+                <Text style={[styles.dealCardTitle, { color: colors.textPrimary }]}>💲Price Drop Special!</Text>
               </View>
 
               <Text style={[styles.dealCardText, { color: colors.textSecondary }]}>
@@ -1699,14 +1792,25 @@ const handleAddToCart = async () => {
                 ) : (
                   <Ionicons name="person-circle" size={32} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
                 )}
-                {item.seller?.username && item.seller.username !== 'null' ? (
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-                    <Text style={{ color: theme === 'dark' ? '#9F7AEA' : '#805AD5', fontWeight: '700' }}>@</Text>
-                    {item.seller.username}
-                  </Text>
-                ) : (
-                  <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Seller Info</Text>
-                )}
+                <View style={{ flex: 1 }}>
+                  {item.seller?.username && item.seller.username !== 'null' ? (
+                    <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: 4 }]}>
+                      <Text style={{ color: theme === 'dark' ? '#9F7AEA' : '#805AD5', fontWeight: '700' }}>@</Text>
+                      {item.seller.username}
+                    </Text>
+                  ) : (
+                    <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: 4 }]}>Seller Info</Text>
+                  )}
+                  <View style={styles.sellerSubtitleRow}>
+                    <TouchableOpacity onPress={handleViewSeller}>
+                      <Text style={[styles.sellerSubtitleLink, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>Seller Profile</Text>
+                    </TouchableOpacity>
+                    <Text style={[styles.sellerSubtitleDot, { color: colors.textTertiary }]}>·</Text>
+                    <TouchableOpacity onPress={handleMessageSeller}>
+                      <Text style={[styles.sellerSubtitleLink, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>Leave Message</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
               </View>
               <Ionicons
                 name={sellerInfoExpanded ? "chevron-down" : "chevron-forward"}
@@ -1784,8 +1888,31 @@ const handleAddToCart = async () => {
                   <Text style={[styles.viewSellerButtonText, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>View Full Profile</Text>
                   <Ionicons name="chevron-forward" size={16} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
                 </TouchableOpacity>
+
+                {/* View More Items From This Seller */}
+                  <View style={[styles.policyDivider, { backgroundColor: theme === 'dark' ? '#3C3C3E' : '#E5E7EB' }]} />
+
+                 <TouchableOpacity  onPress={handleViewSellerItems}  style={styles.policyLinkButton}
+              >
+                 <Ionicons name="albums-outline" size={18} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+                 <Text style={[styles.policyLinkText, { color: colors.textPrimary }]}>View More Items From This Seller</Text>
+                 <Ionicons name="chevron-forward" size={14} color={theme === 'dark' ? '#666' : '#9CA3AF'} />
+
+                 </TouchableOpacity>
+
+
+                 <View style={[styles.policyDivider, { backgroundColor: theme === 'dark' ? '#3C3C3E' : '#E5E7EB' }]} />
+
+                <TouchableOpacity  onPress={handleMessageSeller} style={styles.policyLinkButton}
+              >
+                <Ionicons name="chatbubble-ellipses-outline" size={18} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+                <Text style={[styles.policyLinkText, { color: colors.textPrimary }]}>Ask The Seller A Question</Text>
+                <Ionicons name="chevron-forward" size={14} color={theme === 'dark' ? '#666' : '#9CA3AF'} />
+
+                 </TouchableOpacity>
               </>
             )}
+
           </View>
 
           {/* Ended Auction - Show total bid count as historical info */}
@@ -1818,7 +1945,7 @@ const handleAddToCart = async () => {
             </View>
             {!!item.buy_it_now && !!item.auction_ends_at && (
               <View style={styles.infoRow}>
-                <Text style={[styles.infoLabel, { color: colors.textPrimary }]}>🎁 Buy Before</Text>
+                <Text style={[styles.infoLabel, { color: colors.textPrimary }]}>👨‍❤️‍💋‍👨 Buy Before</Text>
                 <Text style={[styles.infoValue, { color: colors.textPrimary }]}>
                   {safeFormat(item.auction_ends_at, 'PPP')}
                 </Text>
@@ -1952,7 +2079,7 @@ const handleAddToCart = async () => {
             activeOpacity={0.7}
           >
             <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Seller Description</Text>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>🧾Seller Description</Text>
               <Ionicons
                 name={descriptionExpanded ? "chevron-up" : "chevron-down"}
                 size={20}
@@ -1965,7 +2092,7 @@ const handleAddToCart = async () => {
                 {item.description || 'No description available'}
               </Text>
             ) : (
-              <Text style={[styles.seeMoreText, { color: theme === 'dark' ? '#9CA3AF' : '#666' }]}>See seller&apos;s description</Text>
+              <Text style={[styles.seeMoreText, { color: theme === 'dark' ? '#9CA3AF' : '#666' }]}>👀See seller&apos;s description</Text>
             )}
           </TouchableOpacity>
 
@@ -1978,9 +2105,9 @@ const handleAddToCart = async () => {
            <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
                 {(item.category === '2' || item.tags?.toLowerCase().includes('watch'))
-                  ? 'Technical Specifications'
+                  ? '👓Technical Specifications'
                   : item.diamond_specifications
-                  ? "Seller's Certificate of Diamond"
+                  ? "👀Seller's Certificate of Diamond"
                   : 'About this item'}
               </Text>
               <Ionicons
@@ -2002,9 +2129,9 @@ const handleAddToCart = async () => {
                     console.error('Failed to parse watch specs:', e);
                   }
 
-                  // Helper to format values
+                  // Helper to format values — false booleans are omitted (only show positive features)
                   const formatValue = (value: any) => {
-                    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+                    if (typeof value === 'boolean') return value ? 'Yes' : null;
                     if (!value || value === '') return null;
                     return String(value);
                   };
@@ -2016,64 +2143,73 @@ const handleAddToCart = async () => {
 
                   // BASIC DESCRIPTION - Always visible at the top
                   const basicInfo = [
-                    { label: 'Brand', value: brand },
+                    { label: '📛Brand', value: brand },
                     { label: 'Model', value: model },
-                    { label: 'Model Number', value: watchSpecs.modelNumber },
-                    { label: 'Year of Manufacture', value: watchSpecs.yearOfManufacture },
+                    { label: '#️⃣ Model Number', value: watchSpecs.modelNumber },
+                     { label: '#️⃣ Serial Number', value: watchSpecs.serialNumber },
+                    { label: '📅Year of Manufacture', value: watchSpecs.yearOfManufacture },
                     { label: 'Condition', value: watchSpecs.condition },
                   ].filter(spec => formatValue(spec.value) !== null);
 
                   // COLLAPSIBLE GROUPS
                   const movementSpecs = [
-                    { label: 'Movement Type', value: watchSpecs.movementType },
-                    { label: 'Water Resistance', value: watchSpecs.waterResistance },
-                    { label: 'Features', value: watchSpecs.selectedFeatures?.join(', ') },
+                    { label: '⚙️Movement Type', value: watchSpecs.movementType },
+                    { label: '🥩Rarity', value: watchSpecs.rarity },
+                    { label: '💦Water Resistance', value: watchSpecs.waterResistance },
+                    { label: '🚀Features', value: watchSpecs.selectedFeatures?.join(', ') },
                   ].filter(spec => formatValue(spec.value) !== null);
 
                   const caseSpecs = [
-                    { label: 'Case Material', value: watchSpecs.caseMaterial },
-                    { label: 'Case Shape', value: watchSpecs.caseShape },
-                    { label: 'Case Thickness', value: watchSpecs.caseThickness },
-                    { label: 'Watch Size', value: watchSpecs.watchSize },
-                    { label: 'Bezel Material', value: watchSpecs.bezelMaterial },
-                    { label: 'Bezel Type', value: watchSpecs.bezelType },
-                    { label: 'Bezel Style', value: watchSpecs.bezelStyle },
-                    { label: 'Bezel Weight (carats)', value: watchSpecs.bezelWeight },
+                    { label: 'Case Metal', value: watchSpecs.caseMetal },
+                    { label: 'Gold Karat', value: watchSpecs.caseGoldKarat },
+                    { label: '🪞Case Metal Finish', value: watchSpecs.caseMetalFinish },
+                    { label: '🔎Case Back Material', value: watchSpecs.caseBackMaterial },
+                    { label: '⬛Case Shape', value: watchSpecs.caseShape },
+                    { label: '📐Case Thickness', value: watchSpecs.caseThickness },
+                    { label: '📏Watch Size', value: watchSpecs.watchSize },
+                    { label: '💎Bezel Material', value: watchSpecs.bezelMaterial },
+                    { label: '💿Bezel Type', value: watchSpecs.bezelType },
+                    { label: '👀Bezel Style', value: watchSpecs.bezelStyle },
+                    { label: '⚖️Bezel Weight (carats)', value: watchSpecs.bezelWeight },
                     { label: 'Original Bezel', value: watchSpecs.originalBezel },
                     { label: 'Aftermarket Bezel', value: watchSpecs.aftermarketBezel },
-                    { label: 'Dial Material', value: watchSpecs.dialMaterial },
-                    { label: 'Dial Color', value: watchSpecs.dialColor },
-                    { label: 'Dial Style', value: watchSpecs.dialStyle },
-                    { label: 'Dial Type', value: watchSpecs.dialType },
-                    { label: 'Hour Markers', value: watchSpecs.dialHourMarkers },
+                    { label: '🦪Dial Material', value: watchSpecs.dialMaterial },
+                    { label: '🎨Dial Color', value: watchSpecs.dialColor },
+                    { label: '📀Dial Style', value: watchSpecs.dialStyle },
+                    { label: '📟Dial Type', value: watchSpecs.dialType },
+                    { label: '💎Hour Markers', value: watchSpecs.dialHourMarkers },
                     { label: 'Original Dial', value: watchSpecs.originalDial },
                     { label: 'Aftermarket Dial', value: watchSpecs.aftermarketDial },
-                    { label: 'Skeletal Back', value: watchSpecs.skeletalBack },
-                    { label: 'Flip Skeletal Back', value: watchSpecs.flipSkeletalBack },
-                    { label: 'Full Skeletal Watch', value: watchSpecs.fullSkeletalWatch },
+                    { label: '🦴Skeletal Back', value: watchSpecs.skeletalBack },
+                    { label: '🩻Flip Skeletal Back', value: watchSpecs.flipSkeletalBack },
+                    { label: '💀Full Skeletal Watch', value: watchSpecs.fullSkeletalWatch },
                   ].filter(spec => formatValue(spec.value) !== null);
 
                   const bandSpecs = [
-                    { label: 'Band Material', value: watchSpecs.bandMaterial },
-                    { label: 'Band Link Type', value: watchSpecs.bandLink },
-                    { label: 'Band Style', value: watchSpecs.bandStyle },
-                    { label: 'Band Size', value: watchSpecs.bandSize },
-                    { label: 'Band Length', value: watchSpecs.bandLength },
-                    { label: 'Band Size (inches)', value: watchSpecs.bandSizeInches },
-                    { label: 'Lug Width', value: watchSpecs.lugWidth },
-                    { label: 'Buckle Width', value: watchSpecs.buckleWidth },
-                    { label: 'Lug to Lug Length', value: watchSpecs.lugToLugLength },
-                    { label: 'Clasp Type', value: watchSpecs.claspType },
+                    { label: 'Band Material', value: watchSpecs.bandMetal ?? watchSpecs.bandMaterial },
+                    { label: '🐊Leather Type', value: watchSpecs.bandLeatherType },
+                    { label: 'Gold Color', value: watchSpecs.bandGoldColor },
+                    { label: 'Gold Karat', value: watchSpecs.bandGoldKarat },
+                    { label: '🦪Band Link Type', value: watchSpecs.bandLink },
+                    { label: '👀Band Style', value: watchSpecs.bandStyle },
+                    { label: '📏Band Size', value: watchSpecs.bandSize },
+                    { label: '📏Band Length', value: watchSpecs.bandLength },
+                    { label: '📏Band Size (inches)', value: watchSpecs.bandSizeInches },
+                    { label: '📐Lug Width', value: watchSpecs.lugWidth },
+                    { label: '📐Buckle Width', value: watchSpecs.buckleWidth },
+                    { label: '📏Lug to Lug Length', value: watchSpecs.lugToLugLength },
+                    { label: '🎨Band Color', value: watchSpecs.bandColor },
+                    { label: '🦋Clasp Type', value: watchSpecs.claspType },
                   ].filter(spec => formatValue(spec.value) !== null);
 
                   const otherSpecs = [
-                    { label: 'Gender', value: watchSpecs.gender },
-                    { label: 'New/Pre-Owned', value: watchSpecs.isNew ? 'New' : 'Pre-Owned' },
+                    { label: '♀️♂️Gender', value: watchSpecs.gender },
+                    { label: '🆕New/Pre-Owned', value: watchSpecs.isNew ? 'New' : 'Pre-Owned' },
                     { label: 'Rarity', value: watchSpecs.rarity || item.rarity },
-                    { label: 'Country of Origin', value: watchSpecs.countryOfOrigin },
-                    { label: 'Warranty', value: watchSpecs.warranty },
-                    { label: 'Original Packaging', value: watchSpecs.hasOriginalPackaging },
-                    { label: 'Diamonds', value: watchSpecs.hasDiamonds },
+                    { label: '🌎Country of Origin', value: watchSpecs.countryOfOrigin },
+                    { label: '🧾Warranty', value: watchSpecs.warranty },
+                    { label: '📦Original Packaging', value: watchSpecs.hasOriginalPackaging },
+                    { label: '💎Diamonds/Gemstones', value: watchSpecs.hasDiamonds },
                   ].filter(spec => formatValue(spec.value) !== null);
 
                   return (
@@ -2081,7 +2217,7 @@ const handleAddToCart = async () => {
                       {/* BASIC DESCRIPTION - Always visible */}
                       {basicInfo.length > 0 && (
                         <View style={[styles.basicDescriptionSection, { borderBottomColor: theme === 'dark' ? '#48484A' : '#E2E8F0' }]}>
-                          <Text style={[styles.basicDescriptionTitle, { color: colors.textPrimary }]}>Basic Description</Text>
+                          <Text style={[styles.basicDescriptionTitle, { color: colors.textPrimary }]}>ℹ️Basic Description</Text>
                           {basicInfo.map((spec, index) => (
                             <View key={`basic-${index}`} style={styles.aboutRow}>
                               <Text style={[styles.aboutLabel, { color: colors.textSecondary }]}>{spec.label}</Text>
@@ -2099,7 +2235,7 @@ const handleAddToCart = async () => {
                             onPress={() => setMovementExpanded(!movementExpanded)}
                             activeOpacity={0.7}
                           >
-                            <Text style={[styles.groupHeaderText, { color: colors.textPrimary }]}>Movement</Text>
+                            <Text style={[styles.groupHeaderText, { color: colors.textPrimary }]}>⚙️Movement</Text>
                             <Ionicons
                               name={movementExpanded ? "remove" : "add"}
                               size={20}
@@ -2127,7 +2263,7 @@ const handleAddToCart = async () => {
                             onPress={() => setCaseExpanded(!caseExpanded)}
                             activeOpacity={0.7}
                           >
-                            <Text style={[styles.groupHeaderText, { color: colors.textPrimary }]}>The Case</Text>
+                            <Text style={[styles.groupHeaderText, { color: colors.textPrimary }]}>⬛Case Shape</Text>
                             <Ionicons
                               name={caseExpanded ? "remove" : "add"}
                               size={20}
@@ -2155,7 +2291,7 @@ const handleAddToCart = async () => {
                             onPress={() => setBandExpanded(!bandExpanded)}
                             activeOpacity={0.7}
                           >
-                            <Text style={[styles.groupHeaderText, { color: colors.textPrimary }]}>Band</Text>
+                            <Text style={[styles.groupHeaderText, { color: colors.textPrimary }]}>🧾Band Details</Text>
                             <Ionicons
                               name={bandExpanded ? "remove" : "add"}
                               size={20}
@@ -2183,7 +2319,7 @@ const handleAddToCart = async () => {
                             onPress={() => setOtherExpanded(!otherExpanded)}
                             activeOpacity={0.7}
                           >
-                            <Text style={[styles.groupHeaderText, { color: colors.textPrimary }]}>Other</Text>
+                            <Text style={[styles.groupHeaderText, { color: colors.textPrimary }]}>🧾Other</Text>
                             <Ionicons
                               name={otherExpanded ? "remove" : "add"}
                               size={20}
@@ -2352,6 +2488,21 @@ const handleAddToCart = async () => {
               <Text style={[styles.seeMoreText, { color: colors.textSecondary }]}>See product details</Text>
             )}
           </TouchableOpacity>
+
+          {/* More Options */}
+          <TouchableOpacity
+            onPress={() => setMoreOptionsVisible(true)}
+            style={[styles.moreOptionsRow, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderColor: theme === 'dark' ? '#3C3C3E' : '#E5E7EB' }]}
+            activeOpacity={0.7}
+          >
+            <View style={styles.moreOptionsRowInner}>
+              <Text style={[styles.moreOptionsRowText, { color: colors.textPrimary }]}>More about this item</Text>
+              <Ionicons name={theme === 'dark' ? 'ellipsis-horizontal' : 'ellipsis-horizontal'} size={18} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={theme === 'dark' ? '#666' : '#9CA3AF'} />
+          </TouchableOpacity>
+
+
 
           {/* Sell a Similar Item Link */}
           <TouchableOpacity
@@ -2651,7 +2802,7 @@ const handleAddToCart = async () => {
         </View>
       ) : null}
 
-      {/* Shipping Section */}
+        {/* Shipping Section */}
       <View style={[styles.shippingSection, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
         <TouchableOpacity
           onPress={() => setShippingExpanded(!shippingExpanded)}
@@ -2672,8 +2823,9 @@ const handleAddToCart = async () => {
             activeOpacity={0.7}
           >
             <Text style={[styles.shippingText, { color: colors.textPrimary }]}>📦 Shipping calculated at checkout based on weight ({item.weight_lbs || 1} lbs)</Text>
-            <Text style={[styles.shippingText, { color: colors.textPrimary }]}>🔒 Buyer Protection included</Text>
-            <Text style={[styles.shippingText, { color: colors.textPrimary }]}>💳 Payments: Credit Card, PayPal, Apple Pay</Text>
+            <Text style={[styles.shippingText, { color: colors.textPrimary }]}>🔒 Buyer Protection is optional</Text>
+            <Text style={[styles.shippingText, { color: colors.textPrimary }]}>💳 Payments accepted: Credit/Debit, Cash App, Crypto, Google Pay, Apple Pay & many more.
+</Text>
             <View style={styles.tapToLearnMoreContainer}>
               <Text style={[styles.tapToLearnMore, { color: theme === 'dark' ? '#B794F4' : '#6A0DAD' }]}>Tap for carrier options & details</Text>
               <Ionicons name="information-circle" size={16} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
@@ -2696,7 +2848,7 @@ const handleAddToCart = async () => {
   {renderSimilarItemsContent()}
 </View>
 
-        </ScrollView>
+        </RNAnimated.ScrollView>
 
         {/* Price Adjustment Modal */}
         <Modal
@@ -2783,6 +2935,7 @@ const handleAddToCart = async () => {
               borderTopLeftRadius: 16,
               borderTopRightRadius: 16,
               overflow: 'hidden',
+              maxHeight: screenHeight * 0.88,
             }]}>
               <View style={styles.modalHeader}>
                 <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>💰 Cost Breakdown</Text>
@@ -2791,7 +2944,7 @@ const handleAddToCart = async () => {
                 </TouchableOpacity>
               </View>
 
-              <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
+              <ScrollView style={[styles.modalScrollView, { maxHeight: screenHeight * 0.65 }]} showsVerticalScrollIndicator={false}>
                 {/* Item Price */}
                 <View style={[styles.modalSection, styles.purchaseSection, {
                   backgroundColor: theme === 'dark' ? '#2C1C4A' : '#F5F0FF',
@@ -2873,76 +3026,84 @@ const handleAddToCart = async () => {
                     <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>How Sellers Are Paid</Text>
                   </View>
                   <Text style={[styles.modalDescription, { color: colors.textSecondary }]}>
-                    {item.seller?.is_premium ? (
-                      <>Premium sellers keep <Text style={[styles.highlightText, { color: theme === 'dark' ? '#48BB78' : '#2F855A' }]}>92%</Text> of the sale price (8% total fees: 5% commission + 3% payment processing).</>
-                    ) : (
-                      <>Regular sellers keep <Text style={[styles.highlightText, { color: theme === 'dark' ? '#48BB78' : '#2F855A' }]}>89%</Text> of the sale price (11% total fees: 8% commission + 3% payment processing).</>
-                    )}
+                    Regular sellers keep <Text style={[styles.highlightText, { color: theme === 'dark' ? '#48BB78' : '#2F855A' }]}>89%</Text> (11% total fees: 8% commission + 3% processing). Premium sellers keep <Text style={[styles.highlightText, { color: theme === 'dark' ? '#48BB78' : '#2F855A' }]}>92%</Text> (8% total fees: 5% commission + 3% processing).
                   </Text>
-                  <View style={[styles.feeExample, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F9FAFB' }]}>
-                    <Text style={[styles.feeExampleTitle, { color: colors.textPrimary }]}>Example for ${displayPrice.toFixed(2)} sale:</Text>
+
+                  {/* Regular seller example */}
+                  <View style={[styles.feeExample, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F9FAFB', marginBottom: 10 }]}>
+                    <Text style={[styles.feeExampleTitle, { color: colors.textPrimary }]}>
+                      Regular Seller — ${displayPrice.toFixed(2)} sale:
+                    </Text>
                     <View style={styles.feeExampleRow}>
                       <Text style={[styles.feeExampleLabel, { color: colors.textSecondary }]}>Sale Price</Text>
                       <Text style={[styles.feeExampleValue, { color: colors.textSecondary }]}>${displayPrice.toFixed(2)}</Text>
                     </View>
                     <View style={styles.feeExampleRow}>
-                      <Text style={[styles.feeExampleLabel, { color: colors.textSecondary }]}>BidGoat Fees</Text>
-                      <Text style={[styles.feeExampleValue, { color: colors.textSecondary }]}>
-                        -${(displayPrice * (item.seller?.is_premium ? 0.08 : 0.11)).toFixed(2)}
-                      </Text>
+                      <Text style={[styles.feeExampleLabel, { color: colors.textSecondary }]}>BidGoat Fees (11%)</Text>
+                      <Text style={[styles.feeExampleValue, { color: colors.textSecondary }]}>-${(displayPrice * 0.11).toFixed(2)}</Text>
                     </View>
                     <View style={styles.feeDivider} />
                     <View style={styles.feeExampleRow}>
                       <Text style={[styles.feeExampleTotal, { color: colors.textPrimary }]}>Seller Receives</Text>
-                      <Text style={[styles.feeExampleTotal, { color: colors.textPrimary }]}>
-                        ${(displayPrice * (item.seller?.is_premium ? 0.92 : 0.89)).toFixed(2)}
-                      </Text>
+                      <Text style={[styles.feeExampleTotal, { color: colors.textPrimary }]}>${(displayPrice * 0.89).toFixed(2)}</Text>
+                    </View>
+                  </View>
+
+                  {/* Premium seller example */}
+                  <View style={[styles.feeExample, { backgroundColor: theme === 'dark' ? '#2C1C4A' : '#F5F0FF', borderWidth: 1, borderColor: theme === 'dark' ? '#6B46C1' : '#D6BCFA' }]}>
+                    <Text style={[styles.feeExampleTitle, { color: colors.textPrimary }]}>
+                      ⭐ Premium Seller — ${displayPrice.toFixed(2)} sale:
+                    </Text>
+                    <View style={styles.feeExampleRow}>
+                      <Text style={[styles.feeExampleLabel, { color: colors.textSecondary }]}>Sale Price</Text>
+                      <Text style={[styles.feeExampleValue, { color: colors.textSecondary }]}>${displayPrice.toFixed(2)}</Text>
+                    </View>
+                    <View style={styles.feeExampleRow}>
+                      <Text style={[styles.feeExampleLabel, { color: colors.textSecondary }]}>BidGoat Fees (8%)</Text>
+                      <Text style={[styles.feeExampleValue, { color: theme === 'dark' ? '#48BB78' : '#2F855A' }]}>-${(displayPrice * 0.08).toFixed(2)}</Text>
+                    </View>
+                    <View style={styles.feeDivider} />
+                    <View style={styles.feeExampleRow}>
+                      <Text style={[styles.feeExampleTotal, { color: colors.textPrimary }]}>Seller Receives</Text>
+                      <Text style={[styles.feeExampleTotal, { color: theme === 'dark' ? '#48BB78' : '#2F855A' }]}>${(displayPrice * 0.92).toFixed(2)}</Text>
                     </View>
                   </View>
                 </View>
 
                 {/* Payment Methods */}
                 <View style={styles.modalSection}>
-                  <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>Accepted Payments</Text>
-                  <View style={styles.paymentMethods}>
-                    <View style={[styles.paymentBadge, {
-                      backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F9FAFB',
-                      borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0',
-                      shadowColor: '#635BFF',
-                      shadowOpacity: 0.1,
-                      shadowRadius: 8,
-                      shadowOffset: { width: 0, height: 2 },
-                      elevation: 2,
-                    }]}>
-                      <Ionicons name="card" size={24} color="#635BFF" />
-                      <Text style={[styles.paymentText, { color: theme === 'dark' ? '#E0E0E0' : '#2D3748' }]}>Credit/Debit</Text>
-                    </View>
-                    <View style={[styles.paymentBadge, {
-                      backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F9FAFB',
-                      borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0',
-                      shadowColor: '#003087',
-                      shadowOpacity: 0.1,
-                      shadowRadius: 8,
-                      shadowOffset: { width: 0, height: 2 },
-                      elevation: 2,
-                    }]}>
-                      <Ionicons name="logo-paypal" size={24} color="#003087" />
-                      <Text style={[styles.paymentText, { color: theme === 'dark' ? '#E0E0E0' : '#2D3748' }]}>PayPal</Text>
-                    </View>
-                    <View style={[styles.paymentBadge, {
-                      backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F9FAFB',
-                      borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0',
-                      shadowColor: theme === 'dark' ? '#FFF' : '#000',
-                      shadowOpacity: 0.1,
-                      shadowRadius: 8,
-                      shadowOffset: { width: 0, height: 2 },
-                      elevation: 2,
-                    }]}>
-                      <Ionicons name="logo-apple" size={24} color={theme === 'dark' ? '#FFF' : '#000'} />
-                      <Text style={[styles.paymentText, { color: theme === 'dark' ? '#E0E0E0' : '#2D3748' }]}>Apple Pay</Text>
-                    </View>
+                  <View style={styles.sectionIconHeader}>
+                    <Ionicons name="card" size={20} color={theme === 'dark' ? '#60A5FA' : '#2563EB'} />
+                    <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>Accepted Payments</Text>
                   </View>
-                  <View style={[styles.securePaymentBox, { backgroundColor: theme === 'dark' ? '#1A2B3A' : '#EFF6FF' }]}>
+                  <View style={styles.paymentGrid}>
+                    {[
+                      // Cards & Bank
+  { label: 'Credit / Debit Card', icon: 'card', color: '#2563EB', group: 'Cards & Bank' },
+  { label: 'Bank (ACH)', icon: 'business', color: '#2563EB', group: 'Cards & Bank' },
+
+  // Wallets
+  { label: 'Apple Pay', icon: 'logo-apple', color: theme === 'dark' ? '#FFF' : '#000', group: 'Wallets' },
+  { label: 'Google Pay', icon: 'logo-google', color: '#4285F4', group: 'Wallets' },
+  { label: 'Cash App Pay', icon: 'logo-usd', color: '#00D64F', group: 'Wallets' },
+
+  // BNPL
+  { label: 'Klarna', icon: 'time', color: '#FF9AC1', group: 'Buy Now, Pay Later' },
+
+  // Branded
+  { label: 'Amazon Pay', icon: 'storefront', color: '#FF9900', group: 'Branded Payments' },
+
+  // Alternative
+  { label: 'Pay with Link', icon: 'link', color: '#635BFF', group: 'Alternative' },
+  { label: 'Crypto', icon: 'logo-bitcoin', color: '#F7931A', group: 'Alternative' },
+                    ].map(({ label, icon, color }) => (
+                      <View key={label} style={[styles.paymentGridItem, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F9FAFB', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}>
+                        <Ionicons name={icon as any} size={20} color={color} />
+                        <Text style={[styles.paymentGridLabel, { color: colors.textPrimary }]}>{label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  <View style={[styles.securePaymentBox, { backgroundColor: theme === 'dark' ? '#1A2B3A' : '#EFF6FF', marginTop: 12 }]}>
                     <Ionicons name="shield-checkmark" size={18} color={theme === 'dark' ? '#60A5FA' : '#2563EB'} />
                     <Text style={[styles.securePayment, { color: theme === 'dark' ? '#93C5FD' : '#1E40AF' }]}>
                       All payments processed securely via Stripe
@@ -2962,7 +3123,7 @@ const handleAddToCart = async () => {
           onRequestClose={() => setShowShippingModal(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={[styles.modalContent, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
+            <View style={[styles.modalContent, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', maxHeight: screenHeight * 0.88 }]}>
               <View style={styles.modalHeader}>
                 <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>🚚 Shipping & Delivery</Text>
                 <TouchableOpacity onPress={() => setShowShippingModal(false)}>
@@ -2970,7 +3131,7 @@ const handleAddToCart = async () => {
                 </TouchableOpacity>
               </View>
 
-              <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
+              <ScrollView style={[styles.modalScrollView, { maxHeight: screenHeight * 0.65 }]} showsVerticalScrollIndicator={false}>
                 {/* Carriers */}
                 <View style={styles.modalSection}>
                   <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>Available Carriers</Text>
@@ -3022,25 +3183,168 @@ const handleAddToCart = async () => {
 
                 {/* Buyer Protection */}
                 <View style={styles.modalSection}>
-                  <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>Buyer Protection</Text>
-                  <View style={styles.protectionList}>
-                    <View style={styles.protectionItem}>
-                      <Ionicons name="checkmark-circle" size={20} color="#48BB78" />
-                      <Text style={[styles.protectionText, { color: colors.textPrimary }]}>Full refund if item not as described</Text>
-                    </View>
-                    <View style={styles.protectionItem}>
-                      <Ionicons name="checkmark-circle" size={20} color="#48BB78" />
-                      <Text style={[styles.protectionText, { color: colors.textPrimary }]}>Coverage for lost or damaged shipments</Text>
-                    </View>
-                    <View style={styles.protectionItem}>
-                      <Ionicons name="checkmark-circle" size={20} color="#48BB78" />
-                      <Text style={[styles.protectionText, { color: colors.textPrimary }]}>Real-time tracking updates</Text>
-                    </View>
-                    <View style={styles.protectionItem}>
-                      <Ionicons name="checkmark-circle" size={20} color="#48BB78" />
-                      <Text style={[styles.protectionText, { color: colors.textPrimary }]}>24/7 customer support</Text>
-                    </View>
+                  <View style={styles.sectionIconHeader}>
+                    <Ionicons name="shield-checkmark" size={20} color="#48BB78" />
+                    <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>Buyer Protection</Text>
                   </View>
+
+                  {/* Platform Baseline — always on */}
+                  <View style={[styles.protectionTier, { backgroundColor: theme === 'dark' ? '#1C4532' : '#F0FFF4', borderColor: '#48BB78' }]}>
+                    <Text style={[styles.protectionTierTitle, { color: theme === 'dark' ? '#9AE6B4' : '#276749' }]}>
+                      🛡️ Platform Baseline — Always Included
+                    </Text>
+                    <Text style={[styles.protectionTierSubtitle, { color: theme === 'dark' ? '#9AE6B4' : '#276749' }]}>
+                      Sellers cannot override these protections.
+                    </Text>
+                    {[
+                      'Item significantly not as described',
+                      'Counterfeit, fake, or replica items',
+                      'Undisclosed defects or damage',
+                      'Wrong item, size, or color received',
+                    ].map((text) => (
+                      <View key={text} style={styles.protectionItem}>
+                        <Ionicons name="checkmark-circle" size={18} color="#48BB78" />
+                        <Text style={[styles.protectionText, { color: colors.textPrimary }]}>{text}</Text>
+                      </View>
+                    ))}
+                  </View>
+
+
+
+
+
+                  {/* Optional Shipping Insurance */}
+                  <View style={[styles.protectionTier, { backgroundColor: theme === 'dark' ? '#1A2B3A' : '#EFF6FF', borderColor: '#2563EB', marginTop: 10 }]}>
+                    <Text style={[styles.protectionTierTitle, { color: theme === 'dark' ? '#93C5FD' : '#1E40AF' }]}>
+                      📦 Shipping Insurance — Optional
+                    </Text>
+                    <Text style={[styles.protectionTierSubtitle, { color: theme === 'dark' ? '#93C5FD' : '#1E40AF' }]}>
+                      Toggle in your cart before checkout (~2% of item value).
+                    </Text>
+                    {[
+                      'Lost shipments covered',
+                      'Damage during transit covered',
+                    ].map((text) => (
+                      <View key={text} style={styles.protectionItem}>
+                        <Ionicons name="checkmark-circle" size={18} color="#2563EB" />
+                        <Text style={[styles.protectionText, { color: colors.textPrimary }]}>{text}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+
+                {/* Payment Methods */}
+                <View style={styles.modalSection}>
+                  <View style={styles.sectionIconHeader}>
+                    {/* Insurance */}
+<View style={styles.modalSection}>
+  <View style={styles.sectionIconHeader}>
+    <Ionicons name="shield-checkmark-outline" size={20} color="#48BB78" />
+    <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>
+      Insurance
+    </Text>
+  </View>
+
+  <View style={styles.toggleRow}>
+    <Text style={[styles.modalDescription, { color: colors.textSecondary }]}>
+      Add ~2% of item value to protect
+      against loss/damage in transit.
+    </Text>
+
+    <Switch
+      value={includeInsurance}
+      onValueChange={setIncludeInsurance}
+      trackColor={{ false: '#CBD5E0', true: '#48BB78' }}
+      thumbColor={includeInsurance ? '#22543D' : '#F7FAFC'}
+    />
+  </View>
+</View>
+
+                    <Ionicons name="card" size={20} color={theme === 'dark' ? '#60A5FA' : '#2563EB'} />
+                    <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>Accepted Payments</Text>
+                  </View>
+                  <View style={styles.paymentGrid}>
+                    {[
+                      // Cards & Bank
+  { label: 'Credit / Debit Card', icon: 'card', color: '#2563EB', group: 'Cards & Bank' },
+  { label: 'Bank (ACH)', icon: 'business', color: '#2563EB', group: 'Cards & Bank' },
+
+  // Wallets
+  { label: 'Apple Pay', icon: 'logo-apple', color: theme === 'dark' ? '#FFF' : '#000', group: 'Wallets' },
+  { label: 'Google Pay', icon: 'logo-google', color: '#4285F4', group: 'Wallets' },
+  { label: 'Cash App Pay', icon: 'logo-usd', color: '#00D64F', group: 'Wallets' },
+
+  // BNPL
+  { label: 'Klarna', icon: 'time', color: '#FF9AC1', group: 'Buy Now, Pay Later' },
+
+  // Branded
+  { label: 'Amazon Pay', icon: 'storefront', color: '#FF9900', group: 'Branded Payments' },
+
+  // Alternative
+  { label: 'Pay with Link', icon: 'link', color: '#635BFF', group: 'Alternative' },
+  { label: 'Crypto', icon: 'logo-bitcoin', color: '#F7931A', group: 'Alternative' },
+                    ].map(({ label, icon, color }) => (
+                      <View key={label} style={[styles.paymentGridItem, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F9FAFB', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}>
+                        <Ionicons name={icon as any} size={20} color={color} />
+                        <Text style={[styles.paymentGridLabel, { color: colors.textPrimary }]}>{label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  <View style={[styles.securePaymentBox, { backgroundColor: theme === 'dark' ? '#1A2B3A' : '#EFF6FF', marginTop: 12 }]}>
+                    <Ionicons name="shield-checkmark" size={16} color={theme === 'dark' ? '#60A5FA' : '#2563EB'} />
+                    <Text style={[styles.securePayment, { color: theme === 'dark' ? '#93C5FD' : '#1E40AF' }]}>
+                      All payments processed securely via Stripe
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Premium Shipping */}
+                <View style={styles.modalSection}>
+                  <View style={styles.sectionIconHeader}>
+                    <Ionicons name="star" size={20} color={theme === 'dark' ? '#FCD34D' : '#D97706'} />
+                    <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>⭐ Premium Shipping</Text>
+                  </View>
+                  <View style={[
+  styles.protectionTier,
+  {
+    backgroundColor: theme === 'dark' ? '#2C1C0A' : '#FFFBEB',
+    borderColor: theme === 'dark' ? '#D97706' : '#F59E0B',
+    marginTop: 0,
+  }
+]}>
+  <Text style={[
+    styles.protectionTierTitle,
+    { color: theme === 'dark' ? '#FCD34D' : '#92400E' }
+  ]}>
+    🚀 24‑Hour Express Shipping — Available at Checkout
+  </Text>
+
+  <Text style={[
+    styles.protectionTierSubtitle,
+    { color: theme === 'dark' ? '#FCD34D' : '#92400E' }
+  ]}>
+    Our fastest tier for high‑value items.
+  </Text>
+
+  {[
+    '1 business day guaranteed (FedEx Overnight / UPS Next Day Air)',
+    'Adult signature confirmation',
+    'Real‑time SMS & email tracking',
+    'Tamper‑evident secure packaging',
+  ].map((text) => (
+    <View key={text} style={styles.protectionItem}>
+      <Ionicons
+        name="checkmark-circle"
+        size={18}
+        color={theme === 'dark' ? '#FCD34D' : '#D97706'}
+      />
+      <Text style={[styles.protectionText, { color: colors.textPrimary }]}>
+        {text}
+      </Text>
+    </View>
+  ))}
+</View>
+
                 </View>
 
                 {/* International Shipping */}
@@ -3073,28 +3377,28 @@ const handleAddToCart = async () => {
 
               <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>Minimum Bid</Text>
+                  <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>Minimum Bid</Text>
                   <Text style={styles.modalDescription}>
                     You must bid at least the minimum shown. This ensures fair increments between bids.
                   </Text>
                 </View>
 
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>Winning</Text>
+                  <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>Winning</Text>
                   <Text style={styles.modalDescription}>
                     The highest bidder when the auction ends wins the item. You will be notified if someone outbids you.
                   </Text>
                 </View>
 
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>Payment</Text>
+                  <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>Payment</Text>
                   <Text style={styles.modalDescription}>
                     If you win, you will receive payment instructions via email. Complete payment within 48 hours to secure your item.
                   </Text>
                 </View>
 
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>Bid Increments</Text>
+                  <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>Bid Increments</Text>
                   <Text style={styles.modalDescription}>
                     BidGoat uses industry-standard tiered bid increments based on the current price. This prevents penny-bidding wars and keeps auctions moving fairly.
                   </Text>
@@ -3155,21 +3459,21 @@ const handleAddToCart = async () => {
 
               <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>What You See</Text>
+                  <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>What You See</Text>
                   <Text style={styles.modalDescription}>
                     This shows the most recent bids on this item, including the bid amount, username, and when the bid was placed.
                   </Text>
                 </View>
 
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>Your Bids</Text>
+                  <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>Your Bids</Text>
                   <Text style={styles.modalDescription}>
                     If you see your username here, you&#39;ve placed a bid. The top bid is currently winning.
                   </Text>
                 </View>
 
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>Staying Informed</Text>
+                  <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>Staying Informed</Text>
                   <Text style={styles.modalDescription}>
                     Watch this list to see bidding activity. If you are outbid, you will receive a notification and can place a higher bid.
                   </Text>
@@ -3187,138 +3491,151 @@ const handleAddToCart = async () => {
           onRequestClose={() => setShowListingTypeModal(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={[styles.modalContent, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
+            <View style={[styles.modalContent, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', maxHeight: screenHeight * 0.88 }]}>
+              {/* X close button - top right */}
+              <TouchableOpacity style={styles.listingModalCloseBtn} onPress={() => setShowListingTypeModal(false)}>
+                <Ionicons name="close" size={24} color="#FFF" />
+              </TouchableOpacity>
+
               <View style={styles.modalHeader}>
                 <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>How would you like to list it?</Text>
-                <TouchableOpacity onPress={() => setShowListingTypeModal(false)}>
-                  <Ionicons name="close" size={24} color={theme === 'dark' ? '#9CA3AF' : '#666'} />
-                </TouchableOpacity>
               </View>
 
-              <View style={styles.listingTypeContainer}>
-                {/* List My Diamond */}
-                <TouchableOpacity
-                  style={[styles.listingTypeOption, {
-                    backgroundColor: theme === 'dark' ? '#2A2A2E' : '#F7FAFC',
-                    borderColor: theme === 'dark' ? '#3A3A3E' : '#E2E8F0'
-                  }]}
-                  onPress={() => {
-                    setShowListingTypeModal(false);
-                    router.push('/diamond-appraisal');
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.listingTypeContent}>
-                    <Ionicons name="diamond" size={28} color="#3B82F6" />
-                    <Text style={[styles.listingTypeTitle, { color: colors.textPrimary }]}>List My Diamond</Text>
-                    <Text style={[styles.listingTypeDescription, { color: theme === 'dark' ? '#9CA3AF' : '#718096' }]}>
-                      Get an instant appraisal and list your diamond with recommended pricing.
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-
-                {/* List My Watch */}
-                <TouchableOpacity
-                  style={[styles.listingTypeOption, {
-                    backgroundColor: theme === 'dark' ? '#2A2A2E' : '#F7FAFC',
-                    borderColor: theme === 'dark' ? '#3A3A3E' : '#E2E8F0'
-                  }]}
-                  onPress={() => {
-                    setShowListingTypeModal(false);
-                    router.push('/watch-appraisal');
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.listingTypeContent}>
-                    <Ionicons name="watch" size={28} color="#10B981" />
-                    <Text style={[styles.listingTypeTitle, { color: colors.textPrimary }]}>List My Watch</Text>
-                    <Text style={[styles.listingTypeDescription, { color: theme === 'dark' ? '#9CA3AF' : '#718096' }]}>
-                      Get your watch valued and list it with accurate market pricing.
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-
-                {/* Classic Auction */}
-                <TouchableOpacity
-                  style={[styles.listingTypeOption, {
-                    backgroundColor: theme === 'dark' ? '#2A2A2E' : '#F7FAFC',
-                    borderColor: theme === 'dark' ? '#3A3A3E' : '#E2E8F0'
-                  }]}
-                  onPress={() => {
-                    setShowListingTypeModal(false);
-                    router.push('/CreateAuctionScreen' as any);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.listingTypeContent}>
-                    <Ionicons name="hammer" size={28} color="#6A0DAD" />
-                    <Text style={[styles.listingTypeTitle, { color: colors.textPrimary }]}>Create a Classic Auction</Text>
-                    <Text style={[styles.listingTypeDescription, { color: theme === 'dark' ? '#9CA3AF' : '#718096' }]}>
-                      Start bidding at your price. Highest bid wins when auction ends.
-                    </Text>
-                  </View>
+              <ScrollView showsVerticalScrollIndicator={false} style={{ flexShrink: 1 }}>
+                <View style={styles.listingTypeContainer}>
+                  {/* List My Diamond */}
                   <TouchableOpacity
-                    onPress={() => setShowAuctionHelp(true)}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={[styles.listingTypeOption, {
+                      backgroundColor: theme === 'dark' ? '#2A2A2E' : '#F7FAFC',
+                      borderColor: theme === 'dark' ? '#3A3A3E' : '#E2E8F0'
+                    }]}
+                    onPress={() => {
+                      setShowListingTypeModal(false);
+                      router.push('/diamond-appraisal');
+                    }}
+                    activeOpacity={0.7}
                   >
-                    <Ionicons name="help-circle" size={24} color="#6A0DAD" />
+                    <View style={styles.listingTypeContent}>
+                      <Ionicons name="diamond" size={28} color="#3B82F6" />
+                      <Text style={[styles.listingTypeTitle, { color: colors.textPrimary }]}>List My Diamond</Text>
+                      <Text style={[styles.listingTypeDescription, { color: theme === 'dark' ? '#9CA3AF' : '#718096' }]}>
+                        Get an instant appraisal and list your diamond with recommended pricing.
+                      </Text>
+                    </View>
                   </TouchableOpacity>
-                </TouchableOpacity>
 
-                {/* Buy It Now */}
-                <TouchableOpacity
-                  style={[styles.listingTypeOption, {
-                    backgroundColor: theme === 'dark' ? '#2A2A2E' : '#F7FAFC',
-                    borderColor: theme === 'dark' ? '#3A3A3E' : '#E2E8F0'
-                  }]}
-                  onPress={() => {
-                    setShowListingTypeModal(false);
-                    router.push('/list-item' as any);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.listingTypeContent}>
-                    <Ionicons name="cart" size={28} color="#FF6B35" />
-                    <Text style={[styles.listingTypeTitle, { color: colors.textPrimary }]}>Buy It Now</Text>
-                    <Text style={[styles.listingTypeDescription, { color: theme === 'dark' ? '#9CA3AF' : '#718096' }]}>
-                      Set a fixed price. Buyers can purchase instantly without bidding.
-                    </Text>
-                  </View>
+                  {/* List My Watch */}
                   <TouchableOpacity
-                    onPress={() => setShowBuyItNowHelp(true)}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={[styles.listingTypeOption, {
+                      backgroundColor: theme === 'dark' ? '#2A2A2E' : '#F7FAFC',
+                      borderColor: theme === 'dark' ? '#3A3A3E' : '#E2E8F0'
+                    }]}
+                    onPress={() => {
+                      setShowListingTypeModal(false);
+                      router.push('/watch-appraisal');
+                    }}
+                    activeOpacity={0.7}
                   >
-                    <Ionicons name="help-circle" size={24} color="#FF6B35" />
+                    <View style={styles.listingTypeContent}>
+                      <Ionicons name="watch" size={28} color="#10B981" />
+                      <Text style={[styles.listingTypeTitle, { color: colors.textPrimary }]}>List My Watch</Text>
+                      <Text style={[styles.listingTypeDescription, { color: theme === 'dark' ? '#9CA3AF' : '#718096' }]}>
+                        Get your watch valued and list it with accurate market pricing.
+                      </Text>
+                    </View>
                   </TouchableOpacity>
-                </TouchableOpacity>
 
-                {/* Must Sell */}
-                <TouchableOpacity
-                  style={[styles.listingTypeOption, {
-                    backgroundColor: theme === 'dark' ? '#2A2A2E' : '#F7FAFC',
-                    borderColor: theme === 'dark' ? '#3A3A3E' : '#E2E8F0'
-                  }]}
-                  onPress={() => {
-                    setShowListingTypeModal(false);
-                    router.push('/MustSellScreen' as any);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.listingTypeContent}>
-                    <Ionicons name="flash" size={28} color="#E53E3E" />
-                    <Text style={[styles.listingTypeTitle, { color: colors.textPrimary }]}>Must Sell</Text>
-                    <Text style={[styles.listingTypeDescription, { color: theme === 'dark' ? '#9CA3AF' : '#718096' }]}>
-                      No reserve price. Highest bid wins regardless of amount.
-                    </Text>
-                  </View>
+                  {/* Classic Auction */}
                   <TouchableOpacity
-                    onPress={() => setShowMustSellHelp(true)}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={[styles.listingTypeOption, {
+                      backgroundColor: theme === 'dark' ? '#2A2A2E' : '#F7FAFC',
+                      borderColor: theme === 'dark' ? '#3A3A3E' : '#E2E8F0'
+                    }]}
+                    onPress={() => {
+                      setShowListingTypeModal(false);
+                      router.push('/CreateAuctionScreen' as any);
+                    }}
+                    activeOpacity={0.7}
                   >
-                    <Ionicons name="help-circle" size={24} color="#E53E3E" />
+                    <View style={styles.listingTypeContent}>
+                      <Ionicons name="hammer" size={28} color="#6A0DAD" />
+                      <Text style={[styles.listingTypeTitle, { color: colors.textPrimary }]}>Create a Classic Auction</Text>
+                      <Text style={[styles.listingTypeDescription, { color: theme === 'dark' ? '#9CA3AF' : '#718096' }]}>
+                        Start bidding at your price. Highest bid wins when auction ends.
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => setShowAuctionHelp(true)}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      <Ionicons name="help-circle" size={24} color="#6A0DAD" />
+                    </TouchableOpacity>
                   </TouchableOpacity>
-                </TouchableOpacity>
-              </View>
+
+                  {/* Buy It Now */}
+                  <TouchableOpacity
+                    style={[styles.listingTypeOption, {
+                      backgroundColor: theme === 'dark' ? '#2A2A2E' : '#F7FAFC',
+                      borderColor: theme === 'dark' ? '#3A3A3E' : '#E2E8F0'
+                    }]}
+                    onPress={() => {
+                      setShowListingTypeModal(false);
+                      router.push('/list-item' as any);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.listingTypeContent}>
+                      <Ionicons name="cart" size={28} color="#FF6B35" />
+                      <Text style={[styles.listingTypeTitle, { color: colors.textPrimary }]}>Buy It Now</Text>
+                      <Text style={[styles.listingTypeDescription, { color: theme === 'dark' ? '#9CA3AF' : '#718096' }]}>
+                        Set a fixed price. Buyers can purchase instantly without bidding.
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => setShowBuyItNowHelp(true)}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      <Ionicons name="help-circle" size={24} color="#FF6B35" />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+
+                  {/* Must Sell */}
+                  <TouchableOpacity
+                    style={[styles.listingTypeOption, {
+                      backgroundColor: theme === 'dark' ? '#2A2A2E' : '#F7FAFC',
+                      borderColor: theme === 'dark' ? '#3A3A3E' : '#E2E8F0'
+                    }]}
+                    onPress={() => {
+                      setShowListingTypeModal(false);
+                      router.push('/MustSellScreen' as any);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.listingTypeContent}>
+                      <Ionicons name="flash" size={28} color="#E53E3E" />
+                      <Text style={[styles.listingTypeTitle, { color: colors.textPrimary }]}>Must Sell</Text>
+                      <Text style={[styles.listingTypeDescription, { color: theme === 'dark' ? '#9CA3AF' : '#718096' }]}>
+                        No reserve price. Highest bid wins regardless of amount.
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => setShowMustSellHelp(true)}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      <Ionicons name="help-circle" size={24} color="#E53E3E" />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+
+              {/* Cancel button */}
+              <TouchableOpacity
+                style={[styles.listingModalCancelBtn, { borderColor: theme === 'dark' ? '#4A4A4E' : '#E2E8F0' }]}
+                onPress={() => setShowListingTypeModal(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.listingModalCancelText, { color: theme === 'dark' ? '#9CA3AF' : '#fff' }]}>Cancel</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>
@@ -3341,21 +3658,21 @@ const handleAddToCart = async () => {
 
               <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>How It Works</Text>
+                  <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>How It Works</Text>
                   <Text style={styles.modalDescription}>
-                    Set a starting bid price and auction duration. Buyers compete by placing higher bids. The highest bidder when the auction ends wins the item.
+                    Set a starting bid price and auction duration. Your listing enters a 1-hour review period before going live. Once active, buyers compete by placing higher bids — the highest bidder when the auction ends wins.
                   </Text>
                 </View>
 
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>Reserve Price (Optional)</Text>
+                  <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>Reserve Price (Optional)</Text>
                   <Text style={styles.modalDescription}>
                     Set a minimum price you are willing to accept. If bids don&#39;t reach this amount, you are not obligated to sell.
                   </Text>
                 </View>
 
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>Best For</Text>
+                  <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>Best For</Text>
                   <Text style={styles.modalDescription}>
                     Rare or unique items where competitive bidding may drive the price higher than a fixed price.
                   </Text>
@@ -3383,14 +3700,14 @@ const handleAddToCart = async () => {
 
               <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>How It Works</Text>
+                  <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>How It Works</Text>
                   <Text style={styles.modalDescription}>
-                    Set a fixed price and buyers can purchase instantly without waiting for an auction to end. No bidding wars - immediate sale.
+                    Set a fixed price for your item. After a 1-hour review period, it goes live and buyers can purchase instantly — no bidding wars, no waiting for an auction to end.
                   </Text>
                 </View>
 
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>Advantages</Text>
+                  <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>Advantages</Text>
                   <Text style={styles.modalDescription}>
                     • Faster sales - no waiting for auction to end{'\n'}
                     • Predictable pricing{'\n'}
@@ -3399,7 +3716,7 @@ const handleAddToCart = async () => {
                 </View>
 
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>Best For</Text>
+                  <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>Best For</Text>
                   <Text style={styles.modalDescription}>
                     Items with established market values where you know exactly what price you want.
                   </Text>
@@ -3427,14 +3744,14 @@ const handleAddToCart = async () => {
 
               <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>How It Works</Text>
+                  <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>How It Works</Text>
                   <Text style={styles.modalDescription}>
-                    No reserve price means you MUST sell to the highest bidder, regardless of the final bid amount. This creates urgency and attracts more bidders.
+                    No reserve price means you MUST sell to the highest bidder, regardless of the final bid amount. Must Sell listings skip the review period and go live immediately, creating instant urgency and attracting more bidders.
                   </Text>
                 </View>
 
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>Benefits</Text>
+                  <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>Benefits</Text>
                   <Text style={styles.modalDescription}>
                     • Attracts more bidders (no risk of reserve not met){'\n'}
                     • Creates excitement and urgency{'\n'}
@@ -3444,7 +3761,7 @@ const handleAddToCart = async () => {
                 </View>
 
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>Caution</Text>
+                  <Text style={[styles.modalSectionTitle, { color: colors.textPrimary }]}>Caution</Text>
                   <Text style={styles.modalDescription}>
                     You must honor the sale even if the winning bid is lower than expected. Only use this if you&#39;re willing to accept any final price.
                   </Text>
@@ -3456,6 +3773,177 @@ const handleAddToCart = async () => {
 
         {/* Policy modals removed - links now navigate to seller profile */}
 
+        {/* More Options Modal */}
+        <Modal
+          visible={moreOptionsVisible}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setMoreOptionsVisible(false)}
+        >
+          <TouchableOpacity
+            style={styles.moreOptionsOverlay}
+            activeOpacity={1}
+            onPress={() => setMoreOptionsVisible(false)}
+          >
+            <View
+              style={[styles.moreOptionsSheet, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}
+              onStartShouldSetResponder={() => true}
+            >
+              {/* Handle bar */}
+              <View style={[styles.sheetHandle, { backgroundColor: theme === 'dark' ? '#48484A' : '#D1D5DB' }]} />
+
+              <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>
+                More about this item
+              </Text>
+              {item?.name ? (
+                <Text
+                  numberOfLines={1}
+                  style={[styles.sheetSubtitle, { color: colors.textSecondary }]}
+                >
+                  {item.name}
+                </Text>
+              ) : null}
+
+              <View style={[styles.sheetDivider, { backgroundColor: theme === 'dark' ? '#3C3C3E' : '#E5E7EB' }]} />
+
+              {/* Report */}
+              <TouchableOpacity
+                style={styles.sheetRow}
+                onPress={() => { setMoreOptionsVisible(false); setReportVisible(true); }}
+              >
+                <View style={[styles.sheetIconCircle, { backgroundColor: '#FFF1F0' }]}>
+                  <Ionicons name="flag-outline" size={20} color="#EF4444" />
+                </View>
+                <View style={styles.sheetRowText}>
+                  <Text style={[styles.sheetRowLabel, { color: '#EF4444' }]}>Report this listing</Text>
+                  <Text style={[styles.sheetRowSub, { color: colors.textSecondary }]}>Flag a guideline violation for review</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={theme === 'dark' ? '#666' : '#9CA3AF'} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.sheetCancelButton, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F3F4F6' }]}
+                onPress={() => setMoreOptionsVisible(false)}
+              >
+                <Text style={[styles.sheetCancelText, { color: colors.textPrimary }]}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* Report Listing Modal */}
+        <Modal
+          visible={reportVisible}
+          transparent
+          animationType="slide"
+          onRequestClose={() => { setReportVisible(false); setSelectedViolation(''); setReportNotes(''); }}
+        >
+          <View style={styles.reportOverlay}>
+            <View style={[styles.reportModal, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', width: width * 0.95, maxHeight: height * 0.85 }]}>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {/* Header */}
+                <View style={styles.reportModalHeader}>
+                  <Text style={[styles.reportModalTitle, { color: colors.textPrimary }]}>🚩 Report Listing</Text>
+                  <TouchableOpacity onPress={() => { setReportVisible(false); setSelectedViolation(''); setReportNotes(''); }}>
+                    <Ionicons name="close" size={28} color={theme === 'dark' ? '#999' : '#666'} />
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={[styles.reportModalSubtitle, { color: colors.textSecondary }]}>
+                  Select the violation that best describes the issue
+                </Text>
+
+                {/* Violation types */}
+                <Text style={[styles.reportInputLabel, { color: colors.textPrimary }]}>Community Guideline Violation</Text>
+                <View style={styles.reportViolationTypes}>
+                  {VIOLATION_TYPES.map((v) => (
+                    <TouchableOpacity
+                      key={v.key}
+                      style={[
+                        styles.reportViolationButton,
+                        {
+                          backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F5F5F5',
+                          borderColor: selectedViolation === v.key
+                            ? '#6A0DAD'
+                            : v.severity === 'high' ? '#F44336' : '#FF9800',
+                          borderWidth: 2,
+                        },
+                        selectedViolation === v.key && styles.reportViolationActive,
+                      ]}
+                      onPress={() => setSelectedViolation(v.key)}
+                    >
+                      <View style={styles.reportViolationLabelRow}>
+                        <Text style={[
+                          styles.reportViolationText,
+                          { color: theme === 'dark' ? '#ECEDEE' : '#333' },
+                          selectedViolation === v.key && styles.reportViolationTextActive,
+                        ]}>
+                          {v.label}
+                        </Text>
+                        {v.severity === 'high' && (
+                          <View style={styles.reportSeverityBadge}>
+                            <Text style={styles.reportSeverityText}>HIGH</Text>
+                          </View>
+                        )}
+                      </View>
+                      {selectedViolation === v.key && (
+                        <Ionicons name="checkmark-circle" size={22} color="#FFF" />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Notes */}
+                <TextInput
+                  value={reportNotes}
+                  onChangeText={setReportNotes}
+                  placeholder="Additional details (optional)…"
+                  placeholderTextColor={colors.textTertiary}
+                  multiline
+                  maxLength={500}
+                  textAlignVertical="top"
+                  style={[
+                    styles.reportNotesInput,
+                    {
+                      borderColor: theme === 'dark' ? '#3C3C3E' : '#E5E7EB',
+                      color: colors.textPrimary,
+                      backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F9FAFB',
+                    },
+                  ]}
+                />
+
+                {/* Submit */}
+                <TouchableOpacity
+                  onPress={handleReportItem}
+                  disabled={reportSubmitting || !selectedViolation}
+                  style={{ borderRadius: 12, overflow: 'hidden', marginBottom: 8 }}
+                >
+                  <LinearGradient
+                    colors={reportSubmitting || !selectedViolation ? ['#CCC', '#DDD'] : ['#F44336', '#E53935']}
+                    style={styles.reportSubmitGradient}
+                  >
+                    {reportSubmitting ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <>
+                        <Ionicons name="flag" size={20} color="#FFF" />
+                        <Text style={styles.reportSubmitText}>Submit Report</Text>
+                      </>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.sheetCancelButton, { backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F3F4F6' }]}
+                  onPress={() => { setReportVisible(false); setSelectedViolation(''); setReportNotes(''); }}
+                >
+                  <Text style={[styles.sheetCancelText, { color: colors.textPrimary }]}>Cancel</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
       </View>
 
 
@@ -3466,6 +3954,117 @@ const handleAddToCart = async () => {
 
 
 const styles = StyleSheet.create({
+  sellerSubtitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  sellerSubtitleLink: { fontSize: 12, fontWeight: '600' },
+  sellerSubtitleDot: { fontSize: 12 },
+  moreOptionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  moreOptionsRowInner: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  moreOptionsRowText: { fontSize: 15, fontWeight: '600' },
+  moreOptionsOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  moreOptionsSheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    paddingBottom: 36,
+  },
+  reportOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  reportModal: {
+    borderRadius: 20,
+    padding: 20,
+  },
+  reportModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  reportModalTitle: { fontSize: 20, fontWeight: '700' },
+  reportModalSubtitle: { fontSize: 13, marginBottom: 14 },
+  reportInputLabel: { fontSize: 16, fontWeight: '600', marginTop: 4, marginBottom: 10 },
+  reportViolationTypes: { gap: 10, marginBottom: 16 },
+  reportViolationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 10,
+    gap: 12,
+  },
+  reportViolationActive: { backgroundColor: '#6A0DAD', borderColor: '#6A0DAD' },
+  reportViolationLabelRow: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 8 },
+  reportViolationText: { flex: 1, fontSize: 14 },
+  reportViolationTextActive: { color: '#FFF', fontWeight: '600' },
+  reportSeverityBadge: { backgroundColor: '#F44336', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
+  reportSeverityText: { color: '#FFF', fontSize: 9, fontWeight: '700' },
+  reportSubmitGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 15,
+    gap: 8,
+  },
+  sheetHandle: {
+    width: 40, height: 4, borderRadius: 2,
+    alignSelf: 'center', marginBottom: 16,
+  },
+  sheetTitle: { fontSize: 18, fontWeight: '700', marginBottom: 4 },
+  sheetSubtitle: { fontSize: 13, marginBottom: 14 },
+  sheetDivider: { height: StyleSheet.hairlineWidth, marginVertical: 4 },
+  sheetRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 14, gap: 12,
+  },
+  sheetIconCircle: {
+    width: 40, height: 40, borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  sheetRowText: { flex: 1 },
+  sheetRowLabel: { fontSize: 15, fontWeight: '600' },
+  sheetRowSub: { fontSize: 12, marginTop: 1 },
+  sheetCancelButton: {
+    marginTop: 12, borderRadius: 12,
+    paddingVertical: 14, alignItems: 'center',
+  },
+  sheetCancelText: { fontSize: 15, fontWeight: '600' },
+  violationRow: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1, borderRadius: 10,
+    padding: 12, marginBottom: 8, gap: 10,
+  },
+  violationRadio: {
+    width: 20, height: 20, borderRadius: 10,
+    borderWidth: 2, alignItems: 'center', justifyContent: 'center',
+  },
+  violationRadioDot: {
+    width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff',
+  },
+  violationLabel: { flex: 1, fontSize: 14 },
+  reportNotesInput: {
+    borderWidth: 1, borderRadius: 10,
+    padding: 12, minHeight: 80,
+    fontSize: 14, marginTop: 12, marginBottom: 16,
+  },
+  reportSubmitText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   container: {
     padding: 16,
     backgroundColor: '#fffef8',
@@ -3482,28 +4081,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     color: '#2d3748',
   },
- floatingCart: {
-  position: 'absolute',
-  top: 48, // adjust for SafeArea / StatusBar
-  right: 16,
-  zIndex: 999,
-  backgroundColor: '#fff',
-  padding: 8,
-  borderRadius: 24,
-  shadowColor: '#000',
-  shadowOpacity: 0.1,
-  shadowOffset: { width: 0, height: 2 },
-  shadowRadius: 4,
-  elevation: 4,
-  flexDirection: 'row',
-  alignItems: 'center',
-},
-cartBadge: {
-  marginLeft: 6,
-  fontSize: 14,
-  fontWeight: 'bold',
-  color: '#6A0DAD',
-},
   // Must Sell Banner Styles
   mustSellBanner: {
     backgroundColor: '#FF4500',
@@ -3611,6 +4188,28 @@ carouselImage: {
     fontSize: 16,
     color: '#1a202c',
   },
+  toggleRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  paddingVertical: 10,
+  paddingHorizontal: 4,
+  marginTop: 8,
+},
+
+toggleRowLight: {
+  backgroundColor: '#F9FAFB',
+},
+
+toggleRowDark: {
+  backgroundColor: '#2C2C2E',
+},
+
+toggleRowLandscape: {
+  paddingVertical: 6,
+  paddingHorizontal: 2,
+},
+
   section: {
     marginTop: 20,
     padding: 12,
@@ -3834,6 +4433,7 @@ backButton: {
   paddingHorizontal: 16,
   paddingVertical: 8,
   borderRadius: 20,
+  paddingTop: -12,
 },
 backButtonText: {
   fontSize: 14,
@@ -4075,12 +4675,12 @@ infoRow: {
 },
 infoLabel: {
   fontSize: 14,
-  color: '#4a5568',
+  color: '#e2e8f0',
   fontWeight: '500',
 },
 infoValue: {
   fontSize: 14,
-  color: '#2d3748',
+  color: '#2f855a',
   fontWeight: '600',
 },
 endTimeText: {
@@ -4121,6 +4721,12 @@ descriptionCard: {
   borderWidth: 1,
   borderColor: '#e2e8f0',
 },
+   insuranceToggle: {
+
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
 sectionHeader: {
   flexDirection: 'row',
   justifyContent: 'space-between',
@@ -4300,6 +4906,46 @@ similarSubtitle: {
   fontSize: 13,
   color: '#718096',
 },
+  shippingOptionRow: {
+  paddingVertical: 12,
+  paddingHorizontal: 16,
+  borderRadius: 10,
+  borderWidth: 1,
+  marginTop: 8,
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+},
+
+shippingOptionRowLight: {
+  borderColor: '#E2E8F0',
+  backgroundColor: '#F9FAFB',
+},
+
+shippingOptionRowDark: {
+  borderColor: '#3C3C3E',
+  backgroundColor: '#2C2C2E',
+},
+
+shippingOptionSelected: {
+  borderColor: '#6A0DAD',
+  backgroundColor: '#F5F0FF',
+},
+
+shippingOptionSelectedDark: {
+  borderColor: '#B794F4',
+  backgroundColor: '#1C1C1E',
+},
+
+shippingOptionLabel: {
+  fontSize: 16,
+  fontWeight: '500',
+},
+
+shippingOptionLabelLandscape: {
+  fontSize: 14,
+},
+
 // Seller Success Card for SOLD relisted items
 sellerSuccessCard: {
   backgroundColor: '#F0FDF4',
@@ -4407,12 +5053,12 @@ modalContent: {
 modalTitle: {
   fontSize: 20,
   fontWeight: '700',
-  color: '#1a202c',
+  color: '#fff',
   marginBottom: 8,
 },
 modalSubtitle: {
   fontSize: 14,
-  color: '#718096',
+  color: '#fff',
   marginBottom: 20,
 },
 discountInfo: {
@@ -4451,13 +5097,13 @@ modalButton: {
   alignItems: 'center',
 },
 cancelButton: {
-  backgroundColor: '#f3f4f6',
+  backgroundColor: '#FF6B35',
 },
 confirmButton: {
   backgroundColor: '#3b82f6',
 },
 cancelButtonText: {
-  color: '#374151',
+  color: '#fff',
   fontSize: 15,
   fontWeight: '600',
 },
@@ -4532,11 +5178,7 @@ similarCardPrice: {
   fontWeight: '700',
   color: '#6A0DAD',
 },
-bidBadge: {
-  fontSize: 10,
-  fontWeight: '700',
-  letterSpacing: 0.5,
-},
+
 strategyBadge: {
   position: 'absolute',
   top: 10,
@@ -4659,8 +5301,16 @@ highestBidCard: {
   borderColor: '#4CAF50',
   borderWidth: 2,
 },
+highestBidCardDark: {
+  backgroundColor: '#0D2E12',
+  borderColor: '#4CAF50',
+  borderWidth: 2,
+},
 highestBidValue: {
   color: '#2E7D32',
+},
+highestBidValueDark: {
+  color: '#6FCF7A',
 },
 startingBidSubtext: {
   fontSize: 12,
@@ -4862,25 +5512,27 @@ bidError: {
 quickBidRow: {
   flexDirection: 'row',
   alignItems: 'center',
-  gap: 8,
+  gap: 6,
   marginTop: 8,
 },
 quickBidLabel: {
-  fontSize: 14,
+  fontSize: 13,
   color: '#666',
   fontWeight: '600',
-  marginRight: 4,
+  flexShrink: 0,
 },
 quickBidButton: {
+  flex: 1,
   backgroundColor: '#F0E6FF',
-  paddingHorizontal: 16,
+  paddingHorizontal: 6,
   paddingVertical: 10,
   borderRadius: 20,
   borderWidth: 1,
   borderColor: '#6A0DAD',
+  alignItems: 'center',
 },
 quickBidText: {
-  fontSize: 13,
+  fontSize: 12,
   fontWeight: '700',
   color: '#6A0DAD',
 },
@@ -5086,6 +5738,25 @@ highlightText: {
   fontWeight: '700',
   color: '#48BB78',
 },
+paymentGrid: {
+  flexDirection: 'row',
+  flexWrap: 'wrap',
+  gap: 8,
+  marginTop: 8,
+},
+paymentGridItem: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 6,
+  paddingHorizontal: 10,
+  paddingVertical: 8,
+  borderRadius: 8,
+  borderWidth: 1,
+},
+paymentGridLabel: {
+  fontSize: 12,
+  fontWeight: '600',
+},
 // Payment Methods
 paymentMethods: {
   flexDirection: 'row',
@@ -5170,11 +5841,27 @@ itemWeightValue: {
 protectionList: {
   marginTop: 8,
 },
+protectionTier: {
+  borderWidth: 1,
+  borderRadius: 10,
+  padding: 12,
+  marginTop: 8,
+},
+protectionTierTitle: {
+  fontSize: 14,
+  fontWeight: '700',
+  marginBottom: 2,
+},
+protectionTierSubtitle: {
+  fontSize: 12,
+  marginBottom: 10,
+  opacity: 0.9,
+},
 protectionItem: {
   flexDirection: 'row',
   alignItems: 'flex-start',
   gap: 10,
-  marginBottom: 12,
+  marginBottom: 8,
 },
 protectionText: {
   flex: 1,
@@ -5418,6 +6105,27 @@ iconActionText: {
   fontWeight: '600',
   color: '#4A5568',
 },
+listingModalCloseBtn: {
+  position: 'absolute',
+  top: 12,
+  right: 12,
+  zIndex: 999,
+  padding: 8,
+  borderRadius: 20,
+  backgroundColor: 'rgba(0, 0, 0, 0.3)',
+},
+listingModalCancelBtn: {
+  marginTop: 16,
+  paddingVertical: 14,
+  borderRadius: 12,
+  alignItems: 'center',
+  borderWidth: 1,
+  color: '#FF6B35',
+},
+listingModalCancelText: {
+  fontSize: 15,
+  fontWeight: '600',
+},
 // Listing Type Modal Styles
 listingTypeContainer: {
   marginTop: 16,
@@ -5546,5 +6254,16 @@ viewMoreText: {
   fontWeight: '600',
   color: '#6A0DAD',
 },
+  bidBadge: {
+  fontSize: 10,
+  fontWeight: '700',
+  color: '#fff',
+  backgroundColor: '#FF6B35',
+  paddingHorizontal: 6,
+  paddingVertical: 2,
+  borderRadius: 4,
+  overflow: 'hidden',
+},
+
 
 });

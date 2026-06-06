@@ -1,11 +1,11 @@
 import { API_BASE_URL } from '@/config';
 
+// eslint-disable-next-line import/no-duplicates
 import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Switch,
   Animated,
@@ -20,9 +20,10 @@ import { Image } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '../components/EnhancedHeader';
 import { getUserProfile, logoutUser } from '@/api/auth';
-import { User } from '@/types';
+import { User } from '@/types/User';
 import { Link, router, useFocusEffect } from 'expo-router';
 import { playGoatSoundByName } from '@/assets/sounds/officialGoatSoundsSoundtrack';
+// eslint-disable-next-line import/no-duplicates
 import { useCallback } from 'react';
 
 type MascotMood =
@@ -53,19 +54,27 @@ export default function ProfileScreen() {
   const [profileImage, setProfileImage] = useState<string | null>(null);
 
   const fetchProfile = useCallback(async () => {
-    const token = await AsyncStorage.getItem('jwtToken');
-    if (!token) return;
+  const token = await AsyncStorage.getItem('jwtToken');
+  if (!token) return;
 
-    try {
-      const data = await getUserProfile(token);
-      if (data) {
-        setUser(data);
-        setProfileImage(data.avatar_url ?? null);
-      }
-    } catch (error) {
-      console.error('Failed to fetch profile:', error);
+  try {
+    const data = await getUserProfile(token);
+    if (data) {
+      setUser({
+        id: data.id,
+        email: data.email,
+        username: data.username,
+        avatar_url: data.avatar_url ?? undefined,
+        isPremium: !!data.is_premium_seller,   // ⭐ FIXED
+      });
+
+      setProfileImage(data.avatar_url ?? null);
     }
-  }, []);
+  } catch (error) {
+    console.error('Failed to fetch profile:', error);
+  }
+}, []);
+
 
   // Fetch profile on mount
   useEffect(() => {
@@ -95,7 +104,6 @@ export default function ProfileScreen() {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data',
         },
         body: formData,
       });
@@ -141,7 +149,7 @@ export default function ProfileScreen() {
               // Play goat sound (don't await - let it play in background)
               playGoatSoundByName('Victory Baa');
 
-              // Show thank you message
+              // Show thank-you message
               Alert.alert(
                 '🐐 Thank You!',
                 'Thank you for being a loyal BidGoat user! See you soon! 🎉',

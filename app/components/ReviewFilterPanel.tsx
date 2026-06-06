@@ -1,5 +1,5 @@
 import React from 'react';
-import {View, TextInput, StyleSheet, TouchableOpacity} from 'react-native';
+import {View, TextInput, StyleSheet } from 'react-native';
 import StarRangeSlider from './StarRangeSlider';
 import TagSelector from './TagSelector';
 import MediaToggle from './MediaToggle';
@@ -8,7 +8,7 @@ import { ReviewFilter } from '@/types/ReviewFilter';
 import CheckboxGroup from 'app/components/CheckBoxGroup';
 import DateRangePicker from 'app/components/DataRangePicker';
 import Dropdown from 'app/components/DropDown';
-import GlobalFooter from "@/app/components/GlobalFooter";
+
 
 
 type Props = {

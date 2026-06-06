@@ -40,8 +40,8 @@ export default function ReportsAnalyticsScreen() {
   const router = useRouter();
   const { theme, colors } = useTheme();
   const isDark = theme === 'dark';
-  const scrollY = new Animated.Value(0);
-  const headerOpacity = useRef(new Animated.Value(0)).current;
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const headerOpacity = useRef(new Animated.Value(1)).current;
   const headerScale = useRef(new Animated.Value(1)).current;
 
   const [analytics, setAnalytics] = useState<Analytics>({
@@ -52,7 +52,7 @@ export default function ReportsAnalyticsScreen() {
   });
 
   useEffect(() => {
-    loadAnalytics();
+   void loadAnalytics();
   }, []);
 
   const handleMetricTap = (metricType: string) => {
@@ -156,7 +156,7 @@ export default function ReportsAnalyticsScreen() {
 
       <Animated.ScrollView
         style={[styles.scrollView, { backgroundColor: colors.background }]}
-        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20 }}
+        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 10 }}
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
         scrollEventThrottle={16}
       >
@@ -386,12 +386,12 @@ const styles = StyleSheet.create({
   pageHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 40,
-    paddingBottom: 8,
+    paddingHorizontal: 12,
+    paddingTop: 45,
+    paddingBottom: 4,
   },
   backButton: { marginRight: 12, padding: 4 },
-  pageTitle: { fontSize: 16, fontWeight: '700', color: '#1A1A1A' },
+  pageTitle: { fontSize: 20, fontWeight: '700', color: '#1A1A1A', flex: 1 },
   scrollView: { flex: 1 },
   sectionTitle: {
     fontSize: 18,
@@ -427,6 +427,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   metricTitle: {
+
     fontSize: 12,
     color: '#FFF',
     marginTop: 4,

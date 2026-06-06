@@ -72,7 +72,7 @@ export default function CartScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      fetchCart();
+    void  fetchCart();
     }, [fetchCart])
   );
 
@@ -125,52 +125,55 @@ export default function CartScreen() {
   }, [scrollY, summaryTranslateY]);
 
   // Remove item from backend and refresh
-  const handleRemoveItem = async (itemId: string | number) => {
-    // Show confirmation dialog before removing
-    Alert.alert(
-      'Remove Item',
-      'Are you sure you want to remove this item from your cart?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setLoading(true);
-              const token = await AsyncStorage.getItem('jwtToken');
-              if (!token) return;
+const handleRemoveItem = async (itemId: string | number) => {
+  // Show confirmation dialog before removing
+  Alert.alert(
+    'Remove Item',
+    'Are you sure you want to remove this item from your cart?',
+    [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            setLoading(true);
+            const token = await AsyncStorage.getItem('jwtToken');
+            if (!token) return;
 
-              const response = await fetch(`${API_BASE_URL}/remove-from-cart`, {
-                method: 'POST',
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ item_id: itemId }),
-              });
+            const response = await fetch(`${API_BASE_URL}/remove-from-cart`, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ item_id: itemId }),
+            });
 
-              if (response.ok) {
-                console.log('🐐 Item removed from cart:', itemId);
-                // Remove from Redux state immediately for instant UI update
-                dispatch(removeItem(itemId));
-                // Fetch fresh cart from backend to stay in sync
-                await fetchCart();
-              } else {
-                const error = await response.json();
-                Alert.alert('Error', error.error || 'Failed to remove item');
-              }
-            } catch (error) {
-              console.error('🐐 Remove cart item error:', error);
-              Alert.alert('Error', 'Failed to remove item from cart');
-            } finally {
-              setLoading(false);
+            if (response.ok) {
+              console.log('🐐 Item removed from cart:', itemId);
+
+              // Optimistic UI update
+              dispatch(removeItem(itemId));
+
+              // Authoritative refresh from backend
+              await fetchCart();
+            } else {
+              const error = await response.json();
+              Alert.alert('Error', error.error || 'Failed to remove item');
             }
-          },
+          } catch (error) {
+            console.error('🐐 Remove cart item error:', error);
+            Alert.alert('Error', 'Failed to remove item from cart');
+          } finally {
+            setLoading(false);
+          }
         },
-      ]
-    );
-  };
+      },
+    ]
+  );
+};
+
 
   // Calculate costs for all items when cart changes
   useEffect(() => {
@@ -235,7 +238,7 @@ export default function CartScreen() {
       }
     };
 
-    fetchCostBreakdowns();
+  void  fetchCostBreakdowns();
   }, [cartItems, includeInsurance]);
 
   const subtotal = useMemo(() => {

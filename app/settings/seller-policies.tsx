@@ -293,7 +293,7 @@ export default function SellerPoliciesScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={[styles.optionTitle, { color: colors.textPrimary }]}>Return Shipping Cost</Text>
                 <Text style={[styles.optionDescription, { color: theme === 'dark' ? '#999' : '#6B7280' }]}>
-                  Who pays for return shipping on buyer's remorse returns?
+                  Who pays for return shipping on buyer&#39;s remorse returns?
                 </Text>
               </View>
               <Switch

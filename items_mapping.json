@@ -1,0 +1,55 @@
+
+{
+  "settings": {
+    "analysis": {
+      "analyzer": {
+        "bidgoat_text": {
+          "type": "custom",
+          "tokenizer": "standard",
+          "filter": ["lowercase", "asciifolding"]
+        }
+      }
+    }
+  },
+  "mappings": {
+    "properties": {
+      "item_id":            { "type": "keyword" },
+      "user_id":            { "type": "integer" },
+
+      "name":               { "type": "text", "analyzer": "bidgoat_text" },
+      "description":        { "type": "text", "analyzer": "bidgoat_text" },
+      "tags":               { "type": "text", "analyzer": "bidgoat_text" },
+
+      "photo_url":          { "type": "keyword" },
+
+      "price":              { "type": "float" },
+      "highest_bid":        { "type": "float" },
+      "bid_count":          { "type": "integer" },
+
+      "category":           { "type": "keyword" },
+      "category_id":        { "type": "integer" },
+
+      "rarity":             { "type": "keyword" },
+
+      "auction_status":     { "type": "keyword" },
+      "selling_strategy":   { "type": "keyword" },
+
+      "buy_it_now":         { "type": "float" },
+      "is_must_sell":       { "type": "integer" },
+
+      "registration_time":  { "type": "date" },
+      "auction_end_time":   { "type": "date" },
+      "relisted_at":        { "type": "date" },
+      "review_ends_at":     { "type": "date" },
+      "must_sell_start":    { "type": "date" },
+      "converted_at":       { "type": "date" },
+
+      "location":           { "type": "keyword" },
+
+      "seller_rating":      { "type": "float" },
+      "seller_reviews":     { "type": "integer" },
+
+      "_score":             { "type": "float" }
+    }
+  }
+}

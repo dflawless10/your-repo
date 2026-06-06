@@ -1,10 +1,11 @@
 import { API_BASE_URL } from '@/config';
 
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {
   StyleSheet,
   View,
   TextInput,
+  useWindowDimensions,
   Animated,
   TouchableOpacity,
   Text,
@@ -3697,12 +3698,67 @@ const EnhancedHeader: React.FC<HeaderProps> = ({
 
 
 
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const isLandscape = windowWidth > windowHeight;
+
   const baseY = useMemo(() => scrollY ?? new Animated.Value(0), [scrollY]);
   // Fixed header height - no animation to prevent banding
   const headerHeight = HEADER_MAX_HEIGHT;
   const opacity = baseY.interpolate({
     inputRange: [0, HEADER_SCROLL_DISTANCE], outputRange: [1, 1], extrapolate: 'clamp'
   });
+
+  // Scroll-hide: translateY drives header on/off screen
+  const headerTranslateY = useRef(new Animated.Value(0)).current;
+  const lastScrollYVal = useRef(0);
+  const headerHidden = useRef(false);
+  const hideScrollY = useRef<number | null>(null); // scroll position when header was hidden
+  const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // showHeader: requires 40px of upward travel from hide point (prevents show during scroll-down oscillations)
+  const showHeader = useRef(() => {
+    if (!headerHidden.current) return;
+    if (hideScrollY.current !== null && lastScrollYVal.current > hideScrollY.current - 40) return;
+    headerHidden.current = false;
+    hideScrollY.current = null;
+    Animated.timing(headerTranslateY, { toValue: 0, duration: 200, useNativeDriver: true }).start();
+  }).current;
+
+  const hideHeader = useRef(() => {
+    if (headerHidden.current) return;
+    headerHidden.current = true;
+    hideScrollY.current = lastScrollYVal.current;
+    Animated.timing(headerTranslateY, { toValue: -HEADER_MAX_HEIGHT, duration: 200, useNativeDriver: true }).start();
+  }).current;
+
+  useEffect(() => {
+    const listenerId = baseY.addListener(({ value }) => {
+      const diff = value - lastScrollYVal.current;
+      lastScrollYVal.current = value;
+
+      // Inactivity timer: force-show after 5s regardless of scroll position
+      if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+      inactivityTimer.current = setTimeout(() => {
+        if (headerHidden.current) {
+          headerHidden.current = false;
+          hideScrollY.current = null;
+          Animated.timing(headerTranslateY, { toValue: 0, duration: 200, useNativeDriver: true }).start();
+        }
+      }, 5000);
+
+      if (diff > 2 && value > HEADER_MAX_HEIGHT) {
+        // Scrolling down — hide
+        hideHeader();
+      } else if (diff < -1) {
+        // Scrolling up — show only after 40px upward travel from hide point
+        showHeader();
+      }
+    });
+    return () => {
+      baseY.removeListener(listenerId);
+      if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+    };
+  }, [baseY, showHeader, hideHeader, headerTranslateY]);
 
   // Handle favorite toggle in dropdown
   const handleHeartPress = async (itemId: number) => {
@@ -3723,7 +3779,7 @@ const EnhancedHeader: React.FC<HeaderProps> = ({
         });
 
         // Navigate to favorites screen after adding
-        router.push('/JewelryBoxScreen');
+        router.push('/(tabs)/JewelryBoxScreen');
       } else {
         await fetch(`${API_BASE_URL}/api/favorites/${itemId}`, {
           method: 'DELETE',
@@ -3905,9 +3961,6 @@ const EnhancedHeader: React.FC<HeaderProps> = ({
             console.log('🐐 EnhancedHeader - No valid avatar, set to empty');
           }
 
-          // Fetch unread notifications count
-          fetchUnreadCount();
-
           // Check if token is expired
           try {
             const tokenParts = token.split('.');
@@ -3936,19 +3989,16 @@ const EnhancedHeader: React.FC<HeaderProps> = ({
     };
 
     checkAuth();
+  }, [showMenu]);
 
-    // Re-check when menu opens (to catch sign-ins that happened)
-    if (showMenu) {
-      checkAuth();
-    }
-
-    // Poll for notifications every 30 seconds
+  // Notification polling — set up once on mount, never restarts
+  useEffect(() => {
+    fetchUnreadCount();
     const interval = setInterval(() => {
       fetchUnreadCount();
     }, 30000);
-
     return () => clearInterval(interval);
-  }, [showMenu]);
+  }, []);
 
   useEffect(() => {
   if (!scrollY?.addListener) return;
@@ -3986,12 +4036,8 @@ const EnhancedHeader: React.FC<HeaderProps> = ({
       styles.container,
       {
         paddingTop: Platform.OS === 'web' ? 30 : insets.top,
-        opacity,
-        width: '100%',
+        transform: [{ translateY: headerTranslateY }],
         backgroundColor: colors.background,
-        ...(showAlert ? {
-          backgroundColor: colors.background,
-        } : {}),
       },
     ]}
   >
@@ -4031,7 +4077,7 @@ const EnhancedHeader: React.FC<HeaderProps> = ({
           style={styles.iconButton}
         >
           <EnhancedNotificationBell
-            badgeConfig={getNotificationBadgeConfig(notifications)}
+            badgeConfig={{ ...getNotificationBadgeConfig(notifications), count: unreadCount }}
             size={26}
           />
         </TouchableOpacity>
@@ -4132,9 +4178,7 @@ const EnhancedHeader: React.FC<HeaderProps> = ({
                 setSearchText('');
                 setResults([]);
               }}
-              onHeartPress={handleHeartPress}
-              isFavorited={favorites[item.item_id]}
-              showRelevanceScore={false}
+
             />
           </View>
         ))}
@@ -4386,7 +4430,7 @@ const styles = StyleSheet.create({
     color: '#6A0DAD', // Purple
   },
   logoGoat: {
-    color: '#4CAF50', // Gold
+    color: '#4CAF50',
   },
   searchRow: {
     paddingHorizontal: 16,

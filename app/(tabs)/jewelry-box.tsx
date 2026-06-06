@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -71,6 +72,10 @@ export default function JewelryBoxScreen() {
   const boxOpacity = useRef(new Animated.Value(0)).current;
   const headerOpacity = useRef(new Animated.Value(0)).current;
   const headerScale = useRef(new Animated.Value(1)).current;
+  const notifOpacity = useRef(new Animated.Value(0)).current;
+  const notifTranslateY = useRef(new Animated.Value(-12)).current;
+  const [showSuccessNotif, setShowSuccessNotif] = useState(false);
+  const [notifContent, setNotifContent] = useState<{ title: string; subtitle: string }>({ title: 'Notes Saved!', subtitle: 'Your story has been preserved! ✨' });
 
   const [username, setUsername] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -95,7 +100,15 @@ export default function JewelryBoxScreen() {
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [itemNotes, setItemNotes] = useState('');
 
-  useEffect(() => {
+  const scrollRef = useRef<ScrollView>(null);
+
+const handleFocus = () => {
+  setTimeout(() => {
+    scrollRef.current?.scrollToEnd({ animated: true });
+  }, 150);
+};
+
+    useEffect(() => {
     const loadUsername = async () => {
       const name = await AsyncStorage.getItem('username');
       setUsername(name);
@@ -103,6 +116,25 @@ export default function JewelryBoxScreen() {
     loadUsername();
     loadCollection();
   }, []);
+
+  const showNotification = () => {
+    setShowSuccessNotif(true);
+    notifOpacity.setValue(0);
+    notifTranslateY.setValue(-12);
+    Animated.parallel([
+      Animated.timing(notifOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
+      Animated.timing(notifTranslateY, { toValue: 0, duration: 300, useNativeDriver: true }),
+    ]).start();
+    setTimeout(() => {
+      Animated.timing(notifOpacity, { toValue: 0, duration: 400, useNativeDriver: true }).start(() => {
+        setShowSuccessNotif(false);
+        setGoatMood('Celebrate');
+        setGoatMessage('Great story! Your treasures deserve their tales. 📝');
+        setShowGoat(true);
+        setTimeout(() => setShowGoat(false), 4500);
+      });
+    }, 3000);
+  };
 
   const checkFirstVisit = useCallback(async () => {
     const hasVisited = await AsyncStorage.getItem('jewelry_box_visited');
@@ -374,6 +406,39 @@ export default function JewelryBoxScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <EnhancedHeader scrollY={scrollY} username={username} />
+
+      {/* On-screen success notification — sibling of EnhancedHeader, elevation 999 wins on Android */}
+      {showSuccessNotif && (
+        <Animated.View
+          style={{
+            position: 'absolute',
+            top: HEADER_MAX_HEIGHT + 12,
+            left: 16,
+            right: 16,
+            backgroundColor: '#2D1B4E',
+            borderRadius: 14,
+            padding: 16,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
+            zIndex: 9999,
+            elevation: 999,
+            opacity: notifOpacity,
+            transform: [{ translateY: notifTranslateY }],
+            shadowColor: '#6A0DAD',
+            shadowOpacity: 0.4,
+            shadowRadius: 12,
+            shadowOffset: { width: 0, height: 4 },
+          }}
+        >
+          <Text style={{ fontSize: 28 }}>🐐</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: '#FFD700', fontWeight: '700', fontSize: 15 }}>{notifContent.title}</Text>
+            <Text style={{ color: '#C77DFF', fontSize: 13, marginTop: 2 }}>{notifContent.subtitle}</Text>
+          </View>
+        </Animated.View>
+      )}
+
       <Animated.ScrollView
         style={[styles.container, { backgroundColor: colors.background }]}
         contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20, paddingBottom: 20 }}
@@ -392,7 +457,7 @@ export default function JewelryBoxScreen() {
           }
         ]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={28} color='#9B4DCA'  />
+            <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
           <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>My Jewelry Box</Text>
           <TouchableOpacity
@@ -402,7 +467,7 @@ export default function JewelryBoxScreen() {
             }}
             style={styles.helpButton}
           >
-            <Ionicons name="help-circle" size={24} color="#6A0DAD" />
+            <Ionicons name="help-circle" size={24} color="#FFD700" />
           </TouchableOpacity>
         </Animated.View>
 
@@ -581,7 +646,7 @@ export default function JewelryBoxScreen() {
               {sortedItems.map((item, index) => (
                 <TouchableOpacity
                   key={`${item.id}-${index}`}
-                  style={styles.itemCard}
+                  style={[styles.itemCard, viewMode === 'list' && styles.itemCardList]}
                   onPress={() => router.push(`/(tabs)/item/${item.id}`)}
                   onLongPress={async () => {
                     setSelectedItem(item);
@@ -590,10 +655,10 @@ export default function JewelryBoxScreen() {
                     setShowNotesModal(true);
                   }}
                 >
-                  <View style={[styles.itemCardGradient, { backgroundColor: colors.surface }]}>
+                  <View style={[styles.itemCardGradient, { backgroundColor: colors.surface }, viewMode === 'list' && styles.itemCardGradientList]}>
                     <Image
                       source={{ uri: item.photo_url }}
-                      style={styles.itemImage}
+                      style={viewMode === 'list' ? styles.itemImageList : styles.itemImage}
                       contentFit="cover"
                     />
                     <View style={[styles.rarityBadge, { backgroundColor: RARITY_COLORS[item.rarity] || '#95a5a6' }]}>
@@ -613,7 +678,7 @@ export default function JewelryBoxScreen() {
                     >
                       <Ionicons name="document-text" size={16} color="#FFD700" />
                     </TouchableOpacity>
-                    <View style={styles.itemInfo}>
+                    <View style={[styles.itemInfo, viewMode === 'list' && styles.itemInfoList]}>
                       <Text style={[styles.itemName, { color: colors.textPrimary }]} numberOfLines={2}>{item.name}</Text>
                       <Text style={[styles.itemPrice, { color: colors.textPrimary }]}>${item.sale_price.toLocaleString()}</Text>
                     </View>
@@ -630,7 +695,8 @@ export default function JewelryBoxScreen() {
         <MascotOverlay
           mood={goatMood}
           message={goatMessage}
-          position="center"
+          position="top"
+          topOffset={HEADER_MAX_HEIGHT + 12}
           visible={showGoat}
           animate={true}
           onDismiss={() => setShowGoat(false)}
@@ -713,11 +779,8 @@ export default function JewelryBoxScreen() {
                         setOnboardingStep(onboardingStep + 1);
                       } else {
                         setShowOnboarding(false);
-                        // Show goat celebration
-                        setGoatMood('Excited');
-                        setGoatMessage('Your jewelry box awaits, treasure hunter! 🎁✨');
-                        setShowGoat(true);
-                        setTimeout(() => setShowGoat(false), 4000);
+                        setNotifContent({ title: 'Welcome, Treasure Hunter! 🎁', subtitle: 'Your jewelry box awaits! ✨' });
+                        showNotification();
                       }
                     }}
                   >
@@ -733,78 +796,69 @@ export default function JewelryBoxScreen() {
       )}
 
       {/* Notes Modal */}
-      {showNotesModal && selectedItem && (
-        <Modal
-          visible={showNotesModal}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setShowNotesModal(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.notesCard}>
-              <View style={styles.notesHeader}>
-                <Text style={styles.notesTitle}>Add Notes</Text>
-                <TouchableOpacity onPress={() => setShowNotesModal(false)}>
-                  <Ionicons name="close" size={28} color="#fff" />
-                </TouchableOpacity>
-              </View>
+     {showNotesModal && selectedItem && (
+  <Modal
+    visible
+    transparent
+    animationType="slide"
+    onRequestClose={() => setShowNotesModal(false)}
+  >
+    <View style={styles.modalOverlay}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled">
+          <View style={styles.notesCard}>
 
-              <Image
-                source={{ uri: selectedItem.photo_url }}
-                style={styles.notesImage}
-                contentFit="cover"
-              />
-
-              <Text style={styles.notesItemName}>{selectedItem.name}</Text>
-
-              <TextInput
-                style={styles.notesInput}
-                placeholder="Add your memories, story, or important details..."
-                placeholderTextColor="#6A0DAD"
-                value={itemNotes}
-                onChangeText={setItemNotes}
-                multiline
-                numberOfLines={6}
-                textAlignVertical="top"
-              />
-
-              <TouchableOpacity
-                style={styles.saveNotesButton}
-                onPress={async () => {
-                  if (selectedItem) {
-                    const success = await saveItemNotes(selectedItem.id, itemNotes);
-                    if (success) {
-                      setShowNotesModal(false);
-
-                      // TEST: Show alert to confirm flow works
-                      setTimeout(() => {
-                        Alert.alert(
-                          '🐐 Notes Saved!',
-                          'Your story has been preserved! ✨',
-                          [
-                            {
-                              text: 'Awesome!',
-                              onPress: () => {
-                                setGoatMood('Celebrate');
-                                setGoatMessage('Great story! Your treasures deserve their tales. 📝');
-                                setShowGoat(true);
-                                setTimeout(() => setShowGoat(false), 4500);
-                              }
-                            }
-                          ]
-                        );
-                      }, 300);
-                    }
-                  }
-                }}
-              >
-                <Ionicons name="save" size={20} color="#fff" />
-                <Text style={styles.saveNotesButtonText}>Save Notes</Text>
+            <View style={styles.notesHeader}>
+              <Text style={styles.notesTitle}>Add Notes</Text>
+              <TouchableOpacity onPress={() => setShowNotesModal(false)}>
+                <Ionicons name="close" size={28} color="#fff" />
               </TouchableOpacity>
             </View>
+
+            <Image
+              source={{ uri: selectedItem.photo_url }}
+              style={styles.notesImage}
+            />
+
+            <Text style={styles.notesItemName}>{selectedItem.name}</Text>
+
+            <TextInput
+              style={styles.notesInput}
+              placeholder="Add your memories, story, or important details..."
+              placeholderTextColor="#6A0DAD"
+              value={itemNotes}
+              onChangeText={setItemNotes}
+              onFocus={handleFocus}
+              multiline
+              numberOfLines={6}
+              textAlignVertical="top"
+            />
+
+            <TouchableOpacity
+              style={styles.saveNotesButton}
+              onPress={async () => {
+                const success = await saveItemNotes(selectedItem.id, itemNotes);
+                if (success) {
+                  setShowNotesModal(false);
+                  setNotifContent({ title: 'Notes Saved!', subtitle: 'Your story has been preserved! ✨' });
+                  setTimeout(() => showNotification(), 300);
+                }
+              }}
+            >
+              <Ionicons name="save" size={20} color="#fff" />
+              <Text style={styles.saveNotesButtonText}>Save Notes</Text>
+            </TouchableOpacity>
+
           </View>
-        </Modal>
-      )}
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
+  </Modal>
+)}
+
 
     </View>
   );
@@ -980,8 +1034,25 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     elevation: 4,
   },
+  itemCardList: {
+    width: '100%',
+  },
   itemCardGradient: {
     padding: 0,
+  },
+  itemCardGradientList: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  itemImageList: {
+    width: 90,
+    height: 90,
+    backgroundColor: '#1a0033',
+    flexShrink: 0,
+  },
+  itemInfoList: {
+    flex: 1,
+    padding: 12,
   },
   itemImage: {
     width: '100%',
@@ -1080,13 +1151,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: '#6A0DAD',
+    borderColor: '#4CAF50',
     gap: 8,
   },
   controlButtonText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#C77DFF',
+    color: '#4CAF50',
   },
   sortMenu: {
     backgroundColor: '#1a0033',
@@ -1111,7 +1182,7 @@ const styles = StyleSheet.create({
   sortOptionText: {
     flex: 1,
     fontSize: 14,
-    color: '#C77DFF',
+    color: '#4CAF50',
   },
   sortOptionTextActive: {
     color: '#FFD700',
@@ -1230,15 +1301,17 @@ const styles = StyleSheet.create({
   onboardingButtonText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1A0033',
+    color: '#6A0DAD',
   },
   onboardingButtonSecondary: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     paddingVertical: 14,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
   },
   onboardingButtonTextSecondary: {
     fontSize: 16,

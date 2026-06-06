@@ -41,6 +41,7 @@ function SellerDashboardScreen() {
   const [trending, setTrending] = useState<TrendingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [unreadMessages, setUnreadMessages] = useState(0);
   const [username, setUsername] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [stripeStatus, setStripeStatus] = useState<any>(null);
@@ -153,6 +154,19 @@ const fetchDashboardData = async () => {
     }
 
     setTrending([]);
+
+    // Fetch unread message count
+    try {
+      const msgRes = await fetch(`${API_URL}/api/messages/unread-count`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (msgRes.ok) {
+        const msgData = await msgRes.json();
+        setUnreadMessages(msgData.unread_count ?? 0);
+      }
+    } catch {
+      // non-critical, leave at 0
+    }
   } catch (err) {
     console.error('Error loading dashboard:', err);
     // Fallback to empty stats on error
@@ -305,32 +319,51 @@ return (
         {/* Quick Actions */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Quick Actions</Text>
-          <View style={styles.quickActions}>
-            <TouchableOpacity
-              style={[styles.quickActionCard, { backgroundColor: theme === 'dark' ? '#5C3A29' : '#FF6B35' }]}
-              onPress={() => router.push('/seller/orders' as any)}
-            >
-              <View style={styles.quickActionBadge}>
-                <Text style={styles.quickActionBadgeText}>{stats?.pending_shipments || 0}</Text>
-              </View>
-              <Ionicons name="cube-outline" size={32} color="#FFF" />
-              <Text style={styles.quickActionTitle}>Orders to Ship</Text>
-            </TouchableOpacity>
+          <View style={styles.quickActionsColumns}>
+            {/* Left column: Orders to Ship, My Listings, My Messages */}
+            <View style={styles.quickActionsLeft}>
+              <TouchableOpacity
+                style={[styles.quickActionCard, { backgroundColor: theme === 'dark' ? '#C94318' : '#FF6B35' }]}
+                onPress={() => router.push('/seller/orders' as any)}
+              >
+                <View style={styles.quickActionBadge}>
+                  <Text style={styles.quickActionBadgeText}>{stats?.pending_shipments || 0}</Text>
+                </View>
+                <Ionicons name="cube-outline" size={28} color="#FFF" />
+                <Text style={styles.quickActionTitle}>Orders to Ship</Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.quickActionCard, { backgroundColor: theme === 'dark' ? '#4A2873' : '#6A0DAD' }]}
-              onPress={() => router.push('/MyAuctionScreen' as any)}
-            >
-              <Ionicons name="list-outline" size={32} color="#FFF" />
-              <Text style={styles.quickActionTitle}>My Listings</Text>
-              <Text style={styles.quickActionSubtext}>{stats?.total_items || 0} items</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.quickActionCard, { backgroundColor: theme === 'dark' ? '#4A2873' : '#6A0DAD' }]}
+                onPress={() => router.push('/MyAuctionScreen' as any)}
+              >
+                <Ionicons name="list-outline" size={28} color="#FFF" />
+                <Text style={styles.quickActionTitle}>My Listings</Text>
+                <Text style={styles.quickActionSubtext}>{stats?.total_items || 0} items</Text>
+              </TouchableOpacity>
 
+              <TouchableOpacity
+                style={[styles.quickActionCard, { backgroundColor: theme === 'dark' ? '#1A4A6B' : '#2196F3' }]}
+                onPress={() => router.push('/messages' as any)}
+              >
+                {unreadMessages > 0 && (
+                  <View style={styles.quickActionBadge}>
+                    <Text style={[styles.quickActionBadgeText, { color: '#1565C0' }]}>
+                      {unreadMessages}
+                    </Text>
+                  </View>
+                )}
+                <Ionicons name="chatbubbles-outline" size={28} color="#FFF" />
+                <Text style={styles.quickActionTitle}>My Messages</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Right column: Analytics (tall) */}
             <TouchableOpacity
-              style={[styles.quickActionCard, { backgroundColor: theme === 'dark' ? '#2C5F4F' : '#10B981' }]}
+              style={[styles.quickActionCardTall, { backgroundColor: theme === 'dark' ? '#2C5F4F' : '#10B981' }]}
               onPress={() => router.push('/seller/analytics' as any)}
             >
-              <Ionicons name="stats-chart-outline" size={32} color="#FFF" />
+              <Ionicons name="stats-chart-outline" size={36} color="#FFF" />
               <Text style={styles.quickActionTitle}>Analytics</Text>
             </TouchableOpacity>
           </View>
@@ -596,25 +629,42 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 12,
   },
+  quickActionsColumns: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'stretch',
+  },
+  quickActionsLeft: {
+    flex: 1,
+    gap: 12,
+  },
   quickActionCard: {
-    width: '48%',
-    padding: 16,
+    padding: 14,
     borderRadius: 12,
     alignItems: 'center',
-    minHeight: 120,
+    justifyContent: 'center',
+    minHeight: 90,
+  },
+  quickActionCardTall: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 12,
+    alignItems: 'center',
     justifyContent: 'center',
   },
   quickActionBadge: {
     position: 'absolute',
     top: 8,
     right: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: '#FFF',
     borderRadius: 12,
     paddingHorizontal: 8,
     paddingVertical: 2,
+    minWidth: 24,
+    alignItems: 'center',
   },
   quickActionBadgeText: {
-    color: '#FFF',
+    color: '#C94318',
     fontSize: 12,
     fontWeight: '700',
   },

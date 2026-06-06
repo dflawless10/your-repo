@@ -1,17 +1,20 @@
 import { API_BASE_URL } from '@/config';
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, View, Text, StyleSheet } from "react-native";
 import RelistedDiscountsScreen from "app/components/RelistedDiscountsScreen";
 import { ListedItem } from "@/types/items";
 import { useTheme } from '@/app/theme/ThemeContext';
 import { useLocalSearchParams } from 'expo-router';
+import { useAppSelector } from '@/hooks/reduxHooks';
 
 export default function RelistedDiscountsPage() {
   const { theme, colors } = useTheme();
   const { search } = useLocalSearchParams<{ search?: string }>();
   const styles = createStyles(theme === 'dark', colors);
   const [items, setItems] = useState<ListedItem[]>([]);
+  const cartItemsRedux = useAppSelector((state) => state.cart.items);
+  const cartItemIds = useMemo(() => new Set(cartItemsRedux.map(i => String(i.id))), [cartItemsRedux]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,7 +50,7 @@ export default function RelistedDiscountsPage() {
       }
     };
 
-    fetchItems();
+   void fetchItems();
   }, [search]);
 
   if (loading) {
@@ -67,7 +70,7 @@ export default function RelistedDiscountsPage() {
     );
   }
 
-  return <RelistedDiscountsScreen items={items} />;
+  return <RelistedDiscountsScreen items={items.filter(item => !cartItemIds.has(String((item as any).id ?? (item as any).item_id)))} />;
 }
 
 const createStyles = (isDark: boolean, colors: any) => StyleSheet.create({

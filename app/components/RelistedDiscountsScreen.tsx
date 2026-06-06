@@ -280,13 +280,30 @@ export default function RelistedDiscountsScreen({ items }: Props) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <EnhancedHeader scrollY={scrollY} />
-        <View style={[styles.headerTitleContainerInline, { backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0' }]}>
-          <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>🔄 Relisted & Reduced</Text>
-          <Text style={[styles.headerSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]}>Your Second Chance at Great Deals</Text>
-        </View>
-        <View style={[styles.emptyContainer, { backgroundColor: colors.background }]}>
-          <Text style={[styles.emptyText, { color: colors.textPrimary }]}>No relisted discounts available right now.</Text>
-        </View>
+        <RNAnimated.ScrollView
+          onScroll={RNAnimated.event(
+            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+            { useNativeDriver: false }
+          )}
+          scrollEventThrottle={16}
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT, paddingHorizontal: 16, flexGrow: 1 }}
+        >
+          <RNAnimated.View style={[styles.headerTitleContainerInline, { opacity: headerOpacity, transform: [{ scale: headerScale }] }]}>
+            <View style={styles.titleRow}>
+              <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+              </TouchableOpacity>
+              <View style={styles.titleTextContainer}>
+                <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>🔄 Relisted & Reduced</Text>
+                <Text style={[styles.headerSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]}>Your Second Chance at Great Deals</Text>
+              </View>
+            </View>
+          </RNAnimated.View>
+          <View style={[styles.emptyContainer, { backgroundColor: colors.background }]}>
+            <Text style={[styles.emptyText, { color: colors.textPrimary }]}>No relisted discounts available right now.</Text>
+          </View>
+        </RNAnimated.ScrollView>
       </View>
     );
   }
@@ -597,7 +614,7 @@ export default function RelistedDiscountsScreen({ items }: Props) {
       </View>
 
       {/* Items List - Grid Layout */}
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: COLUMN_GAP, paddingHorizontal: 16 }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: COLUMN_GAP }}>
       {filteredItems.map(item => {
         const now = new Date();
         const urgent = item.auction_ends_at ? isAuctionUrgent(item.auction_ends_at, now) : false;
@@ -706,9 +723,34 @@ export default function RelistedDiscountsScreen({ items }: Props) {
 
             {/* Auction countdown */}
             {item.auction_ends_at && (
-              <Text style={[styles.countdown, { color: theme === 'dark' ? '#999' : '#444' }]}>
+              <Text style={[styles.countdown, { color: urgent ? '#c62828' : '#2e7d32' }]}>
                 Ends at: {new Date(item.auction_ends_at).toLocaleString()}
               </Text>
+            )}
+
+            {/* Seller info */}
+            {(item.seller || item.seller_username) && (
+              <View style={styles.sellerRow}>
+                {item.seller?.avatar_url ? (
+                  <Image source={{ uri: item.seller.avatar_url }} style={styles.sellerAvatar} />
+                ) : (
+                  <View style={[styles.sellerAvatar, styles.sellerAvatarFallback]}>
+                    <Text style={styles.sellerAvatarInitial}>
+                      {(item.seller?.username || item.seller_username || '?')[0].toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.sellerName, { color: colors.textPrimary }]} numberOfLines={1}>
+                    {item.seller?.username || item.seller_username}
+                  </Text>
+                  {item.seller?.avg_rating != null && (
+                    <Text style={styles.sellerRating}>
+                      ⭐ {item.seller.avg_rating.toFixed(1)}
+                    </Text>
+                  )}
+                </View>
+              </View>
             )}
           </TouchableOpacity>
         );
@@ -849,7 +891,6 @@ const styles = StyleSheet.create({
   },
   card: {
     marginBottom: 20,
-    marginHorizontal: 16,
     padding: 12,
     borderRadius: 12,
     shadowColor: '#000',
@@ -924,6 +965,35 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   countdown: { marginTop: 6, fontSize: 12 },
+  sellerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 8,
+  },
+  sellerAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+  },
+  sellerAvatarFallback: {
+    backgroundColor: '#6A0DAD',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sellerAvatarInitial: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  sellerName: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  sellerRating: {
+    fontSize: 11,
+    color: '#888',
+  },
   emptyContainer: {
     flex: 1,
     justifyContent: "center",

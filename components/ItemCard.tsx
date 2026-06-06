@@ -2,7 +2,7 @@ import React from 'react';
 import {View, Text, StyleSheet, Image as RNImage, TouchableOpacity} from 'react-native';
 import {AuctionItem} from "@/types/items";
 import {Ionicons} from '@expo/vector-icons';
-import {formatTimeWithSeconds} from '@/utils/time';
+import {formatTimeWithSeconds, getTimeColor} from '@/utils/time';
 import {router} from 'expo-router';
 
 
@@ -39,6 +39,9 @@ export const CardContent: React.FC<CardProps> = ({item, onPress}: CardProps) => 
     const getPriceDisplay = () => {
         if ((item.selling_strategy === 'must_sell' || item.is_must_sell) && item.price === 0) {
             return 'Best Offer';
+        }
+        if (item.buy_it_now) {
+            return `$${Number(item.buy_it_now).toFixed(2)}`;
         }
         if (item.price !== null && item.price !== undefined) {
             return `$${item.price.toFixed(2)}`;
@@ -86,14 +89,17 @@ export const CardContent: React.FC<CardProps> = ({item, onPress}: CardProps) => 
                 </Text>
 
                 {/* Time Remaining */}
-                {item.auction_ends_at && (
-                  <View style={styles.timeRow}>
-                    <Ionicons name="time-outline" size={14} color="#666" />
-                    <Text style={styles.timeText}>
-                      {formatTimeWithSeconds(item.auction_ends_at, Date.now())}
-                    </Text>
-                  </View>
-                )}
+                {item.auction_ends_at && (() => {
+                  const tColor = getTimeColor(item.auction_ends_at);
+                  return (
+                    <View style={styles.timeRow}>
+                      <Ionicons name="time-outline" size={14} color={tColor} />
+                      <Text style={[styles.timeText, { color: tColor }]}>
+                        {formatTimeWithSeconds(item.auction_ends_at, Date.now())}
+                      </Text>
+                    </View>
+                  );
+                })()}
 
                 {/* Seller Info */}
                 {item.seller && (
@@ -106,8 +112,8 @@ export const CardContent: React.FC<CardProps> = ({item, onPress}: CardProps) => 
                       }
                     }}
                   >
-                    {item.seller.avatar && (
-                      <RNImage source={{ uri: item.seller.avatar }} style={styles.sellerAvatar} />
+                    {item.seller.avatar_url && (
+                      <RNImage source={{ uri: item.seller.avatar_url }} style={styles.sellerAvatar} />
                     )}
                     <View style={styles.sellerInfo}>
                       <Text style={styles.sellerName} numberOfLines={1}>

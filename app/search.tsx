@@ -7,11 +7,11 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Image,
-  Dimensions,
   LayoutAnimation,
   Platform,
   UIManager,
   Animated as RNAnimated,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { useAuth } from '@/hooks/AuthContext';
@@ -39,9 +39,10 @@ interface ElasticsearchItem {
   selling_strategy?: string;
   buy_it_now?: number;
   is_sold?: boolean;
-  status?: 'sold' | 'active';
+  status?: 'sold' | 'active' | 'review';
   is_favorite?: boolean;
   is_must_sell?: number;
+  appraised_price?: number;
   _score?: number;
 }
 
@@ -56,8 +57,6 @@ interface HelpResult {
 }
 
 
-
-const { width } = Dimensions.get('window');
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -76,9 +75,9 @@ export default function SearchScreen() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<Record<number, boolean>>({});
 
-  // Reactive dimensions for landscape support
-  const { width: windowWidth, height: windowHeight } = Dimensions.get('window');
-  const isLandscape = useMemo(() => windowWidth > windowHeight, [windowWidth, windowHeight]);
+  // Reactive dimensions — updates on rotation
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const isLandscape = windowWidth > windowHeight;
   const NUM_COLUMNS = isLandscape ? 3 : 1;
 
   // Scroll animation for EnhancedHeader
@@ -179,13 +178,20 @@ export default function SearchScreen() {
         const data = await response.json();
         console.log('🔍 Elasticsearch search results:', data);
 
-        // Filter out sold items and items with missing critical fields
-        const activeItems = (data.hits || []).filter((item: ElasticsearchItem) =>
-          !item.is_sold &&
-          item.status !== 'sold' &&
-          item.name &&
-          item.item_id
-        );
+        const now = Date.now();
+        // Filter out sold/review items, items with missing critical fields, and expired auctions
+        const activeItems = (data.hits || []).filter((item: ElasticsearchItem) => {
+          if (!item.name || !item.item_id) return false;
+          if (item.is_sold || item.status === 'sold') return false;
+          if ((item.status as string) === 'review') return false; // still in review period
+          if (item.auction_ends_at) {
+            const raw = item.auction_ends_at;
+            const hasTZ = raw.includes('T') || raw.endsWith('Z') || raw.includes('+');
+            const endMs = new Date(hasTZ ? raw : raw.replace(' ', 'T') + 'Z').getTime();
+            if (endMs <= now) return false; // expired auction
+          }
+          return true;
+        });
 
         // Update favorites map with any is_favorite flags from results
         const updatedFavorites = { ...favorites };

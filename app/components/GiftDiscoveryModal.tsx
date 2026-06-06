@@ -13,6 +13,9 @@ import {
   ActivityIndicator,
   Pressable,
   Dimensions,
+  useWindowDimensions,
+  Share,
+  Alert,
 } from 'react-native';
 import { Ionicons,} from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -167,6 +170,13 @@ const getActiveOccasions = (): GiftOccasion[] => {
       gradient: ['#9D50BB', '#6E48AA'],
     },
     {
+      id: 'retirement',
+      label: 'Retirement',
+      icon: 'watch',
+      description: 'Timeless timepieces for a new chapter',
+      gradient: ['#455A64', '#78909C'],
+    },
+    {
       id: 'promotions',
       label: 'Promotions',
       icon: 'pricetag',
@@ -214,7 +224,7 @@ let OCCASION_KEYWORDS;
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 OCCASION_KEYWORDS = {
     'birthday': ['birthday', 'birthstone', 'celebration'],
-    'anniversary': ['anniversary', 'love', 'romantic', 'heart', 'wedding', 'forever'],
+    'anniversary': ['💘', 'anniversary', 'love', 'romantic', 'heart', 'wedding', 'forever'],
     'christmas': ['christmas', 'holiday', 'festive', 'winter', 'xmas'],
     'valentines': ['valentine', 'love', 'heart', 'romantic'],
     'mothers-day': ['mother', 'mom', 'elegant', 'classic'],
@@ -223,7 +233,8 @@ OCCASION_KEYWORDS = {
     'wedding': ['wedding', 'bridal', 'engagement', 'forever', 'diamond'],
     'graduation': ['graduation', 'achievement', 'success', 'milestone'],
     'thank-you': ['thank you', 'appreciation', 'gratitude', 'gift'],
-    'just-because': ['surprise', 'special', 'unique', 'treasure'],
+    'just-because': ['🎁', 'surprise', 'special', 'unique', 'treasure'],
+    'retirement': ['⌚', 'watch', 'watches', 'timepiece', 'luxury watch', 'retirement'],
     'promotions': [
         'promotion', 'promotions', 'deal', 'deals', 'sale', 'discount',
         'clearance', 'price drop', 'marked down', 'special offer', 'bargain'
@@ -233,6 +244,13 @@ OCCASION_KEYWORDS = {
 export default function GiftDiscoveryModal({ visible, onClose }: Readonly<GiftDiscoveryModalProps>) {
   const router = useRouter();
   const { theme, colors } = useTheme();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const isLandscape = windowWidth > windowHeight;
+  const numOccasionColumns = isLandscape ? 4 : 2;
+  // 16px padding each side + 16px gap per column gap
+  const occasionCardWidth = (windowWidth - 32 - 16 * (numOccasionColumns - 1)) / numOccasionColumns;
+  const numGiftColumns = isLandscape ? 3 : 2;
+  const giftCardWidth = Math.floor((windowWidth - 32 - 8 * (numGiftColumns - 1)) / numGiftColumns);
   const [step, setStep] = useState<'occasions' | 'questionnaire' | 'results'>('occasions');
   const [selectedOccasion, setSelectedOccasion] = useState<GiftOccasion | null>(null);
   const [activeOccasions, setActiveOccasions] = useState<GiftOccasion[]>([]);
@@ -242,7 +260,7 @@ export default function GiftDiscoveryModal({ visible, onClose }: Readonly<GiftDi
   const [budgetRange, setBudgetRange] = useState<typeof BUDGET_RANGES[0] | null>(null);
   const [stylePreference, setStylePreference] = useState<string | null>(null);
 
-  // Results state
+  // Result state
   const [giftItems, setGiftItems] = useState<GiftItem[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -254,6 +272,7 @@ export default function GiftDiscoveryModal({ visible, onClose }: Readonly<GiftDi
   const scrollViewRef = useRef<ScrollView>(null);
   const [budgetSectionY, setBudgetSectionY] = useState(0);
   const [styleSectionY, setStyleSectionY] = useState(0);
+  const [findGiftsSectionY, setFindGiftsSectionY] = useState(0);
 
   useEffect(() => {
     // Update active occasions when modal opens
@@ -299,6 +318,15 @@ export default function GiftDiscoveryModal({ visible, onClose }: Readonly<GiftDi
     }
   }, [budgetRange, styleSectionY, selectedOccasion]);
 
+  // Auto-scroll after style selected - scroll to Find Perfect Gifts button
+  useEffect(() => {
+    if (stylePreference && scrollViewRef.current && findGiftsSectionY > 0) {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollTo({ y: findGiftsSectionY - 50, animated: true });
+      }, 300);
+    }
+  }, [stylePreference, findGiftsSectionY]);
+
   const handleOccasionSelect = (occasion: GiftOccasion) => {
     setSelectedOccasion(occasion);
 
@@ -342,6 +370,11 @@ export default function GiftDiscoveryModal({ visible, onClose }: Readonly<GiftDi
         params.style = style;
       }
 
+      // Retirement always searches watches only
+      if (occasion.id === 'retirement') {
+        params.style = 'watches';
+      }
+
       const queryString = new URLSearchParams(params).toString();
       const response = await fetch(`${API_BASE_URL}/api/gift-recommendations?${queryString}`, {
         headers: {
@@ -373,7 +406,7 @@ export default function GiftDiscoveryModal({ visible, onClose }: Readonly<GiftDi
   // @ts-ignore
   const renderOccasionCard = ({ item }: { item: GiftOccasion }) => (
     <TouchableOpacity
-      style={styles.occasionCard}
+      style={[styles.occasionCard, { width: occasionCardWidth }]}
       onPress={() => handleOccasionSelect(item)}
       activeOpacity={0.9}
     >
@@ -402,7 +435,7 @@ export default function GiftDiscoveryModal({ visible, onClose }: Readonly<GiftDi
       style={[styles.questionnaireContainer, { backgroundColor: colors.background }]}
       showsVerticalScrollIndicator={false}
     >
-      <Text style={[styles.questionnaireTitle, { color: colors.textPrimary }]}>Let&#39;s Find The Perfect Gift! 🥚</Text>
+      <Text style={[styles.questionnaireTitle, { color: colors.textPrimary }]}>Let&#39;s Find The Perfect Gift!🎀</Text>
 
       {/* Birthday Month Selection (only for birthday) */}
       {selectedOccasion?.id === 'birthday' && (
@@ -511,6 +544,7 @@ export default function GiftDiscoveryModal({ visible, onClose }: Readonly<GiftDi
 
       {/* Find Gifts Button */}
       <TouchableOpacity
+        onLayout={(e) => setFindGiftsSectionY(e.nativeEvent.layout.y)}
         style={[
           styles.findGiftsButton,
           (!budgetRange || (
@@ -554,8 +588,8 @@ export default function GiftDiscoveryModal({ visible, onClose }: Readonly<GiftDi
       // Red for < 2 hours
       if (lowerTime.includes('h') && !lowerTime.includes('d')) {
         const hours = Number.parseInt(lowerTime);
-        if (hours < 2) return '#e53e3e';
-        if (hours < 24) return '#e53e3e';
+        if (hours < 2) return '#E53E3E';
+        if (hours < 24) return '#DD6B20';
       }
 
       // Yellow for 1-3 days
@@ -571,6 +605,7 @@ export default function GiftDiscoveryModal({ visible, onClose }: Readonly<GiftDi
     return (
       <TouchableOpacity
         style={[styles.giftCard, {
+          width: giftCardWidth,
           borderWidth: 2,
           borderColor: theme === 'dark' ? '#6A0DAD' : '#38a169',
           backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF',
@@ -595,10 +630,28 @@ export default function GiftDiscoveryModal({ visible, onClose }: Readonly<GiftDi
             )}
           </View>
         </View>
-        {/* Celebration confetti accent */}
-        <View style={[styles.celebrationBadge, { backgroundColor: theme === 'dark' ? '#6A0DAD' : '#FF6B9D' }]}>
-          <Text style={styles.celebrationEmoji}>🥚</Text>
-        </View>
+        <TouchableOpacity
+          style={[styles.celebrationBadge, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}
+          onPress={async (e) => {
+            e.stopPropagation();
+            try {
+              const shareUrl = `https://bidgoat.com/listing/${item.id}`;
+              const result = await Share.share({
+                message: `Check out ${item.name} on BidGoat!\n\nPrice: $${item.price.toFixed(2)}\n\nView: ${shareUrl}`,
+                title: item.name,
+                url: shareUrl,
+              });
+              if (result.action === Share.sharedAction) {
+                Alert.alert('Shared!', 'Thanks for spreading the word!');
+              }
+            } catch (err) {
+              Alert.alert('Error', 'Could not share this item');
+            }
+          }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name="share-social-outline" size={16} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+        </TouchableOpacity>
       </TouchableOpacity>
     );
   };
@@ -627,7 +680,8 @@ export default function GiftDiscoveryModal({ visible, onClose }: Readonly<GiftDi
           data={giftItems}
           keyExtractor={(item) => item.id.toString()}
           renderItem={renderGiftItem}
-          numColumns={2}
+          numColumns={numGiftColumns}
+          key={`gift-cols-${numGiftColumns}`}
           columnWrapperStyle={styles.giftRow}
           contentContainerStyle={styles.giftList}
           showsVerticalScrollIndicator={false}
@@ -674,7 +728,8 @@ export default function GiftDiscoveryModal({ visible, onClose }: Readonly<GiftDi
               data={activeOccasions}
               keyExtractor={(item) => item.id}
               renderItem={renderOccasionCard}
-              numColumns={2}
+              numColumns={numOccasionColumns}
+              key={`occasion-cols-${numOccasionColumns}`}
               columnWrapperStyle={styles.occasionRow}
               contentContainerStyle={styles.occasionList}
               showsVerticalScrollIndicator={false}
@@ -692,16 +747,21 @@ export default function GiftDiscoveryModal({ visible, onClose }: Readonly<GiftDi
         <View style={styles.birthstoneModalOverlay}>
           <Pressable style={styles.modalBackdrop} onPress={() => setShowBirthstoneModal(false)} />
           <View style={[styles.birthstoneModalContent, { backgroundColor: colors.background }]}>
-            <Text style={[styles.birthstoneModalTitle, { color: colors.textPrimary }]}>💎 Birthday Sparkle Ritual</Text>
-            <Text style={[styles.birthstoneModalSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]}>Tap a month to see the birthstone meaning</Text>
+
+            {/* Title scrolls with the grid; shown fixed above detail view */}
             {!selectedMonthInModal ? (
               <FlatList
                 data={birthstones}
                 numColumns={3}
                 keyExtractor={(item: Birthstone) => item.month}
                 contentContainerStyle={styles.birthstoneGrid}
+                ListHeaderComponent={
+                  <>
+                    <Text style={[styles.birthstoneModalTitle, { color: colors.textPrimary }]}>💎 Birthday Sparkle Ritual</Text>
+                    <Text style={[styles.birthstoneModalSubtitle, { color: theme === 'dark' ? '#999' : '#666' }]}>Tap a month to see the birthstone meaning</Text>
+                  </>
+                }
                 renderItem={({ item }: { item: Birthstone }) => {
-                  // Use dark text for light-colored stones (Pearl, Diamond, light Aquamarine)
                   const lightColors = ['#dcdcdc', '#E0E0E0', '#F5F5DC', '#40E0D0'];
                   const textColor = lightColors.includes(item.color) ? '#333' : '#fff';
                   return (
@@ -709,14 +769,20 @@ export default function GiftDiscoveryModal({ visible, onClose }: Readonly<GiftDi
                       style={[styles.birthstoneTile, { backgroundColor: item.color }]}
                       onPress={() => setSelectedMonthInModal(item.month)}
                     >
-                      <Text style={[styles.birthstoneMonth, { color: textColor }]}>{item.month}</Text>
-                      <Text style={[styles.birthstoneStone, { color: textColor }]}>{item.stone}</Text>
+                      <Text style={[styles.birthstoneMonth, { color: textColor }]} adjustsFontSizeToFit numberOfLines={1} minimumFontScale={0.6}>{item.month}</Text>
+                      <Text style={[styles.birthstoneStone, { color: textColor }]} adjustsFontSizeToFit numberOfLines={1} minimumFontScale={0.6}>{item.stone}</Text>
                     </TouchableOpacity>
                   );
                 }}
               />
             ) : (
-              <View style={styles.birthstoneMeaningContainer}>
+              /* Detail view: explicit maxHeight so ScrollView isn't collapsed by flex:0 parent */
+              <ScrollView
+                style={{ maxHeight: windowHeight * 0.65 }}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.birthstoneMeaningContainer}
+              >
+                <Text style={[styles.birthstoneModalTitle, { color: colors.textPrimary }]}>💎 Birthday Sparkle Ritual</Text>
                 <Text style={[styles.birthstoneMonthTitle, { color: colors.textPrimary }]}>
                   {selectedMonthInModal}
                 </Text>
@@ -747,8 +813,10 @@ export default function GiftDiscoveryModal({ visible, onClose }: Readonly<GiftDi
                     Back to Birthstones
                   </Text>
                 </TouchableOpacity>
-              </View>
+              </ScrollView>
             )}
+
+            {/* Fixed Close button — always visible */}
             <TouchableOpacity
               style={styles.birthstoneCloseButton}
               onPress={() => setShowBirthstoneModal(false)}
@@ -806,11 +874,11 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   occasionRow: {
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
+    gap: 16,
     marginBottom: 16,
   },
   occasionCard: {
-    width: (width - 48) / 2,
     height: 180,
     borderRadius: 16,
     overflow: 'hidden',
@@ -1059,7 +1127,8 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   giftRow: {
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
+    gap: 8,
     marginBottom: 16,
   },
   giftCard: {
@@ -1127,14 +1196,11 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  celebrationEmoji: {
-    fontSize: 18,
-  },
 
   // Birthstone Modal Styles
   birthstoneModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1143,7 +1209,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 24,
     width: '90%',
-    maxHeight: '80%',
+    maxHeight: '85%',
   },
   birthstoneModalTitle: {
     fontSize: 24,

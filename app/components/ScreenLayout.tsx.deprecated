@@ -1,0 +1,176 @@
+/**
+ * ⚠️ DEPRECATED - DO NOT USE
+ *
+ * This file has been deprecated and should not be imported or used.
+ *
+ * Reason: ScreenLayout was causing state management issues and conflicts with
+ * native scrolling behavior in landscape mode. All screens now use direct
+ * EnhancedHeader + native ScrollView/FlatList implementations.
+ *
+ * Date Deprecated: 2026-03-26
+ *
+ * If you need screen layout functionality:
+ * - Use EnhancedHeader directly for the header
+ * - Use Animated.ScrollView or FlatList for scrollable content
+ * - See explore.tsx, discover.tsx, wishlist.tsx, or index.tsx for examples
+ */
+
+import React, { useRef } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Animated,
+  useWindowDimensions,
+  StyleSheet,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+
+import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
+import { useTheme } from '@/app/theme/ThemeContext';
+
+type ScreenLayoutProps = {
+  children: React.ReactNode;
+  title: string;
+  subtitle?: string;
+  username: string | null;
+  avatarUrl: string | null;
+  onSearch?: (text: string) => void;
+  routeName: string;
+  embedded?: boolean;
+  onSelect?: (result: any) => void;
+};
+
+export default function ScreenLayout({
+  children,
+  title,
+  username,
+  avatarUrl,
+  onSearch,
+  embedded,
+  onSelect,
+}: Readonly<ScreenLayoutProps>) {
+
+  const { theme, colors } = useTheme();
+  const router = useRouter();
+
+  // Orientation
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
+
+  // Scroll tracking
+  const scrollY = useRef(new Animated.Value(0)).current;
+
+  // Header animations
+  const headerOpacity = scrollY.interpolate({
+    inputRange: [0, 80],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+
+  const headerScale = scrollY.interpolate({
+    inputRange: [0, 80],
+    outputRange: [1, 0.85],
+    extrapolate: 'clamp',
+  });
+
+  // Dynamic header height
+  const dynamicHeaderHeight = isLandscape
+    ? HEADER_MAX_HEIGHT * 0.55   // shorter header in landscape
+    : HEADER_MAX_HEIGHT;
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+
+      {/* PORTRAIT: EnhancedHeader fixed */}
+      {!isLandscape && <EnhancedHeader
+  scrollY={scrollY}
+  username={username}
+  avatarUrl={avatarUrl}
+  onSearch={onSearch}
+  embedded={embedded}
+  onSelect={onSelect}
+/>
+}
+
+      <Animated.ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          paddingTop: isLandscape ? 0 : dynamicHeaderHeight,
+          paddingBottom: 140, // space for footer
+        }}
+
+        scrollEventThrottle={16}
+        keyboardShouldPersistTaps="handled"
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
+      >
+        {/* LANDSCAPE: EnhancedHeader scrolls */}
+        {isLandscape && <EnhancedHeader scrollY={scrollY} />}
+
+        {/* Title + Subtitle scroll with content */}
+        <Animated.View
+          style={[
+            styles.headerTitleContainer,
+            {
+              top: dynamicHeaderHeight - 50,
+              opacity: headerOpacity,
+              transform: [{ scale: headerScale }],
+              backgroundColor: colors.background,
+              borderBottomColor: theme === 'dark' ? '#333' : '#E0E0E0',
+            },
+          ]}
+        >
+          <View style={styles.titleWithArrow}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
+              <Ionicons
+                name="arrow-back"
+                size={24}
+                color={theme === 'dark' ? '#B794F4' : '#6A0DAD'}
+              />
+            </TouchableOpacity>
+
+            <View>
+              <Text style={[styles.headerTitleText, { color: colors.textPrimary }]}>
+                {title}
+              </Text>
+
+            </View>
+          </View>
+        </Animated.View>
+
+        {/* CHILD CONTENT — untouched */}
+        {children}
+      </Animated.ScrollView>
+    </View>
+  );
+}
+
+
+const styles = StyleSheet.create({
+  headerTitleContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
+  titleWithArrow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  backArrow: {
+    padding: 4,
+    marginRight: 8,
+  },
+  headerTitleText: {
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    marginTop: 2,
+  },
+});

@@ -33,18 +33,22 @@ interface FlaggedItem {
   reported_by: string;
   reported_at: string;
   status: 'pending' | 'reviewed' | 'removed';
+  item_deleted?: boolean;
 }
 
 interface PendingReport {
   id: number;
   type: 'item' | 'user' | 'message';
   target_id: number;
+  item_id?: number;
   target_name: string;
   reason: string;
   details?: string;
   reported_by: string;
   created_at: string;
-  status: 'pending' | 'investigating' | 'resolved' | 'dismissed';
+  status: 'pending' | 'investigating' | 'resolved' | 'dismissed' | 'approved' | 'removed';
+  item_image?: string;
+  item_deleted?: boolean;
 }
 
 export default function ModerateContentScreen() {
@@ -62,7 +66,7 @@ export default function ModerateContentScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    loadData();
+    void loadData();
   }, [activeTab]);
 
   useEffect(() => {
@@ -188,20 +192,69 @@ export default function ModerateContentScreen() {
     );
   };
 
-  const handleReportAction = async (reportId: number, action: 'resolve' | 'dismiss') => {
-    try {
-      const token = await AsyncStorage.getItem('jwtToken');
-      const response = await fetch(`${API_BASE_URL}/api/admin/reports/${reportId}/${action}`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (response.ok) {
-        Alert.alert('Success', `Report ${action}d`);
-        loadData();
-      }
-    } catch (error) {
-      Alert.alert('Error', `Failed to ${action} report`);
-    }
+  const handleApproveReport = (reportId: number) => {
+    Alert.alert(
+      'Approve Report',
+      'This will clear the report and restore the listing to active.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Approve',
+          onPress: () => {
+            (async () => {
+              try {
+                const token = await AsyncStorage.getItem('jwtToken');
+                const response = await fetch(`${API_BASE_URL}/api/admin/reports/${reportId}/approve`, {
+                  method: 'POST',
+                  headers: { Authorization: `Bearer ${token}` },
+                });
+                if (response.ok) {
+                  Alert.alert('Success', 'Report approved, listing restored');
+                  await loadData();
+                } else {
+                  Alert.alert('Error', 'Failed to approve report');
+                }
+              } catch (error) {
+                Alert.alert('Error', 'Failed to approve report');
+              }
+            })();
+          },
+        },
+      ]
+    );
+  };
+
+  const handleRemoveViaReport = (reportId: number) => {
+    Alert.alert(
+      'Remove Listing',
+      'This will permanently remove the listing, notify the seller, and log a violation on their account.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            (async () => {
+              try {
+                const token = await AsyncStorage.getItem('jwtToken');
+                const response = await fetch(`${API_BASE_URL}/api/admin/reports/${reportId}/remove`, {
+                  method: 'POST',
+                  headers: { Authorization: `Bearer ${token}` },
+                });
+                if (response.ok) {
+                  Alert.alert('Success', 'Listing removed and seller notified');
+                  await loadData();
+                } else {
+                  Alert.alert('Error', 'Failed to remove listing');
+                }
+              } catch (error) {
+                Alert.alert('Error', 'Failed to remove listing');
+              }
+            })();
+          },
+        },
+      ]
+    );
   };
 
   const getSeverityColor = (severity?: 'low' | 'medium' | 'high') => {
@@ -272,13 +325,21 @@ export default function ModerateContentScreen() {
             <Text style={[styles.actionButtonText, { color: '#F44336' }]}>Remove</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.actionButton, styles.viewButton]}
-            onPress={() => router.push(`/item/${item.item_id}` as any)}
-          >
-            <Ionicons name="eye" size={18} color="#2196F3" />
-            <Text style={[styles.actionButtonText, { color: '#2196F3' }]}>View</Text>
-          </TouchableOpacity>
+          {!item.item_deleted && (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.viewButton]}
+              onPress={() => router.push(`/item/${item.item_id}` as any)}
+            >
+              <Ionicons name="eye" size={18} color="#2196F3" />
+              <Text style={[styles.actionButtonText, { color: '#2196F3' }]}>View</Text>
+            </TouchableOpacity>
+          )}
+          {item.item_deleted && (
+            <View style={[styles.actionButton, styles.viewButton, { opacity: 0.4 }]}>
+              <Ionicons name="trash-outline" size={18} color="#2196F3" />
+              <Text style={[styles.actionButtonText, { color: '#2196F3' }]}>Removed</Text>
+            </View>
+          )}
         </View>
       </View>
     );
@@ -292,10 +353,14 @@ export default function ModerateContentScreen() {
   const renderReport = (report: PendingReport) => {
     const reasonDetails = getReportReasonDetails(report.reason);
     const severityColor = reasonDetails?.severity === 'high' ? '#F44336' : reasonDetails?.severity === 'medium' ? '#FF9800' : '#FBC02D';
+    const itemId = report.item_id ?? report.target_id;
 
     return (
       <View key={report.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: isDark ? '#333' : '#E0E0E0' }]}>
         <View style={styles.cardHeader}>
+          {report.item_image && (
+            <Image source={{ uri: report.item_image }} style={styles.itemImage} />
+          )}
           <View style={styles.cardHeaderText}>
             <View style={styles.reportTypeRow}>
               <View style={[styles.typeBadge, { backgroundColor: getReportColor(report.type) }]}>
@@ -320,19 +385,35 @@ export default function ModerateContentScreen() {
         <View style={styles.cardActions}>
           <TouchableOpacity
             style={[styles.actionButton, styles.approveButton]}
-            onPress={() => handleReportAction(report.id, 'resolve')}
+            onPress={() => handleApproveReport(report.id)}
           >
             <Ionicons name="checkmark-circle" size={18} color="#4CAF50" />
-            <Text style={[styles.actionButtonText, { color: '#4CAF50' }]}>Resolve</Text>
+            <Text style={[styles.actionButtonText, { color: '#4CAF50' }]}>Approve</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.actionButton, styles.removeButton]}
-            onPress={() => handleReportAction(report.id, 'dismiss')}
+            onPress={() => handleRemoveViaReport(report.id)}
           >
-            <Ionicons name="close-circle" size={18} color="#F44336" />
-            <Text style={[styles.actionButtonText, { color: '#F44336' }]}>Dismiss</Text>
+            <Ionicons name="trash" size={18} color="#F44336" />
+            <Text style={[styles.actionButtonText, { color: '#F44336' }]}>Remove</Text>
           </TouchableOpacity>
+
+          {!report.item_deleted && (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.viewButton]}
+              onPress={() => router.push(`/item/${itemId}` as any)}
+            >
+              <Ionicons name="eye" size={18} color="#2196F3" />
+              <Text style={[styles.actionButtonText, { color: '#2196F3' }]}>View</Text>
+            </TouchableOpacity>
+          )}
+          {report.item_deleted && (
+            <View style={[styles.actionButton, styles.viewButton, { opacity: 0.4 }]}>
+              <Ionicons name="trash-outline" size={18} color="#2196F3" />
+              <Text style={[styles.actionButtonText, { color: '#2196F3' }]}>Removed</Text>
+            </View>
+          )}
         </View>
       </View>
     );

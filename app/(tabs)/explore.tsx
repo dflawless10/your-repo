@@ -21,7 +21,7 @@ import { router } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { getCountdownLocal } from '@/utils/time';
+import { getCountdownLocal, getTimeColor } from '@/utils/time';
 import Toast from 'react-native-toast-message';
 import { useWishlist } from '@/app/wishlistContext';
 import { useAppDispatch, useAppSelector } from 'hooks/reduxHooks';
@@ -36,7 +36,7 @@ import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHead
 
 // Constants
 const COLUMN_GAP = 12;
-const HORIZONTAL_PADDING = 16;
+
 
 
 
@@ -72,8 +72,9 @@ const JustListedCard = React.memo(
     onShare: (item: ListedItem) => void;
     itemWidth: number;
   }) => {
-    const { timeText, isUrgent } = getCountdownLocal(item.auction_ends_at);
-   const displayPrice = Number(item.highest_bid ?? item.price ?? 0);
+    const { timeText } = getCountdownLocal(item.auction_ends_at);
+    const timeColor = getTimeColor(item.auction_ends_at);
+    const displayPrice = Number(item.highest_bid ?? item.buy_it_now ?? item.price ?? 0);
 
     return (
       <TouchableOpacity
@@ -145,11 +146,11 @@ const JustListedCard = React.memo(
 
             {item.auction_ends_at && (
               <View style={styles.statsContainer}>
-                <MaterialCommunityIcons name="clock-outline" size={14} color="#666" />
+                <Ionicons name="time-outline" size={14} color={timeColor} />
                 <Text
                   style={[
                     styles.statsText,
-                    { color: isUrgent ? '#e53e3e' : '#38a169' },
+                    { color: timeColor },
                   ]}
                   numberOfLines={1}
                 >
@@ -208,18 +209,23 @@ export default function TabTwoScreen() {
   // Reactive landscape constants
   const isLandscape = useMemo(() => width > height, [width, height]);
   const NUM_COLUMNS = useMemo(() => isLandscape ? 3 : 2, [isLandscape]);
-  
-  // Fixed card widths - same size across all devices/orientations
-  const ITEM_WIDTH = 260;
+  const COLUMN_GAP = 12
+  // Responsive card width — fills available grid space for current orientation/columns
+  const ITEM_WIDTH = useMemo(
+    () => (width - 32 - COLUMN_GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS,
+    [width, NUM_COLUMNS]
+  );
   const TRENDING_CARD_WIDTH = 190;
   const TRENDING_CARD_HEIGHT = useMemo(() => TRENDING_CARD_WIDTH * 1.2, [TRENDING_CARD_WIDTH]); // Image height
-  const trendingHeight = useMemo(() => TRENDING_CARD_HEIGHT + 140, [TRENDING_CARD_HEIGHT]); // Image + info container (~120px) + padding
+  const trendingHeight = useMemo(() => TRENDING_CARD_HEIGHT + 165, [TRENDING_CARD_HEIGHT]); // Image + info container + padding
   const titleLineHeight = useMemo(() => isLandscape ? 16 : 18, [isLandscape]);
   const countdownFont = useMemo(() => isLandscape ? 11 : 12, [isLandscape]);
   const countdownMargin = useMemo(() => isLandscape ? 2 : 4, [isLandscape]);
   const sectionSpacing = useMemo(() => isLandscape ? 12 : 24, [isLandscape]);
   const trendingSectionPadding = useMemo(() => isLandscape ? 4 : 8, [isLandscape]);
   const trendingSectionMargin = useMemo(() => isLandscape ? 8 : 12, [isLandscape]);
+
+
 
   const [justListedItems, setJustListedItems] = useState<ListedItem[]>([]);
   const [trendingItems, setTrendingItems] = useState<ListedItem[]>([]);
@@ -234,7 +240,7 @@ export default function TabTwoScreen() {
   const [sortBy, setSortBy] = useState<string>('newest');
   const [activeFilterTab, setActiveFilterTab] = useState<string | null>(null);
   const [sortModalVisible, setSortModalVisible] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const {wishlistIds, refreshWishlist, addToWishlist: addToWishlistBackend} = useWishlist();
   const dispatch = useAppDispatch();
@@ -249,7 +255,7 @@ export default function TabTwoScreen() {
         setUsername(storedUsername);
         setAvatarUrl(storedAvatar);
       };
-      loadUser();
+      void loadUser();
 
       // Fade in title
       Animated.timing(titleOpacity, {
@@ -263,6 +269,7 @@ export default function TabTwoScreen() {
       };
     }, [titleOpacity])
   );
+
 
   const toggleFavorite = useCallback(async (id: number) => {
     const updated = {
@@ -328,7 +335,7 @@ export default function TabTwoScreen() {
 
   const handleShare = useCallback(async (item: ListedItem) => {
     try {
-      const message = `Check out this ${item.name} on BidGoat! 💎\n\nPrice: $${((item.highest_bid ?? item.price) ?? 0).toFixed(2)}\n\nView: https://bidgoat.com/listing/${item.id}`;
+      const message = `Check out this ${item.name} on BidGoat! 💎\n\nPrice: $${((item.highest_bid ?? item.buy_it_now ?? item.price) ?? 0).toFixed(2)}\n\nView: https://bidgoat.com/listing/${item.id}`;
 
       const result = await Share.share({
         message,
@@ -355,8 +362,6 @@ export default function TabTwoScreen() {
       const token = await AsyncStorage.getItem('jwtToken');
       if (!token) return;
 
-      // For now, simulate trending by sorting by bidCount
-      // In production; this should call a dedicated /api/trending endpoint
       const response = await fetch(`${API_BASE_URL}/api/just-listed`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -367,10 +372,10 @@ export default function TabTwoScreen() {
       if (response.ok) {
         const data = await response.json();
         if (Array.isArray(data.items)) {
-          const trending = [...data.items]
-            .sort((a, b) => (b.bidCount || 0) - (a.bidCount || 0))
+          const sortedItems = data.items
+            .sort((a: ListedItem, b: ListedItem) => (b.bidCount ?? 0) - (a.bidCount ?? 0))
             .slice(0, 10);
-          setTrendingItems(trending);
+          setTrendingItems(sortedItems);
         }
       }
     } catch (err) {
@@ -432,12 +437,16 @@ export default function TabTwoScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      fetchJustListed();
-      fetchTrending();
-      loadFavoritesFromStorage();
-      loadSortPreference();
+      void fetchJustListed();
+      void fetchTrending();
+      void loadFavoritesFromStorage();
+      void loadSortPreference();
     }, [])
   );
+
+
+
+
 
   // Load sort preference from storage
   const loadSortPreference = async () => {
@@ -566,13 +575,16 @@ export default function TabTwoScreen() {
     }
   };
 
+  const cartItemsRedux = useAppSelector((state) => state.cart.items);
+  const cartItemIds = useMemo(() => new Set(cartItemsRedux.map(i => String(i.id))), [cartItemsRedux]);
+
   const uniqueItems = justListedItems.filter((item, index, self) =>
-    index === self.findIndex((t) => t.id === item.id)
+    index === self.findIndex((t) => t.id === item.id) && !cartItemIds.has(String(item.id))
   );
 
   // Apply filters
   const filteredItems = uniqueItems.filter(item => {
-    const price = item.highest_bid ?? item.price ?? 0;
+    const price = item.highest_bid ?? item.buy_it_now ?? item.price ?? 0;
     const itemTags = (item.tags || '').toLowerCase();
     const itemName = (item.name || '').toLowerCase();
     const itemDesc = (item.description || '').toLowerCase();
@@ -614,8 +626,8 @@ export default function TabTwoScreen() {
 
   // Apply sorting
   const sortedItems = [...filteredItems].sort((a, b) => {
-    const priceA = a.highest_bid ?? a.price ?? 0;
-    const priceB = b.highest_bid ?? b.price ?? 0;
+    const priceA = a.highest_bid ?? a.buy_it_now ?? a.price ?? 0;
+    const priceB = b.highest_bid ?? b.buy_it_now ?? b.price ?? 0;
 
     if (sortBy === 'price_asc') return priceA - priceB;
     if (sortBy === 'price_desc') return priceB - priceA;
@@ -711,25 +723,35 @@ export default function TabTwoScreen() {
       />
 
       <Animated.ScrollView
-        style={{flex: 1}}
-        contentContainerStyle={{
-          paddingBottom: 160,
-        }}
-        showsVerticalScrollIndicator={false}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false }
-        )}
-        scrollEventThrottle={16}
-      >
-      {/* Animated Explore Title with Back Arrow - Fixed to not go under header */}
-      <View style={{ height: 20 }} />
-      <Animated.View style={[styles.exploreTitleContainerInline, { opacity: titleOpacity }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
-        </TouchableOpacity>
-        <Text style={[styles.exploreTitle, { color: colors.textPrimary }]}>Explore</Text>
-      </Animated.View>
+  style={{ flex: 1 }}
+  contentContainerStyle={{
+    paddingTop: HEADER_MAX_HEIGHT,
+    paddingBottom: 40,
+  }}
+  showsVerticalScrollIndicator={false}
+  onScroll={Animated.event(
+    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+    { useNativeDriver: false }
+  )}
+  scrollEventThrottle={16}
+>
+  <Animated.View
+    style={[
+      styles.exploreTitleContainerInline,
+      {
+        opacity: titleOpacity,
+        marginTop: 24, // adjust this number until it looks perfect
+      },
+    ]}
+  >
+    <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+      <Ionicons name="arrow-back" size={24} color="#6A0DAD" />
+    </TouchableOpacity>
+    <Text style={[styles.exploreTitle, { color: colors.textPrimary }]}>
+      Explore
+    </Text>
+  </Animated.View>
+
 
       {/* Clean Filter Tabs */}
       <ThemedView style={styles.filtersSection}>
@@ -1036,7 +1058,7 @@ export default function TabTwoScreen() {
           <FlatList
             data={itemsWithWatchStatus}
             renderItem={({item}) => {
-              const displayPrice = (item.highest_bid ?? item.price) ?? 0;
+              const displayPrice = (item.highest_bid ?? item.buy_it_now ?? item.price) ?? 0;
               const placeholder = require('../../assets/goat-icon.png');
 
               return (
@@ -1057,7 +1079,7 @@ export default function TabTwoScreen() {
                     <TouchableOpacity
                       onPress={(e) => {
                         e.stopPropagation();
-                        toggleFavorite(item.id);
+                        void toggleFavorite(item.id);
                       }}
                       style={styles.heartIconOverlay}
                       activeOpacity={0.7}
@@ -1088,7 +1110,7 @@ export default function TabTwoScreen() {
                     <View style={styles.wishlistCoinOverlay}>
                       <GoatGenieBadge
                         onWish={() => {
-                          handleWishlistTap(item);
+                         void handleWishlistTap(item);
                         }}
                       />
                     </View>
@@ -1097,7 +1119,7 @@ export default function TabTwoScreen() {
                   {/* Info Container */}
                   <View style={styles.productInfo}>
                     <Text
-                      style={[styles.productTitle, {lineHeight: titleLineHeight}]}
+                      style={[styles.productTitle, {lineHeight: titleLineHeight, minHeight: titleLineHeight * 2}]}
                       numberOfLines={2}
                     >
 
@@ -1114,46 +1136,31 @@ export default function TabTwoScreen() {
                       const endTime = new Date(item.auction_ends_at).getTime();
                       const timeLeft = endTime - Date.now();
                       const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
+                      const tColor = getTimeColor(item.auction_ends_at);
 
                       if (days >= 2) {
-                        // More than 2 days - show date in green
                         const formattedDate = new Date(item.auction_ends_at).toLocaleDateString('en-US', {
                           month: 'short',
                           day: 'numeric',
                           year: 'numeric'
                         });
                         return (
-                          <Text
-                            style={[
-                              styles.buyBeforeText,
-                              {
-                                color: '#38a169',
-                                fontSize: countdownFont,
-                                marginTop: countdownMargin,
-                              },
-                            ]}
-                          >
-
-                            🥚 Buy Before {formattedDate}
-                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: countdownMargin }}>
+                            <Ionicons name="time-outline" size={countdownFont} color="#38A169" />
+                            <Text style={[styles.buyBeforeText, { color: '#38A169', fontSize: countdownFont }]}>
+                              Buy Before {formattedDate}
+                            </Text>
+                          </View>
                         );
                       } else {
-                        // Less than 48 hours - show countdown (red if ≤24h, orange otherwise)
-                        const {timeText, isUrgent} = getCountdownLocal(item.auction_ends_at);
+                        const {timeText} = getCountdownLocal(item.auction_ends_at);
                         return (
-                          <Text
-                            style={[
-                              styles.buyBeforeText,
-                              {
-                                color: isUrgent ? '#e53e3e' : '#e53e3e',
-                                fontSize: countdownFont,
-                                marginTop: countdownMargin,
-                              },
-                            ]}
-                          >
-
-                            ⏰ {timeText}
-                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: countdownMargin }}>
+                            <Ionicons name="time-outline" size={countdownFont} color={tColor} />
+                            <Text style={[styles.buyBeforeText, { color: tColor, fontSize: countdownFont }]}>
+                              {timeText}
+                            </Text>
+                          </View>
                         );
                       }
                     })()}
@@ -1202,7 +1209,7 @@ export default function TabTwoScreen() {
                       style={styles.addToCartButton}
                       onPress={(e) => {
                         e.stopPropagation();
-                        handleAddToCart(item);
+                       void handleAddToCart(item);
                       }}
                       activeOpacity={0.7}
                     >
@@ -1218,7 +1225,7 @@ export default function TabTwoScreen() {
             key={`grid-${NUM_COLUMNS}`}
             contentContainerStyle={[
               styles.gridContainer,
-              {width: '100%', paddingBottom: 160, paddingHorizontal: 16}
+              {width: '100%', paddingBottom: 0,  paddingHorizontal: 16, flexGrow: 1}
             ]}
             style={{width: '100%'}}
 
@@ -1229,8 +1236,8 @@ export default function TabTwoScreen() {
             nestedScrollEnabled={true}
             ListFooterComponent={
               itemsWithWatchStatus.length > 0 ? (
-                <View style={{paddingVertical: 24, alignItems: 'center'}}>
-                  {loadingMore ? (
+                <View style={{paddingTop: 32, paddingBottom: 56, alignItems: 'center'}}>
+                  {loading ? (
                     <ActivityIndicator size="large" color="#FF6B35"/>
                   ) : (
                     <Text style={{color: '#666'}}>You&#39;ve reached the end 🐐</Text>
@@ -1239,10 +1246,10 @@ export default function TabTwoScreen() {
               ) : null
             }
             onEndReached={async () => {
-              if (!loadingMore && itemsWithWatchStatus.length > 0) {
-                setLoadingMore(true);
+              if (!loading && itemsWithWatchStatus.length > 0) {
+                setLoading(true);
                 await new Promise(res => setTimeout(res, 1500));
-                setLoadingMore(false);
+                setLoading(false);
               }
             }}
             onEndReachedThreshold={0.5}
@@ -1379,7 +1386,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 18,
     paddingBottom: 12,
   },
   backButton: {
@@ -1387,7 +1394,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   exploreTitle: {
-    fontSize: 28,
+    fontSize: 16,
     fontWeight: '700',
   },
   header: {
@@ -1398,13 +1405,13 @@ const styles = StyleSheet.create({
     borderBottomColor: '#e5e5e5',
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: '700',
   },
   wishlistIconWrapper: {
   position: 'absolute',
   bottom: 8,
-  right: 8, // 👈 this puts it in the top-left corner
+  right: 8, //
   zIndex: 2,
   padding: 1,
   borderRadius: 20,
@@ -1455,12 +1462,14 @@ const styles = StyleSheet.create({
  countdownText: {
   fontSize: 18,
   color:  '#38a169',
-  fontWeight: '700',
+  fontWeight: '600',
   marginTop: 4,
 },
-urgentText: {
-  color: '#c62828', // red when urgent
-},
+  urgentText: {
+    color: '#c62828',
+    fontWeight: '700',
+  },
+
 title: {
   fontSize: 14,
   fontWeight: '600',
@@ -1577,6 +1586,8 @@ modalClose: {
     backgroundColor: '#fff',
     borderBottomLeftRadius: 12,
     borderBottomRightRadius: 12,
+    minHeight: 160,
+    justifyContent: 'space-between',
   },
   subtitle: {
   fontSize: 14,
@@ -1586,10 +1597,11 @@ modalClose: {
 },
 
   cardTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: '#1a202c',
     marginBottom: 8,
+    lineHeight: 21,
   },
   statsRow: {
     flexDirection: 'row',
@@ -1670,6 +1682,7 @@ modalClose: {
   outlineRed: {
     borderWidth: 1,
     borderColor: 'rgba(255,0,0,0.85)',
+    fontWeight: '600',
   },
   outlineBlue: {
     borderWidth: 1,
@@ -1678,6 +1691,7 @@ modalClose: {
   outlineGreen: {
     borderWidth: 1,
     borderColor: 'rgba(0,200,0,0.85)',
+    fontWeight: '600',
   },
   pageHeader: {
     flexDirection: 'row',
@@ -1829,11 +1843,12 @@ modalClose: {
   },
   gridColumnWrapper: {
     gap: COLUMN_GAP,
-    justifyContent: 'flex-start',
-    marginBottom: 10,
+    justifyContent: 'center',
+    marginBottom: 12,
   },
   productCard: {
     flexShrink: 0,
+    width: 180,
     backgroundColor: '#fff',
     borderRadius: 12,
     shadowColor: '#000',
@@ -1932,7 +1947,7 @@ modalClose: {
     fontSize: 10,
     fontWeight: '700',
     color: '#fff',
-    backgroundColor: '#F57C00',
+    backgroundColor: '#FF6B35',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,

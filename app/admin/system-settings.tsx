@@ -95,11 +95,11 @@ export default function SystemSettingsScreen() {
         const data = await response.json();
 
         // Only allow super admin email
-        if (data.email?.toLowerCase() === 'chicagofiregaming@gmail.com' && data.is_admin) {
+        if (data.email?.toLowerCase() === 'bidgoats@gmail.com' && data.is_admin) {
           setIsSuperAdmin(true);
           loadSettings();
         } else {
-          Alert.alert('Access Denied', 'System Settings are restricted to the platform owner only.');
+          Alert.alert('Access Denied', 'System Settings are restricted to the platform Super Admin only.');
           router.back();
         }
       } else {

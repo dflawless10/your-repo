@@ -24,7 +24,7 @@ import { useTheme } from '@/app/theme/ThemeContext';
 
 
 interface User {
-  user_id: number;
+  id: number;
   username: string;
   email: string;
   firstname: string;
@@ -33,16 +33,19 @@ interface User {
   is_seller: boolean;
   is_banned: boolean;
   created_at: string;
-  total_items: number;
+  listings_count: number;
+  sales_count: number;
   total_sales: number;
   avatar_url?: string;
+  isPremium: boolean;
+  is_premium_seller: boolean;
 }
 
 export default function UserManagementScreen() {
   const router = useRouter();
   const { theme, colors } = useTheme();
   const isDark = theme === 'dark';
-  const scrollY = new Animated.Value(0);
+  const scrollY = useRef(new Animated.Value(0)).current;
   const headerOpacity = useRef(new Animated.Value(0)).current;
   const headerScale = useRef(new Animated.Value(1)).current;
 
@@ -129,6 +132,7 @@ export default function UserManagementScreen() {
       }
     } catch (error) {
       console.error('Error loading users:', error);
+      console.log(users[0]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -209,6 +213,7 @@ export default function UserManagementScreen() {
       ]
     );
   };
+  
 
   const renderUser = (user: User) => (
     <View style={[styles.userCard, { backgroundColor: colors.surface, borderColor: isDark ? '#333' : '#E0E0E0' }]}>
@@ -242,16 +247,16 @@ export default function UserManagementScreen() {
           </View>
 
           <Text style={[styles.userEmail, { color: colors.textSecondary }]}>{user.email}</Text>
-          <Text style={[styles.userName, { color: colors.textSecondary }]}>{`${user.firstname} ${user.lastname}`}</Text>
+          <Text style={[styles.userName, { color: colors.textSecondary }]}>{`${user.firstname ?? ''} ${user.lastname ?? ''}`.trim() || '—'}</Text>
 
           <View style={styles.userStats}>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 12 }}>
               <Ionicons name="cube" size={12} color={isDark ? '#999' : '#666'} style={{ marginRight: 4 }} />
-              <Text style={[styles.statText, { color: isDark ? '#999' : '#666' }]}>{`${user.total_items} items`}</Text>
+              <Text style={[styles.statText, { color: isDark ? '#999' : '#666' }]}>{`${user.listings_count ?? 0} items`}</Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 12 }}>
               <Ionicons name="cash" size={12} color={isDark ? '#999' : '#666'} style={{ marginRight: 4 }} />
-              <Text style={[styles.statText, { color: isDark ? '#999' : '#666' }]}>{`$${user.total_sales} sales`}</Text>
+              <Text style={[styles.statText, { color: isDark ? '#999' : '#666' }]}>{`${user.sales_count ?? 0} sales ($${Number(user.total_sales ?? 0).toFixed(2)})`}</Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Ionicons name="calendar" size={12} color={isDark ? '#999' : '#666'} style={{ marginRight: 4 }} />
@@ -264,7 +269,7 @@ export default function UserManagementScreen() {
       <View style={styles.userActions}>
         <TouchableOpacity
           style={[styles.actionButton, user.is_banned ? styles.unbanButton : styles.banButton]}
-          onPress={() => handleBanUser(user.user_id, user.is_banned)}
+          onPress={() => handleBanUser(user.id, user.is_banned)}
         >
           <Ionicons name={user.is_banned ? "checkmark-circle" : "ban"} size={16} color={user.is_banned ? "#4CAF50" : "#F44336"} />
           <Text style={[styles.actionButtonText, { color: user.is_banned ? "#4CAF50" : "#F44336" }]}>
@@ -274,7 +279,7 @@ export default function UserManagementScreen() {
 
         <TouchableOpacity
           style={[styles.actionButton, styles.adminButton]}
-          onPress={() => handleToggleAdmin(user.user_id, user.is_admin)}
+          onPress={() => handleToggleAdmin(user.id, user.is_admin)}
         >
           <Ionicons name="shield" size={16} color="#2196F3" />
           <Text style={[styles.actionButtonText, { color: '#2196F3' }]}>
@@ -285,7 +290,8 @@ export default function UserManagementScreen() {
         {user.is_seller && (
           <TouchableOpacity
             style={[styles.actionButton, styles.viewButton]}
-            onPress={() => router.push(`/seller/${user.user_id}` as any)}
+            onPress={() => router.push(`/seller/${user.id}` as any)}
+
           >
             <Ionicons name="eye" size={16} color={isDark ? '#999' : '#666'} />
             <Text style={[styles.actionButtonText, { color: isDark ? '#999' : '#666' }]}>View Seller Profile</Text>
@@ -319,7 +325,7 @@ export default function UserManagementScreen() {
             onPress={() => router.back()}
             style={styles.backButton}
           >
-            <Ionicons name="arrow-back" size={24} color={isDark ? '#B794F4' : '#6A0DAD'} />
+             <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
           <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>User Management</Text>
         </Animated.View>
@@ -384,7 +390,7 @@ export default function UserManagementScreen() {
         </Text>
 
         {filteredUsers.length > 0 ? (
-          filteredUsers.map((user) => <React.Fragment key={user.user_id}>{renderUser(user)}</React.Fragment>)
+          filteredUsers.map((user) => <React.Fragment key={user.id}>{renderUser(user)}</React.Fragment>)
         ) : (
           <View style={styles.emptyState}>
             <Ionicons name="people" size={64} color={isDark ? '#444' : '#D1D5DB'} />

@@ -10,7 +10,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Animated,
-  Image,
   ScrollView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -395,7 +394,7 @@ const LoginScreen = () => {
           <View style={styles.whyBidGoatContainer}>
             <Text style={styles.whyBidGoatText}>New to BidGoat? </Text>
             <TouchableOpacity onPress={() => router.push('/landing')}>
-              <Text style={styles.whyBidGoatLink}>Learn Why We're Different</Text>
+              <Text style={styles.whyBidGoatLink}>Learn Why We&#39;re Different</Text>
             </TouchableOpacity>
           </View>
         </View>

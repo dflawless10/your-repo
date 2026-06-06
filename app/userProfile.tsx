@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Alert, ScrollView, TouchableOpacity } from 'rea
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getUserProfile, logoutUser } from '@/api/auth';
 import { FC } from 'react';
-import { User } from "@/types";
+import { User } from '@/types/User';
 import { Link, router } from 'expo-router';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';

@@ -30,7 +30,7 @@ export const MODERATION_WORKFLOW = {
   // Community reporting (Layer 3)
   COMMUNITY_REPORTING: {
     enabled: true,
-    reportsToFlag: 3, // 3 reports triggers admin review
+    reportsToFlag: 3, // 3 reports trigger admin review
     reportsToAutoHide: 5, // 5 reports temporarily hides listing
     reportCooldownHours: 24, // Can't report same item twice in 24h
   },

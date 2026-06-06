@@ -33,6 +33,7 @@ interface UserStats {
   watching: number;
   sales: number;
   purchases: number;
+  unreadMessages: number;
 }
 
 interface UserProfile {
@@ -73,28 +74,16 @@ export const BidGoatMenuModal: React.FC<BidGoatMenuModalProps> = ({
     watching: 0,
     sales: 0,
     purchases: 0,
+    unreadMessages: 0,
   });
   const [userProfile, setUserProfile] = useState<UserProfile>({
     isAdmin: false,
     isPremium: false,
   });
-  const [buyingExpanded, setBuyingExpanded] = useState(true);
-  const [sellingExpanded, setSellingExpanded] = useState(true);
-  const [accountExpanded, setAccountExpanded] = useState(true);
+  const [buyingExpanded, setBuyingExpanded] = useState(false);
+  const [sellingExpanded, setSellingExpanded] = useState(false);
+  const [accountExpanded, setAccountExpanded] = useState(false);
 
-// Add to component state
-const [expandedSections, setExpandedSections] = useState<{buying: boolean, selling: boolean, account: boolean}>({
-  buying: false,
-  selling: false, 
-  account: false
-});
-
-// Reset when modal closes
-useEffect(() => {
-  if (!visible) {
-    setExpandedSections({ buying: false, selling: false, account: false });
-  }
-}, [visible]);
   const [cartSlideAnim] = useState(new Animated.Value(0));
   const [lastViewedCounts, setLastViewedCounts] = useState({
     jewelryBox: 0,
@@ -110,8 +99,8 @@ useEffect(() => {
         tension: 65,
         friction: 11,
       }).start();
-      loadUserStats();
-      loadLastViewedCounts();
+     void loadUserStats();
+    void  loadLastViewedCounts();
 
       // Start the goat cart animation - slide back and forth
       Animated.loop(
@@ -136,6 +125,10 @@ useEffect(() => {
         duration: 250,
         useNativeDriver: true,
       }).start();
+      // Collapse all sections when modal closes so they're fresh on next open
+      setBuyingExpanded(false);
+      setSellingExpanded(false);
+      setAccountExpanded(false);
     }
   }, [visible]);
 
@@ -156,7 +149,7 @@ useEffect(() => {
       const token = await AsyncStorage.getItem('jwtToken');
       if (!token) {
         console.log('🐐 BidGoatMenuModal: No token found');
-        setUserStats({ activeBids: 0, watching: 0, sales: 0, purchases: 0 });
+        setUserStats({ activeBids: 0, watching: 0, sales: 0, purchases: 0, unreadMessages: 0 });
         return;
       }
       console.log('🐐 BidGoatMenuModal: Token found, fetching stats...');
@@ -226,11 +219,25 @@ useEffect(() => {
         console.warn('Failed to fetch purchases:', e);
       }
 
+      let unreadCount = 0;
+      try {
+        const msgRes = await fetch(`${API_BASE_URL}/api/messages/unread-count`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (msgRes.ok) {
+          const msgData = await msgRes.json();
+          unreadCount = msgData.unread_count ?? 0;
+        }
+      } catch (e) {
+        console.warn('Failed to fetch unread messages:', e);
+      }
+
       setUserStats({
         activeBids: activeBidsCount,
         watching: watchingCount,
         sales: salesCount,
         purchases: purchasesCount,
+        unreadMessages: unreadCount,
       });
 
       // Check if user is admin
@@ -254,7 +261,7 @@ useEffect(() => {
       }
     } catch (error) {
       console.error('Error loading user stats:', error);
-      setUserStats({ activeBids: 0, watching: 0, sales: 0, purchases: 0 });
+      setUserStats({ activeBids: 0, watching: 0, sales: 0, purchases: 0, unreadMessages: 0 });
     }
   };
 
@@ -413,7 +420,7 @@ useEffect(() => {
       icon: 'diamond' as keyof typeof Ionicons.glyphMap,
       iconColor: '#FFD700',
       iconBg: '#FFF9E6',
-      route: '/premium-benefits',
+      route: '/premium-status',
       subtitle: 'Saving 3% on every sale',
       isPremiumHighlight: true,
     }] : [{
@@ -574,10 +581,6 @@ useEffect(() => {
         </View>
       )}
       <Ionicons name="chevron-forward" size={18} color={theme === 'dark' ? '#666' : '#CCC'} style={styles.chevron} />
-    <Ionicons
-  name="chevron-down"
-  style={{ transform: [{ rotate: expandedSections.buying ? '180deg' : '0deg' }] }}
-/>
     </TouchableOpacity>
   );
 

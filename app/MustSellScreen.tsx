@@ -1,18 +1,16 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
-  View, Text, TextInput, Button, StyleSheet,
-  Alert, ScrollView, Animated, TouchableOpacity, KeyboardAvoidingView, Platform, Keyboard
+  View, Text, TextInput, StyleSheet,
+  Alert, ScrollView, Animated, TouchableOpacity, Pressable,
 } from 'react-native';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Picker } from "@react-native-picker/picker";
 import { Ionicons } from '@expo/vector-icons';
 import { useGoatBid } from "@/hooks/useGoatBid";
-
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import ImageUploader from '@/components/ImageUploader';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
 import { CharacterCounterInput, CHARACTER_LIMITS, validateCharacterCount } from 'app/components/CharacterCounterInput';
-import { handleListingSuccess } from 'app/utils/formHelpers';
 import { validateContentQuick } from 'app/utils/contentModeration';
 import { useImageValidation } from '@/hooks/useImageValidation';
 import ImageValidationFeedback from '@/app/components/ImageValidationFeedback';
@@ -21,8 +19,8 @@ import { API_BASE_URL } from '@/config';
 import CategorySelector, { QUICK_CATEGORIES } from '@/app/components/CategorySelector';
 import { useTheme } from '@/app/theme/ThemeContext';
 import {playGoatSoundByName} from "@/assets/sounds/officialGoatSoundsSoundtrack";
-import {triggerGoat} from "@/utils/goatFeedback";
-import {any} from "prop-types";
+import { Image } from 'expo-image';
+
 
 const API_URL = API_BASE_URL;
 
@@ -35,7 +33,7 @@ export default function MustSellScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const editItemId = params.editItemId as string | undefined;
-const [showConfetti, setShowConfetti] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [imageUris, setImageUris] = useState<string[]>([]);
@@ -49,6 +47,7 @@ const [showConfetti, setShowConfetti] = useState(false);
   const [condition, setCondition] = useState('good');
   const [rarity, setRarity] = useState('common');
   const [loading, setLoading] = useState(false);
+  const [coverIndex, setCoverIndex] = useState(0);
 
   // Item-level return policy overrides
   const [returnPolicyOverride, setReturnPolicyOverride] = useState<string>('use_default');
@@ -56,8 +55,40 @@ const [showConfetti, setShowConfetti] = useState(false);
 
   const { goatTrigger, lastBidAmount, triggerGoat } = useGoatBid();
 
-  // Image validation for first image
-  // Image validation for first image
+  const pickImages = async () => {
+  if (imageUris.length >= 5) {
+    Alert.alert('Maximum Images Reached', 'You can upload up to 5 images.');
+    return;
+  }
+
+  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (status !== 'granted') {
+    Alert.alert('Permission Required', 'Please allow access to your photos.');
+    return;
+  }
+
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    allowsMultipleSelection: true,
+    quality: 1,
+  });
+
+  if (!result.canceled) {
+    const newUris = result.assets.map(
+      (a: ImagePicker.ImagePickerAsset) => a.uri
+    );
+
+    const remaining = 5 - imageUris.length;
+    const toAdd = newUris.slice(0, remaining);
+
+    setImageUris(prev => [...prev, ...toAdd]);
+
+    if (newUris.length > remaining) {
+      Alert.alert('Limit Reached', `Only ${remaining} image(s) were added.`);
+    }
+  }
+};
+  //  validation for first image
   const imageValidation = useImageValidation(imageUris.length > 0 ? imageUris[0] : null);
 
   useEffect(() => {
@@ -68,7 +99,7 @@ const [showConfetti, setShowConfetti] = useState(false);
         duration: 2000, // 2 seconds - slow and dramatic
         useNativeDriver: true,
       }).start(() => {
-        // After fade-in completes, start pulsing animation
+        // After fade-in stops, start pulsing animation
         Animated.loop(
           Animated.sequence([
             Animated.timing(headerScale, {
@@ -87,7 +118,7 @@ const [showConfetti, setShowConfetti] = useState(false);
     }, 500); // 500ms delay - let screen render fully first
 
     if (editItemId) {
-      loadItemForEdit();
+     void loadItemForEdit();
     }
   }, [editItemId]);
 
@@ -109,7 +140,7 @@ const [showConfetti, setShowConfetti] = useState(false);
           router.back();
           return;
         }
-console.log("🐐 FULL ITEM:", item);
+        console.log("🐐 FULL ITEM:", item);
 
         setName(item.name || '');
         setDescription(item.description || '');
@@ -128,12 +159,8 @@ console.log("🐐 FULL ITEM:", item);
         setGender(item.gender || 'unisex');
         setDurationHours(item.duration_hours?.toString() || '24');
 
-        // Load existing images
-        const existingImages = [item.photo_url];
-        if (item.additional_photos && Array.isArray(item.additional_photos)) {
-          existingImages.push(...item.additional_photos);
-        }
-        setImageUris(existingImages);
+
+
       }
     } catch (error) {
       console.error('Error loading item for edit:', error);
@@ -150,7 +177,6 @@ console.log("🐐 FULL ITEM:", item);
 
   // Refs for each field to enable auto-scroll
   const categorySelectorRef = useRef<View>(null);
-  const imageUploaderRef = useRef<View>(null);
   const nameInputRef = useRef<View>(null);
   const descriptionInputRef = useRef<View>(null);
   const tagsInputRef = useRef<TextInput>(null);
@@ -236,24 +262,26 @@ console.log("🐐 FULL ITEM:", item);
     formData.append('gender', gender);
     formData.append('selling_strategy', 'must_sell');
     formData.append('return_policy_override', returnPolicyOverride);
-
+    const primary = imageUris[coverIndex];
+    const additional = imageUris.filter((_, i) => i !== coverIndex);
     // Main image (first image)
-    formData.append('photo', {
-      uri: imageUris[0],
-      name: 'photo.jpg',
-      type: 'image/jpeg',
-    } as any);
+    // Main image
+   formData.append('photo', {
+   uri: primary,
+   name: 'photo.jpg',
+   type: 'image/jpeg',
+   } as unknown as Blob);
 
-    // Additional images
-    for (let i = 1; i < imageUris.length; i++) {
-      formData.append(`additional_photo_${i - 1}`, {
-        uri: imageUris[i],
-        name: `extra_${i - 1}.jpg`,
-        type: 'image/jpeg',
-      } as any);
-    }
+   // Additional images
+   additional.forEach((uri, i) => {
+   formData.append(`additional_photo_${i}`, {
+    uri,
+    name: `extra_${i}.jpg`,
+    type: 'image/jpeg',
+  } as unknown as Blob);
+});
 
-    try {
+   try {
       let res;
 
       if (editItemId) {
@@ -329,7 +357,7 @@ console.log("🐐 FULL ITEM:", item);
             // 4. Show success alert AFTER confetti
             Alert.alert(
               'Success! 🎉',
-              `Your Must Sell listing ends in ${durationHours} hours! It will be live in 1 hour. Want to preview it?`,
+              `Your Must Sell listing is live now! It ends in ${durationHours} hours. Want to preview it?`,
               [
                 {
                   text: 'Preview Now',
@@ -365,7 +393,7 @@ console.log("🐐 FULL ITEM:", item);
       <Animated.ScrollView
         ref={scrollViewRef}
         style={{ backgroundColor: colors.background }}
-        contentContainerStyle={[styles.container, { paddingBottom: 120, backgroundColor: colors.background }]}
+        contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}
         keyboardShouldPersistTaps="handled"
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -379,7 +407,7 @@ console.log("🐐 FULL ITEM:", item);
               <Ionicons name="arrow-back" size={28} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
             </TouchableOpacity>
             <View>
-              <Text style={[styles.headerTitleText, { color: colors.textPrimary }]}>{editItemId ? 'Edit Must Sell' : 'Must Sell'}</Text>
+              <Text style={[styles.headerTitleText, { color: colors.textPrimary }]}>{editItemId ? 'Edit Must Sell' : 'Must Sell 🔥  '}</Text>
               <Text style={[styles.headerSubtitle, { color: theme === 'dark' ? '#999' : '#718096' }]}>{editItemId ? 'Update your listing details' : 'No reserve - highest bidder wins!'}</Text>
             </View>
           </View>
@@ -399,29 +427,124 @@ console.log("🐐 FULL ITEM:", item);
             />
           </View>
 
-          <View ref={imageUploaderRef}>
-            <ImageUploader
-              maxImages={5}
-              imageUris={imageUris}
-              onImagesChange={(uris) => {
-                setImageUris(uris);
-                if (uris.length > 0) {
-                  triggerGoat(0);
-                }
-                // Scroll to image uploader when images are added
-                if (uris.length > 0) {
-                  setTimeout(() => scrollToField(imageUploaderRef), 100);
-                }
-              }}
-              title="Upload Item Photos"
-              subtitle="Add up to 5 photos"
-            />
-          </View>
 
-          {/* Image Validation Feedback */}
-          {imageUris.length > 0 && (
-            <ImageValidationFeedback validation={imageValidation} />
-          )}
+          {/* ------------------ IMAGE SECTION (Diamond Behavior) ------------------ */}
+
+<Text
+  style={[
+    styles.label,
+    { color: theme === 'dark' ? '#E2E8F0' : '#2D3748' }
+  ]}
+>
+  📸 {imageUris.length}/5️⃣  Photos Uploaded
+</Text>
+
+
+<ScrollView
+  horizontal
+  showsHorizontalScrollIndicator={false}
+  style={{ marginBottom: 16, height: 240 }}
+  contentContainerStyle={{ flexGrow: 1, justifyContent: imageUris.length === 0 ? 'center' : 'flex-start', alignItems: 'center' }}
+>
+  {imageUris.map((uri, index) => (
+    <View key={index} style={styles.imageWrapper}>
+      <Image
+        source={{ uri }}
+        style={styles.image}
+        contentFit="cover"
+      />
+
+      {/* Delete Button */}
+      <TouchableOpacity
+        style={styles.deleteButton}
+        onPress={() => {
+          Alert.alert(
+            'Delete Image',
+            'Are you sure you want to remove this image?',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: () => {
+                  const updated = imageUris.filter((_, i) => i !== index);
+                  setImageUris(updated);
+
+                  // Adjust cover index
+                  if (coverIndex === index) setCoverIndex(0);
+                  else if (coverIndex > index) setCoverIndex(coverIndex - 1);
+                }
+              }
+            ]
+          );
+        }}
+      >
+        <Ionicons name="close-circle" size={24} color="#FF3B30" />
+      </TouchableOpacity>
+
+      {/* Cover Toggle */}
+      <TouchableOpacity
+        style={[
+          styles.coverToggle,
+          coverIndex === index && styles.coverToggleActive,
+        ]}
+        onPress={() => {
+          setCoverIndex(index);
+          Alert.alert('Cover Image Set', `Image ${index + 1} is now your cover.`);
+        }}
+      >
+        <Text style={styles.coverToggleText}>
+          {coverIndex === index ? '✅ Cover Image' : 'Set as Cover'}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  ))}
+
+  {/* Add More Button */}
+  {imageUris.length < 5 && (
+  <View
+    style={[
+     styles.uploadBadgeContainer,
+    {
+      backgroundColor: colors.background,
+      borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0'
+    }
+  ]}
+  >
+    <Pressable onPress={pickImages} style={styles.uploadBadgeWrapper}>
+      <Image
+        source={require('assets/images/upload-your-gallery.png')}
+        style={{ width: 120, height: 120, resizeMode: 'contain' }}
+      />
+    </Pressable>
+  </View>
+)}
+</ScrollView>
+
+{/* Fullscreen Viewer */}
+{imageUris.length > 0 && (
+  <TouchableOpacity
+    style={styles.fullscreenButton}
+    onPress={() =>
+      router.push({
+        pathname: '/FullImageScreen',
+        params: {
+          mediaArray: JSON.stringify(imageUris),
+          index: coverIndex.toString(),
+          title: name || 'Item Photos',
+        },
+      })
+    }
+  >
+    <Text style={styles.fullscreenText}>🔍 View Fullscreen</Text>
+  </TouchableOpacity>
+)}
+
+{/* Validation */}
+{imageUris.length > 0 && (
+  <ImageValidationFeedback validation={imageValidation} />
+)}
+
 
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>⚡ Must Sell Listing</Text>
 
@@ -439,7 +562,7 @@ console.log("🐐 FULL ITEM:", item);
 
           <View ref={descriptionInputRef}>
             <CharacterCounterInput
-              label="Description"
+              label="➡️Description"
               placeholder="Describe your item in detail (condition, materials, size, unique features...)"
               value={description}
               onChangeText={setDescription}
@@ -470,7 +593,7 @@ console.log("🐐 FULL ITEM:", item);
             </Picker>
           </View>
 
-          <Text style={[styles.label, { color: colors.textPrimary }]}>⏰ Listing Duration</Text>
+          <Text style={[styles.label, { color: colors.textPrimary }]}>🏪 Listing Duration</Text>
           <View style={{ backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', borderRadius: 8, borderWidth: 1, borderColor: theme === 'dark' ? '#3C3C3E' : '#DDD' }}>
             <Picker
               selectedValue={durationHours}
@@ -479,13 +602,13 @@ console.log("🐐 FULL ITEM:", item);
               dropdownIconColor={theme === 'dark' ? '#B794F4' : '#6A0DAD'}
               mode="dropdown"
             >
-              <Picker.Item label="24 Hours (Fast Sale)" value="24" />
+              <Picker.Item label="🏪 Hours (Fast Sale)" value="24" />
               <Picker.Item label="48 Hours" value="48" />
               <Picker.Item label="72 Hours (3 Days)" value="72" />
             </Picker>
           </View>
 
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>📦 Item Details</Text>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>📝 Item Details</Text>
           <TextInput
             ref={tagsInputRef}
             placeholder="Tags (comma-separated)"
@@ -518,7 +641,7 @@ console.log("🐐 FULL ITEM:", item);
             </View>
           </View>
 
-          <Text style={[styles.label, { color: colors.textPrimary }]}>Shipping Weight</Text>
+          <Text style={[styles.label, { color: colors.textPrimary }]}>🚚 Shipping Weight</Text>
           <TextInput
             ref={weightInputRef}
             placeholder="Weight (lbs) - for shipping"
@@ -541,7 +664,7 @@ console.log("🐐 FULL ITEM:", item);
                 mode="dropdown"
                 onFocus={() => scrollToField(genderPickerRef)}
               >
-                <Picker.Item label="Unisex / Not Specified" value="unisex" />
+                <Picker.Item label="Unisex 🧑‍🤝‍🧑 Not Specified" value="unisex" />
                 <Picker.Item label="👨 Men's" value="men" />
                 <Picker.Item label="👩 Women's" value="women" />
               </Picker>
@@ -587,6 +710,31 @@ console.log("🐐 FULL ITEM:", item);
             </View>
           )}
 
+        {/* BUTTON ROW */}
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={[styles.cancelButton, {
+              backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC',
+              borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0'
+            }]}
+            onPress={() => {
+              Alert.alert(
+                'Cancel Listing',
+                'Are you sure you want to cancel? Your entered information will be lost.',
+                [
+                  { text: 'Keep Editing', style: 'cancel' },
+                  {
+                    text: 'Yes, Cancel',
+                    style: 'destructive',
+                    onPress: () => router.back()
+                  }
+                ]
+              );
+            }}
+          >
+            <Ionicons name="close-circle" size={20} color={theme === 'dark' ? '#999' : '#718096'} />
+            <Text style={[styles.cancelButtonText, { color: theme === 'dark' ? '#999' : '#718096' }]}>Cancel</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={[styles.submitButton, loading && styles.submitButtonDisabled]}
             onPress={handleSubmit}
@@ -601,6 +749,7 @@ console.log("🐐 FULL ITEM:", item);
               <Text style={styles.submitButtonText}>List Must Sell</Text>
             )}
           </TouchableOpacity>
+        </View>
       </Animated.ScrollView>
       <GlobalFooter />
     </View>
@@ -661,11 +810,12 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   submitButton: {
+    flex: 1,
     backgroundColor: '#FF6B35',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
-    marginVertical: 16,
+    justifyContent: 'center',
     shadowColor: '#000',
     shadowOpacity: 0.2,
     shadowRadius: 4,
@@ -680,6 +830,33 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: '700',
+  },
+  buttonContainer: {
+    marginTop: 24,
+    marginBottom: 40,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+    paddingBottom: 24,
+  },
+  cancelButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F7FAFC',
+    paddingVertical: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+    gap: 6,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#718096',
   },
   categoryInputContainer: {
     position: 'relative',
@@ -769,4 +946,87 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginTop: 8,
   },
+  imageWrapper: {
+  width: 220,
+  height: 220,
+  borderRadius: 16,
+  backgroundColor: '#e0e0e0',
+  marginRight: 12,
+  overflow: 'hidden',
+  position: 'relative',
+},
+image: {
+  width: '100%',
+  height: '100%',
+  borderRadius: 16,
+},
+deleteButton: {
+  position: 'absolute',
+  top: 8,
+  right: 8,
+  backgroundColor: '#ffffffee',
+  borderRadius: 12,
+  padding: 2,
+},
+coverToggle: {
+  position: 'absolute',
+  bottom: 8,
+  left: 8,
+  backgroundColor: '#ffffffcc',
+  paddingVertical: 4,
+  paddingHorizontal: 8,
+  borderRadius: 6,
+},
+coverToggleActive: {
+  backgroundColor: '#0077cc',
+},
+coverToggleText: {
+  fontSize: 12,
+  fontWeight: '600',
+  color: '#2c3e50',
+},
+addMoreImageCard: {
+  width: 220,
+  height: 220,
+  borderRadius: 16,
+  backgroundColor: '#F7FAFC',
+  borderWidth: 2,
+  borderColor: '#6A0DAD',
+  borderStyle: 'dashed',
+  marginRight: 12,
+  justifyContent: 'center',
+  alignItems: 'center',
+},
+addMoreCardText: {
+  fontSize: 16,
+  fontWeight: '600',
+  color: '#6A0DAD',
+  marginTop: 8,
+},
+fullscreenButton: {
+  marginTop: 12,
+  alignSelf: 'center',
+  backgroundColor: '#EDF2F7',
+  paddingVertical: 8,
+  paddingHorizontal: 16,
+  borderRadius: 8,
+},
+fullscreenText: {
+  fontSize: 14,
+  fontWeight: '600',
+  color: '#2D3748',
+},
+uploadBadgeWrapper: {
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+  uploadBadgeContainer: {
+  width: 160,
+  height: 200,
+  borderRadius: 12,
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginRight: 12,
+  borderWidth: 2,
+},
 });

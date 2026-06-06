@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  Button,
   Alert,
   Animated,
   TouchableOpacity,
@@ -27,7 +26,9 @@ import { parseISO, format } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { calculateBuyerTotal, type BuyerTotalBreakdown } from '@/api/revenue';
-// Stripe SDK removed - using backend escrow system instead
+import  {fetchCart}  from '@/app/utils/fetchCart';
+import {useAppDispatch} from "@/app/store/hooks";
+import { usePaymentSheet } from '@stripe/stripe-react-native';
 
 // -------------------------------
 // Safe date formatting
@@ -45,10 +46,11 @@ function safeFormat(dateString?: string, formatStr = 'PPP') {
 }
 
 export default function CheckoutScreen() {
-  console.log('🎯 CheckoutScreen: Component rendering');
+  const dispatch = useAppDispatch();
   const router = useRouter();
   const { theme, colors } = useTheme();
   const { cartItems } = useCartBackend();
+
 
   console.log('🎯 CheckoutScreen: Cart items:', cartItems?.length || 0);
 
@@ -73,12 +75,15 @@ export default function CheckoutScreen() {
   const [savedCardId, setSavedCardId] = useState<string | null>(null);
   const [confirmedOwnItems, setConfirmedOwnItems] = useState<Set<number>>(new Set());
 
+  const { initPaymentSheet, presentPaymentSheet } = usePaymentSheet();
+
   const scrollY = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   const reduxUser = useAppSelector((s) => s.user.profile);
   const { email, username, address: paramAddress, includeInsurance: insuranceParam } = useLocalSearchParams();
+
 
   // -------------------------------
   // Derived values
@@ -160,7 +165,7 @@ export default function CheckoutScreen() {
     setUserProfile(reduxUser);
     setLoading(false);
   } else {
-    loadUser();
+   void loadUser();
   }
 }, [reduxUser]);
 
@@ -247,7 +252,7 @@ export default function CheckoutScreen() {
       }
     };
 
-    fetchCostBreakdowns();
+   void fetchCostBreakdowns();
   }, [cartItems, includeInsurance]);
 
 
@@ -268,7 +273,7 @@ export default function CheckoutScreen() {
   }, [userProfile, email, username]);
 
   // -------------------------------
-  // Checkout handler with Escrow System
+  // Checkout handler with Escrow + Stripe PaymentSheet
   // -------------------------------
   const handlePlaceOrder = async () => {
     if (!streetAddress || !city || !state || !zipCode || !country) {
@@ -288,8 +293,7 @@ export default function CheckoutScreen() {
         return;
       }
 
-      // Process each item in cart with escrow system
-      const orderIds = [];
+      const orderIds: number[] = [];
 
       for (const item of cartItems) {
         const itemId = Number(item.id);
@@ -300,7 +304,7 @@ export default function CheckoutScreen() {
           continue;
         }
 
-        // Create escrow payment - money held until delivery confirmed
+        // Step 1: Create escrow on backend → get clientSecret
         const escrowResponse = await fetch(`${API_BASE_URL}/api/stripe-connect/payment/create-escrow`, {
           method: 'POST',
           headers: {
@@ -309,16 +313,16 @@ export default function CheckoutScreen() {
           },
           body: JSON.stringify({
             item_id: itemId,
-            amount: Math.round(breakdown.total * 100), // Convert to cents
+            amount: Math.round(breakdown.total * 100),
             include_insurance: includeInsurance,
             shipping_address: fullAddress,
-            confirm_buy_own_item: confirmedOwnItems.has(itemId), // Include confirmation if already confirmed
+            confirm_buy_own_item: confirmedOwnItems.has(itemId),
           }),
         });
 
         const escrowResult = await escrowResponse.json();
 
-        // Handle confirmation requirement (seller buying own item)
+        // Handle seller buying their own item
         if (escrowResult.requires_confirmation) {
           setProcessing(false);
           Alert.alert(
@@ -330,9 +334,8 @@ export default function CheckoutScreen() {
                 text: 'Yes, Buy It Back',
                 style: 'destructive',
                 onPress: () => {
-                  // Mark this item as confirmed and retry
                   setConfirmedOwnItems(prev => new Set(prev).add(itemId));
-                  setTimeout(() => handlePlaceOrder(), 100); // Small delay to ensure state update
+                  setTimeout(() => handlePlaceOrder(), 100);
                 },
               },
             ]
@@ -346,13 +349,67 @@ export default function CheckoutScreen() {
           return;
         }
 
-        const { order_id, payment_intent_id, escrow_id } = escrowResult;
-        orderIds.push(order_id);
+        const { clientSecret, order_id } = escrowResult;
 
-        console.log('✅ Escrow payment created:', { order_id, payment_intent_id, escrow_id });
+        // Step 2: Initialize Stripe PaymentSheet with the clientSecret
+        const { error: initError } = await initPaymentSheet({
+          merchantDisplayName: 'BidGoat',
+          paymentIntentClientSecret: clientSecret,
+          returnURL: 'bidgoat://stripe-redirect',
+          defaultBillingDetails: {
+            name: effectiveUser?.username || '',
+            email: effectiveUser?.email || '',
+          },
+          appearance: {
+            colors: {
+              primary: '#6A0DAD',
+            },
+          },
+        });
+
+        if (initError) {
+          // Revert the escrow since we can't present payment
+          await fetch(`${API_BASE_URL}/api/stripe-connect/payment/cancel-escrow`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order_id }),
+          });
+          Alert.alert('Payment Error', initError.message);
+          setProcessing(false);
+          return;
+        }
+
+        // Step 3: Present the PaymentSheet so user can enter card details
+        const { error: presentError } = await presentPaymentSheet();
+
+        if (presentError) {
+          // Attempt to cancel the escrow — but check if payment already succeeded
+          const cancelRes = await fetch(`${API_BASE_URL}/api/stripe-connect/payment/cancel-escrow`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order_id }),
+          });
+
+          if (cancelRes.status === 409) {
+            // Backend says payment already succeeded — treat as successful purchase
+            console.log('⚠️ PaymentSheet returned error but payment already captured, order:', order_id);
+            orderIds.push(order_id);
+            continue;
+          }
+
+          if (presentError.code !== 'Canceled') {
+            Alert.alert('Payment Failed', presentError.message);
+          }
+          setProcessing(false);
+          return;
+        }
+
+        // Payment confirmed for this item
+        orderIds.push(order_id);
+        console.log('✅ Payment confirmed for order:', order_id);
       }
 
-      // All payments successful - held in escrow
+      // All items paid — show celebration
       setShowCelebration(true);
       setTimeout(() => setShowCelebration(false), 3000);
 
@@ -365,17 +422,27 @@ export default function CheckoutScreen() {
             timestamp: new Date().toISOString(),
           };
 
-      // Calculate delivery date based on processing time (7-10 business days)
       const deliveryStart = new Date();
       deliveryStart.setDate(deliveryStart.getDate() + 7);
       const deliveryEnd = new Date();
       deliveryEnd.setDate(deliveryEnd.getDate() + 10);
       const estimatedDelivery = `${format(deliveryStart, 'MMM d')}–${format(deliveryEnd, 'MMM d')}`;
 
-      // Get buyer full name
       const buyerFullName = effectiveUser?.firstname && effectiveUser?.lastname
         ? `${effectiveUser.firstname.trim()} ${effectiveUser.lastname.trim()}`
         : effectiveUser?.username || 'Guest';
+
+      // Clear cart on backend
+      await fetch(`${API_BASE_URL}/api/cart/clear`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      // Refresh Redux cart
+      await fetchCart(dispatch);
 
       router.push({
         pathname: '/order-confirmation',
@@ -389,6 +456,7 @@ export default function CheckoutScreen() {
           orderIds: JSON.stringify(orderIds),
         },
       });
+
     } catch (err) {
       console.error('Checkout error:', err);
       Alert.alert('Error', 'Failed to complete checkout. Please try again.');
@@ -979,10 +1047,10 @@ export default function CheckoutScreen() {
         <View style={[styles.paymentInfoBox, { backgroundColor: colors.surface, borderColor: theme === 'dark' ? '#444' : '#ccc' }]}>
           <Ionicons name="card-outline" size={32} color={colors.textSecondary} />
           <Text style={[styles.paymentInfoText, { color: colors.textPrimary }]}>
-            Payment via Stripe Connect
+            Pay with Card, Apple Pay, or Google Pay
           </Text>
           <Text style={[styles.paymentInfoSubtext, { color: colors.textSecondary }]}>
-            Funds held in escrow until delivery confirmed
+            You&#39;ll be prompted to enter payment details when you tap Place Order. Funds held in escrow until delivery confirmed.
           </Text>
         </View>
 
@@ -1008,6 +1076,14 @@ export default function CheckoutScreen() {
               Place Order · ${formattedTotal}
             </Text>
           )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.cancelOrderButton}
+          onPress={() => router.back()}
+          disabled={processing}
+        >
+          <Text style={styles.cancelOrderButtonText}>Cancel</Text>
         </TouchableOpacity>
       </View>
 </KeyboardAwareScrollView>
@@ -1101,5 +1177,19 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: '700',
+  },
+  cancelOrderButton: {
+    marginTop: 12,
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#CBD5E0',
+  },
+  cancelOrderButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#718096',
   },
 });

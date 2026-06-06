@@ -32,7 +32,8 @@ export type AuctionItem = {
   state?: string | undefined;
   is_premium_seller?: boolean;
   // ...other fields
-};
+
+   };
    current_bid: number;
   category_id: number;
   category: string;
@@ -41,8 +42,10 @@ export type AuctionItem = {
   auction_ends_at: string;
   rarity?: string;
   bidCount: number;
+  bid_count: number;
   quantity_available: number;
   price: number;
+  highest_bid?: number;
   photo_url?: string;
   image_url: string;
   ItemDetails: string;
@@ -71,6 +74,9 @@ material: '',
   is_sold: number | boolean;
   sold_to: string | number;
   status?: string; // 'active', 'sold', 'deleted', 'closed'
+  db_status?: string; // raw DB status: 'review', 'active', 'ended', etc.
+  in_review?: boolean;
+  review_ends_at?: string;
   moderation_status?: string; // 'pending', 'approved', 'rejected', 'flagged'
   is_must_sell?: number | boolean;
   must_sell_duration?: number;

@@ -1,5 +1,4 @@
 import { API_BASE_URL } from '@/config';
-
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
@@ -8,11 +7,8 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
   Alert,
-  Animated,
-  KeyboardAvoidingView,
-  Platform,
+  Animated, Pressable,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,6 +20,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useImageValidation } from '@/hooks/useImageValidation';
 import ImageValidationFeedback from '@/app/components/ImageValidationFeedback';
 import { useTheme } from '@/app/theme/ThemeContext';
+import { Image } from 'expo-image';
+import GlobalFooter from "@/app/components/GlobalFooter";
 
 
 type Props = {
@@ -41,31 +39,36 @@ export default function WatchListingScreen() {
   const params = useLocalSearchParams();
   const { token } = useAuth();
 
-  // Debug: Log all params
-  console.log('🐐 Watch listing params:', params);
-  console.log('🐐 additionalImages param:', params.additionalImages);
+  const isEditMode = !!params.editItemId;
+  const editItemId = params.editItemId as string;
 
   // Parse watchSpecs from URL parameter
   let parsedWatchSpecs: any = {};
   try {
     if (params.watchSpecs && typeof params.watchSpecs === 'string') {
-      parsedWatchSpecs = JSON.parse(decodeURIComponent(params.watchSpecs as string));
-      console.log('📊 Parsed watch specs from params:', parsedWatchSpecs);
+      parsedWatchSpecs = JSON.parse(decodeURIComponent(params.watchSpecs));
     }
   } catch (e) {
     console.error('Failed to parse watchSpecs:', e);
   }
 
-  const [title, setTitle] = useState(`${params.brand} ${params.model}`);
-  const [description, setDescription] = useState<string>('');
+  const [title, setTitle] = useState<string>(
+    isEditMode
+      ? (params.name as string || '')
+      : `${params.brand} ${params.model}`
+  );
+  const [description, setDescription] = useState<string>(
+    isEditMode ? (params.description as string || '') : ''
+  );
   const [imageUris, setImageUris] = useState<string[]>([]);
 
-  // Default starting bid to 60% of appraised value for better auction dynamics
-  const defaultStartingBid = params.price
-    ? (parseFloat(params.price as string) * 0.6).toFixed(0)
-    : '';
+  const defaultStartingBid = isEditMode
+    ? (params.price as string || '')
+    : params.price
+      ? (Number.parseFloat(params.price as string) * 0.6).toFixed(0)
+      : '';
   const [startingBid, setStartingBid] = useState(defaultStartingBid);
-  const [duration, setDuration] = useState('24');
+  const [duration, setDuration] = useState('7');
 
   // Advanced auction options
   const [hasReserve, setHasReserve] = useState(false);
@@ -74,6 +77,7 @@ export default function WatchListingScreen() {
   const [buyItNowPrice, setBuyItNowPrice] = useState('');
   const [isMustSell, setIsMustSell] = useState(false);
   const [durationHours, setDurationHours] = useState(30);
+  const [coverIndex, setCoverIndex] = useState(0);
 
   // Header state
   const [username, setUsername] = useState<string | null>(null);
@@ -87,68 +91,117 @@ export default function WatchListingScreen() {
       const name = await AsyncStorage.getItem('username');
       setUsername(name);
     };
-    loadUsername();
+    void loadUsername();
   }, []);
 
-    // Normalize preview URIs
-const previewUris: string[] =
-  imageUris.length > 0
-    ? imageUris
-    : params.imageUrl
-      ? [params.imageUrl as string]
-      : [];
-
-  const pickImages = async () => {
+const pickImages = async () => {
   const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (status !== 'granted') {
     Alert.alert('Permission required to access photos');
     return;
   }
 
-  const result = await ImagePicker.launchImageLibraryAsync({
-  mediaTypes: ImagePicker.MediaTypeOptions.Images,   // ✅ new API
-  quality: 0.8,
-  allowsMultipleSelection: true,              // ✅ multiple
-  // ❌ drop allowsEditing (conflicts with multiple)
-});
+   const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ['images'],
+    allowsMultipleSelection: true,
+    quality: 1,
+  });
 
 
-  if (!result.canceled && result.assets?.length) {
-    const uris = result.assets.map(asset => asset.uri);
-    setImageUris(prev => [...prev, ...uris]); // ✅ append
+
+
+  if (!result.canceled) {
+    const newUris = result.assets.map(a => a.uri);
+
+    const remaining = 5 - imageUris.length;
+    const toAdd = newUris.slice(0, remaining);
+
+    setImageUris(prev => [...prev, ...toAdd]);
+
+    if (newUris.length > remaining) {
+      Alert.alert('Limit Reached', `Only ${remaining} image(s) were added.`);
+    }
   }
 };
 
 
+
+ useEffect(() => {
+  const existing: string[] = [];
+
+  if (params.imageUrl) existing.push(params.imageUrl as string);
+
+  if (params.additionalImages) {
+    try {
+      const parsed = JSON.parse(params.additionalImages as string);
+      if (Array.isArray(parsed)) existing.push(...parsed);
+    } catch (e) {
+      console.log('Error parsing additionalImages:', e);
+    }
+  }
+
+  setImageUris(existing);
+}, []);
+
   useEffect(() => {
-  console.log('🖼️ Image URI updated:', imageUris);
-}, [imageUris]);
+    if (!isEditMode) return;
+    const rp = params.reservePrice as string;
+    if (rp && rp !== '0' && rp !== '') {
+      setHasReserve(true);
+      setReservePrice(rp);
+    }
+  }, []);
 
 
+
+  const showMustSellConfirmation = () => {
+    const appraisedNum = params.price ? Number.parseFloat(params.price as string) : 0;
+    const startingBidNum = Number.parseFloat(startingBid) || 0;
+    const potentialLoss = appraisedNum - startingBidNum;
+
+    Alert.alert(
+      '🐐 BidGoat Must-Sell Terms',
+      `📋 IMPORTANT REMINDER - Please Read Carefully:\n\n` +
+      `⌚ Appraised Value: $${appraisedNum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n` +
+      `🔥 Duration: ${duration} hours\n` +
+      `⚠️ Potential Loss: $${potentialLoss.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n\n` +
+      `HOW MUST SELL WORKS:\n\n` +
+      `✓ Your watch WILL SELL to the highest bidder when time expires\n` +
+      `✓ NO RESERVE PRICE — Even if only one bid comes in\n` +
+      `✓ NO CANCELLATION — Once listed, you CANNOT cancel\n` +
+      `✓ YOU ARE LEGALLY OBLIGATED to sell at the final price\n` +
+      `✓ If no bids are received, the item sells at $0 to any taker\n\n` +
+      `This creates maximum urgency and attracts bidders, but you accept ALL RISK of selling below appraised value.\n\n` +
+      `Do you accept these terms and want to proceed?`,
+      [
+        { text: 'No, Go Back', style: 'cancel' },
+        { text: 'Yes, I Accept Terms', style: 'destructive', onPress: () => submitListing() },
+      ],
+      { cancelable: true }
+    );
+  };
 
   const handleCreateListing = async () => {
-  if (!title || !description || !startingBid) {
+  if (!title || !description || (!isMustSell && !hasBuyItNow && !startingBid)) {
     Alert.alert('Error', 'Please fill in all required fields');
     return;
   }
 
-  // Validate Must Sell constraints
+  // Validate Must-Sell constraints
   if (isMustSell) {
-  const hours = Number.parseInt(String(durationHours), 24);
-
-
-  if (hours < 24 || hours > 72) {
-    Alert.alert('Error', 'Must Sell duration must be between 24 and 72 days');
-    return;
+    const hours = Number.parseInt(duration, 10);
+    if (hours < 24 || hours > 72) {
+      Alert.alert('Error', 'Must Sell duration must be 24, 48, or 72 hours');
+      return;
+    }
   }
-}
 
 
   // Validate Reserve Price
   if (hasReserve && reservePrice) {
-    const reserve = parseFloat(reservePrice);
-    const starting = parseFloat(startingBid);
-    const appraised = params.price ? parseFloat(params.price as string) : starting;
+    const reserve = Number.parseFloat(reservePrice);
+    const starting = Number.parseFloat(startingBid);
+    const appraised = params.price ? Number.parseFloat(params.price as string) : starting;
 
     if (reserve < starting) {
       Alert.alert('Error', 'Reserve price must be greater than or equal to starting bid');
@@ -163,9 +216,9 @@ const previewUris: string[] =
 
   // Validate Buy It Now Price
   if (hasBuyItNow && buyItNowPrice) {
-    const buyNow = parseFloat(buyItNowPrice);
-    const starting = parseFloat(startingBid);
-    const reserve = hasReserve && reservePrice ? parseFloat(reservePrice) : starting;
+    const buyNow = Number.parseFloat(buyItNowPrice);
+    const starting = Number.parseFloat(startingBid);
+    const reserve = hasReserve && reservePrice ? Number.parseFloat(reservePrice) : starting;
     if (buyNow <= reserve) {
       Alert.alert('Error', 'Buy It Now price must be greater than reserve price (or starting bid if no reserve)');
       return;
@@ -185,126 +238,131 @@ const previewUris: string[] =
     return;
   }
 
-if (previewUris.length === 0) {
-  Alert.alert('Error', 'Please upload a photo of your watch first.');
-  return;
-}
 
-try {
-  const formData = new FormData();
-  formData.append('name', title);
-  formData.append('description', description);
-  formData.append('category', 'watch');
-  formData.append('category_id', '2');
-  formData.append('tags', `watch,${params.brand},${params.model}`);
-  formData.append('rarity', 'collectible');
-  formData.append('duration_hours', duration);
-
-  // 🐐 Watch Specifications JSON - Use parsed specs from URL parameter
-  formData.append('watch_specifications', JSON.stringify(parsedWatchSpecs));
-  console.log('📊 Watch specifications being sent:', parsedWatchSpecs);
-
-  // 🐐 Price - always use starting bid as the price field
-  formData.append('price', parseFloat(startingBid).toString());
-  console.log('price:', parseFloat(startingBid));
-
-  // Advanced auction options
-  if (hasReserve && reservePrice) {
-    formData.append('reserve_price', parseFloat(reservePrice).toString());
-    console.log('reserve_price:', parseFloat(reservePrice));
-  }
-
-  if (hasBuyItNow && buyItNowPrice) {
-    formData.append('buy_it_now', parseFloat(buyItNowPrice).toString());
-    console.log('buy_it_now:', parseFloat(buyItNowPrice));
-  }
 
   if (isMustSell) {
-    formData.append('is_must_sell', '24');
-    console.log('is_must_sell: 24');
+    showMustSellConfirmation();
+    return;
   }
 
-  // Handle the main image file
-  const imageUri = params.imageUrl as string;
-  const filename = imageUri.split('/').pop() || 'watch.jpg';
-  const match = /\.(\w+)$/.exec(filename);
-  const type = match ? `image/${match[1]}` : 'image/jpeg';
-
-  formData.append('photo', {
-    uri: imageUri,
-    name: filename,
-    type: type,
-  } as any);
-  console.log('photo:', imageUri, filename, type);
-
-  // Handle additional images (backend expects keys like "additional_photo_0", "additional_photo_1", etc.)
-  if (params.additionalImages) {
-    try {
-      const additionalImagesArray = JSON.parse(params.additionalImages as string);
-      console.log('Additional images to upload:', additionalImagesArray.length);
-
-      for (let i = 0; i < additionalImagesArray.length; i++) {
-        const addUri = additionalImagesArray[i];
-        const addFilename = addUri.split('/').pop() || `watch_${i + 1}.jpg`;
-        const addMatch = /\.(\w+)$/.exec(addFilename);
-        const addType = addMatch ? `image/${addMatch[1]}` : 'image/jpeg';
-
-        formData.append(`additional_photo_${i}`, {
-          uri: addUri,
-          name: addFilename,
-          type: addType,
-        } as any);
-        console.log(`Additional photo ${i}:`, addUri, addFilename, addType);
-      }
-    } catch (error) {
-      console.error('Error parsing additional images:', error);
-    }
-  }
-
-
-
-    console.log('📤 Uploading watch listing:', {
-      name: title,
-      price: startingBid || buyItNowPrice,
-      buy_it_now: buyItNowPrice,
-      duration,
-    });
-
-    const response = await fetch(`${API_BASE_URL}/create_item`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-      body: formData,
-    });
-
-    const responseData = await response.json();
-    console.log('📥 Server response:', responseData);
-
-    if (response.ok) {
-      let successMessage = '⌚ Watch listed successfully!';
-
-      if (hasReserve && reservePrice) {
-        successMessage += `\n🔒 Reserve price set at $${parseFloat(reservePrice).toLocaleString()}`;
-      }
-      if (hasBuyItNow && buyItNowPrice) {
-        successMessage += `\n⚡ Buy It Now price: $${parseFloat(buyItNowPrice).toLocaleString()}`;
-      }
-      if (isMustSell) {
-        successMessage += `\n🔥 Must Sell mode activated (${duration} days)`;
-      }
-
-      Alert.alert('Success', successMessage, [
-        { text: 'OK', onPress: () => router.push('/(tabs)/MyAuctionScreen') },
-      ]);
-    } else {
-      Alert.alert('Error', responseData.error || 'Failed to create listing');
-    }
-  } catch (error) {
-    console.error('🐐 Listing error:', error);
-    Alert.alert('Error', `Failed to create listing: ${error instanceof Error ? error.message : 'Please try again.'}`);
-  }
+  await submitListing();
 };
 
+  let durationToSend = duration;
 
+
+  if (isMustSell) {
+  if (duration === '1') durationToSend = '24';
+  if (duration === '2') durationToSend = '48';
+  if (duration === '3') durationToSend = '72';
+}
+
+const submitListing = async () => {
+  try {
+    const formData = new FormData();
+    formData.append('name', title);
+    formData.append('description', description);
+    formData.append('category', 'watch');
+    formData.append('category_id', '2');
+    formData.append('tags', `watch,${params.brand},${params.model}`);
+    formData.append('rarity', 'collectible');
+
+    // ✅ Only this — the correct duration
+    formData.append('duration_hours', durationToSend);
+
+      // 🐐 Watch Specifications JSON - Use parsed specs from URL parameter
+      formData.append('watch_specifications', JSON.stringify(parsedWatchSpecs));
+      console.log('📊 Watch specifications being sent:', parsedWatchSpecs);
+
+      // Must Sell has no price; BIN uses the BIN price; auction uses starting bid
+      const priceValue = isMustSell ? '0' : hasBuyItNow ? Number.parseFloat(buyItNowPrice).toString() : Number.parseFloat(startingBid).toString();
+      formData.append('price', priceValue);
+      console.log('price:', priceValue);
+
+      // Advanced auction options
+      if (hasReserve && reservePrice) {
+        formData.append('reserve_price', Number.parseFloat(reservePrice).toString());
+        console.log('reserve_price:', Number.parseFloat(reservePrice));
+      }
+
+      if (hasBuyItNow && buyItNowPrice) {
+        formData.append('buy_it_now', Number.parseFloat(buyItNowPrice).toString());
+        console.log('buy_it_now:', Number.parseFloat(buyItNowPrice));
+      }
+
+      if (isMustSell) {
+        formData.append('is_must_sell', duration);
+        console.log('is_must_sell:', duration);
+        if (params.price) {
+          formData.append('appraised_price', params.price as string);
+        }
+      }
+      const primary = imageUris[coverIndex];
+      const additional = imageUris.filter((_, i) => i !== coverIndex);
+
+      formData.append('photo', {
+      uri: primary,
+      name: 'photo.jpg',
+      type: 'image/jpeg',
+      } as any);
+
+      additional.forEach((uri, i) => {
+      formData.append(`additional_photo_${i}`, {
+       uri,
+       name: `extra_${i}.jpg`,
+       type: 'image/jpeg',
+       } as any);
+       });
+
+      console.log('📤 Uploading watch listing:', {
+        name: title,
+        price: startingBid || buyItNowPrice,
+        buy_it_now: buyItNowPrice,
+        duration,
+      });
+
+      const endpoint = isEditMode
+        ? `${API_BASE_URL}/item/${editItemId}`
+        : `${API_BASE_URL}/create_item`;
+
+      const response = await fetch(endpoint, {
+        method: isEditMode ? 'PUT' : 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      const responseData = await response.json();
+
+      if (response.ok) {
+        const resolvedItemId = isEditMode ? editItemId : responseData.item_id;
+        setTimeout(() => {
+          Alert.alert(
+            'Success! 🎉',
+            isEditMode
+              ? 'Your watch listing has been updated! Want to preview it?'
+              : 'Your watch listing will be live in an hour! Want to preview it?',
+            [
+              {
+                text: 'Preview Now',
+                onPress: () => router.push(`/seller/review-item/${resolvedItemId}`),
+              },
+              {
+                text: 'Later',
+                style: 'cancel',
+                onPress: () => router.push('/(tabs)/MyAuctionScreen'),
+              },
+            ],
+            { cancelable: false }
+          );
+        }, 1000);
+      } else {
+        Alert.alert('Error', responseData.error || (isEditMode ? 'Failed to update listing' : 'Failed to create listing'));
+      }
+    } catch (error) {
+      console.error('🐐 Listing error:', error);
+      Alert.alert('Error', `Failed to ${isEditMode ? 'update' : 'create'} listing: ${error instanceof Error ? error.message : 'Please try again.'}`);
+    }
+  };
 
 
   return (
@@ -312,7 +370,7 @@ try {
       <EnhancedHeader scrollY={scrollY} username={username} onSearch={() => {}} />
       <Animated.ScrollView
         style={[styles.container, { backgroundColor: colors.background }]}
-        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20, paddingBottom: 150, backgroundColor: colors.background }}
+        contentContainerStyle={{ paddingTop: HEADER_MAX_HEIGHT + 20, backgroundColor: colors.background }}
         keyboardShouldPersistTaps="handled"
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -322,15 +380,134 @@ try {
       >
         {/* Page Title with Back Button */}
         <View style={[styles.pageHeader, { backgroundColor: colors.background, borderBottomColor: theme === 'dark' ? '#333' : '#E5E5E5' }]}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+         <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backButton}
+          >
             <Ionicons name="arrow-back" size={28} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
-          <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>List Your Watch</Text>
+          <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>{isEditMode ? 'Edit Watch Listing' : 'List Your Watch'}</Text>
         </View>
+
+        {/* ------------------ IMAGE SECTION (Diamond Behavior) ------------------ */}
+
+<Text
+  style={[
+    styles.label,
+    { color: theme === 'dark' ? '#E2E8F0' : '#2D3748' }
+  ]}
+>
+  📸 {imageUris.length}/5️⃣  Photos Uploaded
+</Text>
+
+
+<ScrollView
+  horizontal
+  showsHorizontalScrollIndicator={false}
+  style={{ marginBottom: 16, height: 240 }}
+>
+  {imageUris.map((uri, index) => (
+    <View key={index} style={styles.imageWrapper}>
+      <Image
+        source={{ uri }}
+        style={styles.image}
+        contentFit="cover"
+      />
+
+      {/* Delete Button */}
+      <TouchableOpacity
+        style={styles.deleteButton}
+        onPress={() => {
+          Alert.alert(
+            'Delete Image',
+            'Are you sure you want to remove this image?',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: () => {
+                  const updated = imageUris.filter((_, i) => i !== index);
+                  setImageUris(updated);
+
+                  if (coverIndex === index) setCoverIndex(0);
+                  else if (coverIndex > index) setCoverIndex(coverIndex - 1);
+                }
+              }
+            ]
+          );
+        }}
+      >
+        <Ionicons name="close-circle" size={24} color="#FF3B30" />
+      </TouchableOpacity>
+
+      {/* Cover Toggle */}
+      <TouchableOpacity
+        style={[
+          styles.coverToggle,
+          coverIndex === index && styles.coverToggleActive,
+        ]}
+        onPress={() => {
+          setCoverIndex(index);
+          Alert.alert('Cover Image Set', `Image ${index + 1} is now your cover.`);
+        }}
+      >
+        <Text style={styles.coverToggleText}>
+          {coverIndex === index ? '✅ Cover Image' : 'Set as Cover'}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  ))}
+
+  {/* Add More Button */}
+  {imageUris.length < 5 && (
+  <View
+    style={[
+     styles.uploadBadgeContainer,
+    {
+      backgroundColor: colors.background,
+      borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0'
+    }
+  ]}
+  >
+    <Pressable onPress={pickImages} style={styles.uploadBadgeWrapper}>
+      <Image
+        source={require('assets/images/upload-your-gallery.png')}
+        style={{ width: 120, height: 120, resizeMode: 'contain' }}
+      />
+    </Pressable>
+  </View>
+)}
+</ScrollView>
+
+{/* Fullscreen Viewer */}
+{imageUris.length > 0 && (
+  <TouchableOpacity
+    style={styles.fullscreenButton}
+    onPress={() =>
+      router.push({
+        pathname: '/FullImageScreen',
+        params: {
+          mediaArray: JSON.stringify(imageUris),
+          index: coverIndex.toString(),
+          title: params.title || 'Watch Photos',
+        },
+      })
+    }
+  >
+    <Text style={styles.fullscreenText}>🔍 View Fullscreen</Text>
+  </TouchableOpacity>
+)}
+
+{/* Validation */}
+{imageUris.length > 0 && (
+  <ImageValidationFeedback validation={imageValidation} />
+)}
+
 
       {/* Watch Preview Card */}
       <View style={[styles.previewCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff' }]}>
-        <Text style={[styles.previewTitle, { color: colors.textPrimary }]}>⌚ Your Watch Preview</Text>
+        <Text style={[styles.previewTitle, { color: colors.textPrimary }]}> Your Watch Preview</Text>
         <View style={styles.watchInfo}>
           <Text style={[styles.watchBrand, { color: colors.textPrimary }]}>{params.brand} {params.model}</Text>
           <Text style={styles.watchPrice}>💰 Estimated: ${params.price}</Text>
@@ -341,28 +518,7 @@ try {
 
         </View>
 
-     <View style={styles.imageRow}>
-  {previewUris.length > 0 ? (
-    previewUris.map((uri: string, idx: number) => (
-      <Image
-        key={idx}
-        source={{ uri }}
-        style={{ width: 200, height: 200, borderRadius: 12, marginRight: 8 }}
-      />
-    ))
-  ) : (
-    <View style={styles.placeholderImage}>
-      <Text>No images selected</Text>
-    </View>
-  )}
-</View>
 
-        <TouchableOpacity style={styles.uploadButton} onPress={pickImages}>
-          <Ionicons name="camera" size={20} color="#fff" />
-          <Text style={styles.uploadButtonText}>
-            {imageUris ? 'Change Photo' : 'Upload Photo'}
-          </Text>
-        </TouchableOpacity>
 
         {/* Image Validation Feedback */}
         {imageUris.length > 0 && (
@@ -378,7 +534,7 @@ try {
           onChangeText={setTitle}
           minLength={CHARACTER_LIMITS.NAME_MIN}
           maxLength={CHARACTER_LIMITS.NAME_MAX}
-          helpText="Give your watch a clear, descriptive title"
+          helpText=" 🧾 Give your watch a clear, descriptive title"
         />
 
         <CharacterCounterInput
@@ -388,51 +544,105 @@ try {
           onChangeText={setDescription}
           minLength={CHARACTER_LIMITS.DESCRIPTION_MIN}
           maxLength={CHARACTER_LIMITS.DESCRIPTION_MAX}
-          helpText="Provide detailed information about condition, authenticity, and features"
+          helpText="📝Provide detailed information about condition, authenticity, and features"
           multiline
           numberOfLines={6}
           style={styles.textArea}
         />
 
 
-        <Text style={[styles.label, { color: colors.textPrimary }]}>Starting Bid ($) *</Text>
-        <TextInput
-          style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: colors.textPrimary, borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
-          value={startingBid}
-          onChangeText={setStartingBid}
-          placeholder="0.00"
-          placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
-          keyboardType="decimal-pad"
-        />
-        <View style={styles.infoBox}>
-          <Ionicons name="information-circle" size={20} color="#6A0DAD" />
-          <Text style={styles.infoText}>
-            This is the minimum opening bid. Set it below appraisal value to attract bidders. You can add a Buy It Now price below for instant purchase.
-          </Text>
-        </View>
-
-        <Text style={[styles.label, { color: colors.textPrimary }]}>Auction Duration (days) *</Text>
-        <View style={styles.durationRow}>
-          {['3','7', '14', '30'].map((days) => (
-            <TouchableOpacity
-              key={days}
-              style={[
-                styles.durationButton,
-                duration === days && styles.durationButtonActive,
-              ]}
-              onPress={() => setDuration(days)}
-            >
-              <Text
-                style={[
-                  styles.durationText,
-                  duration === days && styles.durationTextActive,
-                ]}
-              >
-                {days} days
+        {!isMustSell && !hasBuyItNow && (
+          <>
+            <Text style={[styles.label, { color: colors.textPrimary }]}>🚦 Starting Bid (💲) *</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF', color: colors.textPrimary, borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}
+              value={startingBid}
+              onChangeText={setStartingBid}
+              placeholder="0.00"
+              placeholderTextColor={theme === 'dark' ? '#666' : '#999'}
+              keyboardType="decimal-pad"
+            />
+            <View style={[
+            styles.infoBox,
+             { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F7FAFC' }
+             ]}
+             >
+              <Ionicons
+              name="information-circle"
+              size={20}
+               color={theme === 'dark' ? '#9AE6B4' : '#6A0DAD'}
+               />
+              <Text style={styles.infoText}>
+                This is the minimum opening bid. Set it below appraisal value to attract bidders. You can add a Buy It Now price below for instant purchase.
               </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+            </View>
+          </>
+        )}
+        {isMustSell && (
+     <View
+      style={[
+      styles.infoBox,
+      {
+        backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC',
+        borderColor: theme === 'dark' ? '#3A3A3C' : '#E2E8F0',
+      },
+    ]}
+  >
+    <Ionicons
+      name="flame"
+      size={20}
+      color={theme === 'dark' ? '#FBBF24' : '#D97706'}
+    />
+    <Text
+      style={[
+        styles.infoText,
+        { color: theme === 'dark' ? '#E2E8F0' : '#2D3748' }
+      ]}
+    >
+      🔥 Must Sell 🔥: no starting price — the highest bidder wins at any price.
+    </Text>
+       </View>
+       )}
+
+        <Text style={[styles.label, { color: colors.textPrimary }]}>⏱️ Auction Duration (🗓️) *</Text>
+        <View style={styles.durationRow}>
+  {['3','7','14','30'].map((days) => {
+    const isActive = duration === days;
+
+    return (
+      <TouchableOpacity
+        key={days}
+        style={[
+          styles.durationButton,
+          {
+            backgroundColor: isActive
+              ? (theme === 'dark' ? '#6A0DAD' : '#6A0DAD') // same in both modes
+              : (theme === 'dark' ? '#2C2C2E' : '#F7FAFC'),
+
+            borderColor: isActive
+              ? (theme === 'dark' ? '#A78BFA' : '#6A0DAD')
+              : (theme === 'dark' ? '#3A3A3C' : '#E2E8F0'),
+          },
+        ]}
+        onPress={() => setDuration(days)}
+      >
+        <Text
+          style={[
+            styles.durationText,
+            {
+              color: isActive
+                ? '#FFFFFF'
+                : (theme === 'dark' ? '#E2E8F0' : '#2D3748'),
+            },
+          ]}
+        >
+          {days} days
+        </Text>
+      </TouchableOpacity>
+    );
+  })}
+</View>
+
 
         {/* Advanced Auction Options */}
         <View style={[styles.advancedOptionsContainer, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#fff', borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0' }]}>
@@ -465,25 +675,25 @@ try {
                 <View style={styles.quickSelectRow}>
                   <TouchableOpacity
                     style={styles.quickSelectButton}
-                    onPress={() => setReservePrice((parseFloat(params.price as string) * 0.70).toFixed(0))}
+                    onPress={() => setReservePrice((Number.parseFloat(params.price as string) * 0.7).toFixed(0))}
                   >
                     <Text style={styles.quickSelectText}>70%</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.quickSelectButton}
-                    onPress={() => setReservePrice((parseFloat(params.price as string) * 0.80).toFixed(0))}
+                    onPress={() => setReservePrice((Number.parseFloat(params.price as string) * 0.8).toFixed(0))}
                   >
                     <Text style={styles.quickSelectText}>80%</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.quickSelectButton}
-                    onPress={() => setReservePrice((parseFloat(params.price as string) * 0.90).toFixed(0))}
+                    onPress={() => setReservePrice((Number.parseFloat(params.price as string) * 0.9).toFixed(0))}
                   >
                     <Text style={styles.quickSelectText}>90%</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.quickSelectButton}
-                    onPress={() => setReservePrice((parseFloat(params.price as string) * 0.95).toFixed(0))}
+                    onPress={() => setReservePrice((Number.parseFloat(params.price as string) * 0.95).toFixed(0))}
                   >
                     <Text style={styles.quickSelectText}>95%</Text>
                   </TouchableOpacity>
@@ -512,6 +722,8 @@ try {
                   // When enabling Buy It Now, disable and clear Reserve Price
                   setHasReserve(false);
                   setReservePrice('');
+                  // If no starting bid (pure BIN), reset 3-day duration to 7-day minimum
+                  if (!startingBid && duration === '3') setDuration('7');
                 }
               }
             }}
@@ -522,9 +734,9 @@ try {
               <View style={[styles.checkbox, hasBuyItNow && styles.checkboxActive, isMustSell && styles.checkboxDisabled]}>
                 {hasBuyItNow && <Ionicons name="checkmark" size={18} color="#fff" />}
               </View>
-              <Text style={[styles.optionLabel, { color: isMustSell ? (theme === 'dark' ? '#666' : '#CBD5E0') : colors.textPrimary }]}>Buy It Now Price</Text>
+              <Text style={[styles.optionLabel, { color: isMustSell ? (theme === 'dark' ? '#666' : '#CBD5E0') : colors.textPrimary }]}>💲Buy It Now Price</Text>
             </View>
-            <Ionicons name="flash" size={20} color={isMustSell ? "#CBD5E0" : "#FF6B35"} />
+            <Ionicons name="flash" size={20} color={isMustSell ? "#CBD5E0" : "#e53e3e"} />
           </TouchableOpacity>
           {hasBuyItNow && !isMustSell && (
             <View style={styles.optionInputContainer}>
@@ -560,7 +772,7 @@ try {
                 setBuyItNowPrice('');
                 setDuration('48'); // Default to 48 hours
               } else {
-                setDuration('24'); // Reset to 7 days when disabling
+                setDuration('7'); // Reset to 7 days when disabling Must Sell
               }
             }}
             activeOpacity={0.7}
@@ -569,74 +781,181 @@ try {
               <View style={[styles.checkbox, isMustSell && styles.checkboxActive]}>
                 {isMustSell && <Ionicons name="checkmark" size={18} color="#fff" />}
               </View>
-              <Text style={[styles.optionLabel, { color: colors.textPrimary }]}>Must Sell Mode 🔥</Text>
+              <Text style={[styles.optionLabel, { color: colors.textPrimary }]}>🔥 Must Sell Mode </Text>
             </View>
             <Ionicons name="flame" size={20} color="#D97706" />
           </TouchableOpacity>
-          {isMustSell && (
-            <View style={styles.optionInputContainer}>
+         {isMustSell && (
+          <View
+         style={[
+      styles.optionInputContainer,
+      {
+        backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F7FAFC',
+        borderColor: theme === 'dark' ? '#3A3A3C' : '#E2E8F0',
+        borderWidth: 1,
+        borderRadius: 8,
+        padding: 12,
+      },
+    ]}
+  >
+
               <Text style={[styles.optionHelpText, { color: theme === 'dark' ? '#999' : '#718096' }]}>Item MUST sell to highest bidder (no reserve, 24-72 hours only)</Text>
               <View style={styles.mustSellDurationRow}>
-                {[{label: '24h', hours: '24'}, {label: '48h', hours: '48'}, {label: '72h', hours: '72'}].map((option) => (
-                  <TouchableOpacity
-                    key={option.hours}
-                    style={[
-                      styles.mustSellDurationButton,
-                      duration === option.hours && styles.mustSellDurationButtonActive,
-                    ]}
-                    onPress={() => setDuration(option.hours)}
-                  >
-                    <Text style={[
-                      styles.mustSellDurationText,
-                      duration === option.hours && styles.mustSellDurationTextActive,
-                    ]}>
-                      {option.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <TouchableOpacity
-                style={styles.cancelMustSellButton}
-                onPress={() => {
-                  setIsMustSell(false);
-                  setDuration('24');
-                }}
-              >
-                <Text style={styles.cancelMustSellText}>Cancel Must Sell</Text>
-              </TouchableOpacity>
+  {[{ label: '24h', hours: '24' }, { label: '48h', hours: '48' }, { label: '72h', hours: '72' }].map((option) => {
+    const isActive = duration === option.hours;
+
+    return (
+      <TouchableOpacity
+        key={option.hours}
+        style={[
+          styles.mustSellDurationButton,
+          {
+            backgroundColor: isActive
+              ? '#6A0DAD'
+              : theme === 'dark'
+                ? '#2C2C2E'
+                : '#F7FAFC',
+
+            borderColor: isActive
+              ? '#A78BFA'
+              : theme === 'dark'
+                ? '#3A3A3C'
+                : '#E2E8F0',
+          },
+        ]}
+        onPress={() => setDuration(option.hours)}
+      >
+        <Text
+          style={[
+            styles.mustSellDurationText,
+            {
+              color: isActive
+                ? '#FFFFFF'
+                : theme === 'dark'
+                  ? '#E2E8F0'
+                  : '#2D3748',
+            },
+          ]}
+        >
+          {option.label}
+        </Text>
+      </TouchableOpacity>
+    );
+  })}
+</View>
+
+             <TouchableOpacity
+  style={[
+    styles.cancelMustSellButton,
+    {
+      backgroundColor: theme === 'dark' ? '#3A3A3C' : '#EDF2F7',
+      borderColor: theme === 'dark' ? '#4A4A4C' : '#CBD5E0',
+      borderWidth: 1,
+    },
+  ]}
+  onPress={() => {
+    setIsMustSell(false);
+    setDuration('7');
+  }}
+>
+  <Text
+    style={[
+      styles.cancelMustSellText,
+      { color: theme === 'dark' ? '#E2E8F0' : '#2D3748' },
+    ]}
+  >
+    Cancel Must Sell
+  </Text>
+</TouchableOpacity>
+
             </View>
           )}
         </View>
 
-        <View style={styles.infoBox}>
-          <Ionicons name="information-circle" size={20} color="#FF6B35" />
-          <Text style={styles.infoText}>
-            Estimated value: ${params.price}
-          </Text>
+        <View
+  style={[
+    styles.infoBox,
+    {
+      backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F7FAFC',
+      borderColor: theme === 'dark' ? '#3A3A3C' : '#E2E8F0',
+      borderWidth: 1,
+    },
+  ]}
+>
+  <Ionicons
+    name="information-circle"
+    size={20}
+    color={theme === 'dark' ? '#FBBF24' : '#FF6B35'}
+  />
+  <Text
+    style={[
+      styles.infoText,
+      { color: theme === 'dark' ? '#E2E8F0' : '#2D3748' },
+    ]}
+  >
+    Estimated value: ${params.price}
+  </Text>
+</View>
+
+
+        <View
+  style={[
+    styles.infoBox,
+    {
+      backgroundColor: theme === 'dark' ? '#1C1C1E' : '#F7FAFC',
+      borderColor: theme === 'dark' ? '#3A3A3C' : '#E2E8F0',
+      borderWidth: 1,
+    },
+  ]}
+>
+  <Ionicons
+    name="cash"
+    size={20}
+    color={theme === 'dark' ? '#4ADE80' : '#38A169'}
+  />
+  <Text
+    style={[
+      styles.infoText,
+      { color: theme === 'dark' ? '#E2E8F0' : '#2D3748' },
+    ]}
+  >
+    You will receive <Text style={{ fontWeight: '700' }}>89%</Text> after BidGoat fees (8% commission + 3% processing)
+  </Text>
+</View>
+
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={[styles.cancelButton, {
+              backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC',
+              borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0',
+            }]}
+            onPress={() => {
+              Alert.alert(
+                'Cancel Listing',
+                'Are you sure you want to cancel? Your entered information will be lost.',
+                [
+                  { text: 'Keep Editing', style: 'cancel' },
+                  { text: 'Yes, Cancel', style: 'destructive', onPress: () => router.back() }
+                ]
+              );
+            }}
+          >
+            <Ionicons name="close-circle" size={20} color={theme === 'dark' ? '#999' : '#718096'} />
+            <Text style={[styles.cancelButtonText, { color: theme === 'dark' ? '#999' : '#718096' }]}>Cancel</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.submitButton}
+            onPress={handleCreateListing}
+          >
+            <Text style={styles.submitButtonText}>{isEditMode ? '✏️ Update Watch' : '⌚ List Watch'}</Text>
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.infoBox}>
-          <Ionicons name="cash" size={20} color="#38a169" />
-          <Text style={styles.infoText}>
-            You will receive 89% after BidGoat fees (8% commission + 3% processing)
-          </Text>
-        </View>
 
-        <TouchableOpacity
-          style={styles.submitButton}
-          onPress={handleCreateListing}
-        >
-          <Text style={styles.submitButtonText}>⌚ List Watch</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.cancelButton}
-          onPress={() => router.back()}
-        >
-          <Text style={styles.cancelButtonText}>Cancel</Text>
-        </TouchableOpacity>
       </View>
     </Animated.ScrollView>
+    <GlobalFooter />
     </View>
   );
 }
@@ -784,7 +1103,6 @@ const styles = StyleSheet.create({
    infoBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F7FAFC',
     padding: 12,
     borderRadius: 8,
     marginTop: 16,
@@ -796,39 +1114,46 @@ const styles = StyleSheet.create({
     color: '#4A5568',
   },
   submitButton: {
-    flexDirection: 'row',
-    backgroundColor: '#FF6B35',
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 24,
-    marginBottom: 32,
-    shadowColor: '#FF6B35',
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
-  },
+  flex: 1,
+  backgroundColor: '#FF6B35',
+  paddingVertical: 16,
+  borderRadius: 12,
+  alignItems: 'center',
+  justifyContent: 'center',
+  shadowColor: '#FF6B35',
+  shadowOpacity: 0.3,
+  shadowRadius: 8,
+  shadowOffset: { width: 0, height: 4 },
+  elevation: 4,
+},
+
   submitButtonText: {
     fontSize: 18,
     fontWeight: '700',
     color: '#fff',
   },
   cancelButton: {
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
-    marginBottom: 32,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#fff',
-  },
+  flex: 1,
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  paddingVertical: 16,
+  borderRadius: 12,
+  borderWidth: 2,
+  borderColor: '#E2E8F0',
+  backgroundColor: '#F7FAFC',
+  gap: 6,
+},
+  buttonRow: {
+  flexDirection: 'row',
+  gap: 12,
+  marginTop: 20,
+  paddingBottom: 24,
+},
+
   cancelButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#718096',
   },
   // Advanced Auction Options Styles
@@ -984,4 +1309,131 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#718096',
   },
+  overrideToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F7FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+  },
+  overrideToggleText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2D3748',
+  },
+  overrideSubtext: {
+    fontSize: 13,
+    color: '#718096',
+    marginTop: 4,
+  },
+  overridePanel: {
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  overrideLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#2D3748',
+    marginBottom: 8,
+  },
+  overrideHint: {
+    fontSize: 13,
+    color: '#718096',
+    fontStyle: 'italic',
+    marginTop: 8,
+  },
+  imageWrapper: {
+  width: 220,
+  height: 220,
+  borderRadius: 16,
+  backgroundColor: '#e0e0e0',
+  marginRight: 12,
+  overflow: 'hidden',
+  position: 'relative',
+},
+image: {
+  width: '100%',
+  height: '100%',
+  borderRadius: 16,
+},
+deleteButton: {
+  position: 'absolute',
+  top: 8,
+  right: 8,
+  backgroundColor: '#ffffffee',
+  borderRadius: 12,
+  padding: 2,
+},
+coverToggle: {
+  position: 'absolute',
+  bottom: 8,
+  left: 8,
+  backgroundColor: '#ffffffcc',
+  paddingVertical: 4,
+  paddingHorizontal: 8,
+  borderRadius: 6,
+},
+coverToggleActive: {
+  backgroundColor: '#0077cc',
+},
+coverToggleText: {
+  fontSize: 12,
+  fontWeight: '600',
+  color: '#2c3e50',
+},
+addMoreImageCard: {
+  width: 220,
+  height: 220,
+  borderRadius: 16,
+  backgroundColor: '#F7FAFC',
+  borderWidth: 2,
+  borderColor: '#6A0DAD',
+  borderStyle: 'dashed',
+  marginRight: 12,
+  justifyContent: 'center',
+  alignItems: 'center',
+},
+addMoreCardText: {
+  fontSize: 16,
+  fontWeight: '600',
+  color: '#6A0DAD',
+  marginTop: 8,
+},
+fullscreenButton: {
+  marginTop: 12,
+  alignSelf: 'center',
+  backgroundColor: '#EDF2F7',
+  paddingVertical: 8,
+  paddingHorizontal: 16,
+  borderRadius: 8,
+},
+fullscreenText: {
+  fontSize: 14,
+  fontWeight: '600',
+  color: '#718096',
+},
+  cancelButtonWrapper: {
+  marginTop: 24,
+  marginBottom: 12,
+},
+  uploadBadgeWrapper: {
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+  uploadBadgeContainer: {
+  width: 160,
+  height: 200,
+  borderRadius: 12,
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginRight: 12,
+  borderWidth: 2,
+},
 });

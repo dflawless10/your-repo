@@ -20,6 +20,7 @@ import { Picker } from "@react-native-picker/picker";
 import ImageUploader from '@/components/ImageUploader';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
 import GlobalFooter from "@/app/components/GlobalFooter";
+import {useTheme} from "@/app/theme/ThemeContext";
 
 type EditableItem = {
   id: number;
@@ -37,10 +38,11 @@ const API_URL = API_BASE_URL;
 
 export default function EditItemScreen() {
   const { itemId } = useLocalSearchParams();
-  const router = useRouter();
-  const scrollY = useRef(new Animated.Value(0)).current;
-  const headerOpacity = useRef(new Animated.Value(0)).current;
-  const headerScale = useRef(new Animated.Value(1)).current;
+ const router = useRouter();
+  const { theme, colors } = useTheme();
+  const scrollY = new Animated.Value(0);
+  const headerOpacity = React.useRef(new Animated.Value(0)).current;
+  const headerScale = React.useRef(new Animated.Value(1)).current;
 
   const [item, setItem] = useState<EditableItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,7 +59,7 @@ export default function EditItemScreen() {
         duration: 2000, // 2 seconds - slow and dramatic
         useNativeDriver: true,
       }).start(() => {
-        // After fade-in completes, start pulsing animation
+        // After fade-in completing, start pulsing animation
         Animated.loop(
           Animated.sequence([
             Animated.timing(headerScale, {
@@ -75,8 +77,8 @@ export default function EditItemScreen() {
       });
     }, 500); // 500ms delay - let screen render fully first
 
-    loadCategories();
-    loadItem();
+    void loadCategories();
+   void  loadItem();
   }, [itemId]);
 
   const loadCategories = async () => {
@@ -247,17 +249,25 @@ export default function EditItemScreen() {
         <Stack.Screen options={{ headerShown: false }} />
         <EnhancedHeader scrollY={scrollY} />
 
-        <Animated.View style={[styles.headerTitleContainer, { opacity: headerOpacity, transform: [{ scale: headerScale }] }]}>
-          <View style={styles.titleWithArrow}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backArrow}>
-              <Ionicons name="arrow-back" size={28} color="#6A0DAD" />
-            </TouchableOpacity>
-            <View>
+         <Animated.View style={[styles.headerRow, {
+          opacity: headerOpacity,
+          transform: [{ scale: headerScale }],
+          backgroundColor: colors.background,
+          borderBottomColor: theme === 'dark' ? '#333' : '#E5E5E5'
+        }]}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backButton}
+          >
+            <Ionicons name="arrow-back" size={28} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}></Text>
+          <View>
               <Text style={styles.headerTitleText}>Edit Item</Text>
               <Text style={styles.headerSubtitle}>Update your listing details</Text>
             </View>
-          </View>
         </Animated.View>
+
 
         <Animated.ScrollView
           contentContainerStyle={[styles.container, { paddingBottom: 120 }]}
@@ -375,6 +385,10 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 40,
   },
+   headerRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+},
   headerTitleContainer: {
     position: 'absolute',
     top: HEADER_MAX_HEIGHT + 34,
@@ -395,10 +409,22 @@ const styles = StyleSheet.create({
     marginRight: 12,
     padding: 4,
   },
+   backButton: {
+    marginRight: 8,
+    padding: 4,
+    paddingTop: 20,
+  },
+   headerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#718096',
+    marginRight: 8,
+    paddingTop: 50,
+  },
   headerTitleText: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1A202C',
+    color: '#718096',
     marginBottom: 2,
   },
   headerSubtitle: {
@@ -425,7 +451,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: 16,
     marginBottom: 12,
-    color: '#2d3748',
+    color: '#718096',
   },
   label: {
     fontSize: 16,

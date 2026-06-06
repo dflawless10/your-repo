@@ -44,7 +44,7 @@ export default function AutoBidStatsScreen() {
         duration: 2000, // 2 seconds - slow and dramatic
         useNativeDriver: true,
       }).start(() => {
-        // After fade-in completes, start pulsing animation
+        // After fade-in completing, start pulsing animation
         Animated.loop(
           Animated.sequence([
             Animated.timing(headerScale, {
@@ -229,30 +229,30 @@ export default function AutoBidStatsScreen() {
           <View style={[styles.tipCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
             <View style={styles.tipHeader}>
               <Ionicons name="flash" size={20} color="#FF6B6B" />
-              <Text style={[styles.tipStrategy, { color: colors.textPrimary }]}>Aggressive</Text>
+              <Text style={[styles.tipStrategy, { color: colors.textPrimary }]}>Snipe</Text>
             </View>
             <Text style={[styles.tipText, { color: theme === 'dark' ? '#999' : '#4A5568' }]}>
-              Best for high-demand items. Waits until the last 2 minutes and bids every 30 seconds.
+              Waits silently, then fires every 30 seconds in the final 2 minutes. Best for winning at the last moment.
             </Text>
           </View>
 
           <View style={[styles.tipCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
             <View style={styles.tipHeader}>
               <Ionicons name="pulse" size={20} color="#6A0DAD" />
-              <Text style={[styles.tipStrategy, { color: colors.textPrimary }]}>Moderate</Text>
+              <Text style={[styles.tipStrategy, { color: colors.textPrimary }]}>Active</Text>
             </View>
             <Text style={[styles.tipText, { color: theme === 'dark' ? '#999' : '#4A5568' }]}>
-              Balanced approach. Bids every 5 minutes when outbid. Good for most auctions.
+              Bids throughout the entire auction every 5 minutes when outbid. Great for staying in the lead.
             </Text>
           </View>
 
           <View style={[styles.tipCard, { backgroundColor: theme === 'dark' ? '#1C1C1E' : '#FFF' }]}>
             <View style={styles.tipHeader}>
               <Ionicons name="moon" size={20} color="#4CAF50" />
-              <Text style={[styles.tipStrategy, { color: colors.textPrimary }]}>Passive</Text>
+              <Text style={[styles.tipStrategy, { color: colors.textPrimary }]}>Late</Text>
             </View>
             <Text style={[styles.tipText, { color: theme === 'dark' ? '#999' : '#4A5568' }]}>
-              Low-key strategy. Only bids in the final 30 minutes every 10 minutes.
+              Holds back, then bids every 10 minutes in the final 30 minutes. Stays under the radar.
             </Text>
           </View>
         </View>

@@ -30,9 +30,21 @@ export const getCountdownColor = (countdown: string) => {
   const match = new RegExp(/(\d+)h/).exec(countdown);
   const hoursLeft = match ? Number.parseInt(match[1], 10) : 0;
   return {
-    color: hoursLeft <= 2 ? '#e53e3e' : '#38a169', // red if ≤2h, green otherwise
+    color: hoursLeft <= 2 ? '#E53E3E' : '#38A169',
     fontWeight: '600' as const,
   };
+};
+
+// Standard 3-tier time color: red ≤2h, orange ≤24h, green >24h
+export const getTimeColor = (auctionEndsAt?: string): string => {
+  if (!auctionEndsAt) return '#38A169';
+  const safe = normalizeTimestamp(auctionEndsAt);
+  const ms = new Date(safe).getTime() - Date.now();
+  if (ms <= 0) return '#999999';
+  const hours = ms / 3600000;
+  if (hours <= 2) return '#E53E3E';
+  if (hours <= 24) return '#DD6B20';
+  return '#38A169';
 };
 
 
@@ -80,7 +92,13 @@ const end = new Date(safe);
 
 export function isEndingSoon(targetTime?: string, thresholdHours = 24): boolean {
   if (!targetTime) return false;
-  const ms = new Date(targetTime).getTime() - Date.now();
+
+  const ms = new Date(
+    targetTime.endsWith('Z') || targetTime.includes('+')
+      ? targetTime
+      : targetTime.replace(' ', 'T') + 'Z'
+  ).getTime() - Date.now();
+
   return ms < thresholdHours * 3600000;
 }
 
@@ -132,32 +150,7 @@ export const formatTimeWithSeconds = (iso: string | undefined, now: number): str
   return `${hours}h ${minutes}m ${seconds}s`;
 };
 
-// Format time WITHOUT seconds (cleaner for card displays)
-export const formatTime = (iso: string | undefined, now: number): string => {
-  if (!iso) return "Auction ended";
 
-  const parsed = iso.endsWith('Z') || iso.includes('+')
-    ? new Date(iso)
-    : new Date(iso + 'Z');
-
-  if (isNaN(parsed.getTime())) return "Auction ended";
-
-  const diffMs = parsed.getTime() - now;
-  if (diffMs <= 0) return "Auction ended";
-
-  const days = Math.floor(diffMs / 86400000);
-  const hours = Math.floor((diffMs % 86400000) / 3600000);
-  const minutes = Math.floor((diffMs % 3600000) / 60000);
-
-  // Show days + hours when more than 2 days left
-  if (days >= 2) {
-    return `${days}d ${hours}h`;
-  }
-
-  // Show hours/minutes when less than 48 hours
-  const totalHours = Math.floor(diffMs / 3600000);
-  return `${totalHours}h ${minutes}m`;
-};
 
 /**
  * Format shipping deadline time remaining in human-readable format

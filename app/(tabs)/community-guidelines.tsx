@@ -1,5 +1,5 @@
-import React, { useRef, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Linking, Animated, Platform } from 'react-native';
+import React, {useRef, useEffect, useState} from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Linking, Animated, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import EnhancedHeader from '../components/EnhancedHeader';
@@ -13,6 +13,10 @@ export default function CommunityGuidelinesScreen() {
   const scrollY = new Animated.Value(0);
   const headerOpacity = useRef(new Animated.Value(0)).current;
   const headerScale = useRef(new Animated.Value(1)).current;
+  const [showProhibited, setShowProhibited] = useState(false);
+  const [showDont, setShowDont] = useState(false);
+
+
 
   useEffect(() => {
     // Fade in header title and arrow
@@ -86,64 +90,102 @@ export default function CommunityGuidelinesScreen() {
         </View>
       </View>
 
-      {/* Don't Section */}
-      <View style={[styles.section, { backgroundColor: theme === 'dark' ? '#1C1C1E' : 'white' }]}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionIcon}>❌</Text>
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Don&apos;t:</Text>
-        </View>
+     {/* Don't Section */}
+<View style={[styles.section, { backgroundColor: theme === 'dark' ? '#1C1C1E' : 'white' }]}>
 
-        <View style={styles.guidelinesList}>
-          <GuidelineItem
-            text="Use profanity or offensive language"
-            severity="high"
-          />
-          <GuidelineItem
-            text="Share contact information or external links (email, phone, social media)"
-            severity="high"
-          />
-          <GuidelineItem
-            text="Post misleading photos or descriptions"
-            severity="high"
-          />
-          <GuidelineItem
-            text="List counterfeit, replica, or fake items"
-            severity="high"
-          />
-          <GuidelineItem
-            text="Use stock photos or images from other websites"
-            severity="medium"
-          />
-          <GuidelineItem
-            text="Harass, threaten, or intimidate other users"
-            severity="high"
-          />
-          <GuidelineItem
-            text="Manipulate prices or solicit off-platform payments"
-            severity="high"
-          />
-          <GuidelineItem
-            text="Use high-pressure sales tactics"
-            severity="medium"
-          />
-        </View>
-      </View>
+  {/* Header (tappable) */}
+  <TouchableOpacity
+    style={styles.sectionHeader}
+    onPress={() => setShowDont(!showDont)}
+    activeOpacity={0.7}
+  >
+    <Text style={styles.sectionIcon}>❌</Text>
+    <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Don’t</Text>
+
+    <Ionicons
+      name={showDont ? "chevron-up" : "chevron-down"}
+      size={22}
+      color={colors.textPrimary}
+      style={{ marginLeft: 'auto' }}
+    />
+  </TouchableOpacity>
+
+  {/* Collapsible Content */}
+  {showDont && (
+    <View style={styles.guidelinesList}>
+
+      <GuidelineItem text="Use profanity, hate speech, or offensive language" severity="high" />
+      <GuidelineItem text="Harass, threaten, bully, or intimidate other users" severity="high" />
+      <GuidelineItem text="Share personal contact information (email, phone, social media)" severity="high" />
+      <GuidelineItem text="Post misleading, edited, or deceptive photos" severity="high" />
+      <GuidelineItem text="List counterfeit, replica, or fake items" severity="high" />
+      <GuidelineItem text="Use stock photos or images taken from other websites" severity="medium" />
+      <GuidelineItem text="Manipulate prices or solicit off‑platform payments" severity="high" />
+      <GuidelineItem text="Attempt to complete transactions outside BidGoat" severity="high" />
+      <GuidelineItem text="Spam users with repeated messages or unwanted offers" severity="medium" />
+      <GuidelineItem text="Create multiple accounts to avoid restrictions or boost visibility" severity="high" />
+      <GuidelineItem text="Bid on your own items or coordinate with others to inflate prices" severity="high" />
+      <GuidelineItem text="Pressure buyers or sellers into rushed decisions" severity="medium" />
+      <GuidelineItem text="Misrepresent item condition, materials, or authenticity" severity="high" />
+      <GuidelineItem text="Upload blurry, low‑quality, or intentionally obscured photos" severity="medium" />
+      <GuidelineItem text="Cancel auctions or sales without a valid reason" severity="medium" />
+      <GuidelineItem text="Ship items late or ignore shipping deadlines" severity="medium" />
+      <GuidelineItem text="Ignore buyer questions or support requests" severity="low" />
+      <GuidelineItem text="Use bots, scripts, or automation to manipulate bidding" severity="high" />
+      <GuidelineItem text="Engage in any behavior that harms trust, safety, or fairness" severity="high" />
+
+    </View>
+  )}
+
+</View>
+
+
 
       {/* Prohibited Items */}
-      <View style={[styles.section, { backgroundColor: theme === 'dark' ? '#1C1C1E' : 'white' }]}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionIcon}>🚫</Text>
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Prohibited Items:</Text>
-        </View>
+       <View style={[styles.section, { backgroundColor: theme === 'dark' ? '#1C1C1E' : 'white' }]}>
+        <TouchableOpacity
+            style={styles.sectionHeader}
+            onPress={() => setShowProhibited(!showProhibited)}
+            activeOpacity={0.7}
+  >
+       <Text style={styles.sectionIcon}>🚫</Text>
+       <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Prohibited Items</Text>
 
-        <View style={styles.guidelinesList}>
-          <GuidelineItem text="Counterfeit or replica jewelry" />
-          <GuidelineItem text="Stolen items" />
-          <GuidelineItem text="Items with false authentication claims" />
-          <GuidelineItem text="Blood diamonds or conflict minerals" />
-          <GuidelineItem text="Items that are not jewelry, watches, or diamonds" />
-        </View>
-      </View>
+    <Ionicons
+      name={showProhibited ? "chevron-up" : "chevron-down"}
+      size={22}
+      color={colors.textPrimary}
+      style={{ marginLeft: 'auto' }}
+    />
+       </TouchableOpacity>
+
+         {showProhibited && (
+       <View style={styles.guidelinesList}>
+
+      <GuidelineItem text="Counterfeit, replica, or trademark‑infringing jewelry or watches" />
+      <GuidelineItem text="Stolen items or items without proof of ownership" />
+      <GuidelineItem text="Items with false, forged, or misleading authentication claims" />
+      <GuidelineItem text="Blood diamonds, conflict minerals, or ethically restricted gemstones" />
+      <GuidelineItem text="Hazardous materials (chemicals, flammables, explosives)" />
+      <GuidelineItem text="Weapons, ammunition, pepper spray, tasers, or self‑defense items" />
+      <GuidelineItem text="Adult or explicit content of any kind" />
+      <GuidelineItem text="Human body parts or biological materials" />
+      <GuidelineItem text="Drugs, controlled substances, or drug paraphernalia" />
+      <GuidelineItem text="Alcohol, tobacco, vape products, or related accessories" />
+      <GuidelineItem text="Gift cards, prepaid cards, digital codes, or cryptocurrency" />
+      <GuidelineItem text="Live animals or wildlife‑restricted materials (ivory, tortoiseshell)" />
+      <GuidelineItem text="Medical devices requiring prescriptions" />
+      <GuidelineItem text="Government‑issued documents (IDs, passports, plates, badges)" />
+      <GuidelineItem text="Recalled or unsafe items banned by safety agencies" />
+      <GuidelineItem text="Misleading or fraudulent listings (fake appraisals, misrepresented stones)" />
+      <GuidelineItem text="Services, rentals, or digital goods (NFTs, downloads)" />
+      <GuidelineItem text="Mystery boxes or surprise bags" />
+      <GuidelineItem text="Hateful, violent, or offensive items" />
+      <GuidelineItem text="Items that are not jewelry, watches, diamonds, or accessories" />
+
+    </View>
+  )}
+       </View>
 
       {/* Consequences */}
       <View style={[styles.section, { backgroundColor: theme === 'dark' ? '#1C1C1E' : 'white' }]}>
@@ -206,14 +248,17 @@ export default function CommunityGuidelinesScreen() {
           We use automated systems to check all listings for:
         </Text>
 
-        <View style={styles.guidelinesList}>
-          <GuidelineItem text="Inappropriate language" />
-          <GuidelineItem text="Contact information in text or images" />
-          <GuidelineItem text="Spam patterns" />
-          <GuidelineItem text="Inappropriate images" />
-          <GuidelineItem text="Stock photos or watermarks" />
-          <GuidelineItem text="Counterfeit indicators" />
-        </View>
+       <View style={styles.guidelinesList}>
+  <GuidelineItem text="Profanity, hate speech, or abusive language" />
+  <GuidelineItem text="Contact details in text or images (email, phone, socials)" />
+  <GuidelineItem text="Spam‑like patterns or repeated posting behavior" />
+  <GuidelineItem text="Explicit, unsafe, or inappropriate images" />
+  <GuidelineItem text="Stock photos, watermarks, or AI‑generated images" />
+  <GuidelineItem text="Counterfeit signals or authenticity red flags" />
+  <GuidelineItem text="Misleading descriptions or manipulated photos" />
+  <GuidelineItem text="Attempts to bypass platform rules or filters" />
+</View>
+
 
         <Text style={[styles.bodyText, { color: theme === 'dark' ? '#999' : '#374151' }]}>
           You&apos;ll get instant feedback while creating your listing, so you can fix issues before submitting.
@@ -443,14 +488,17 @@ const styles = StyleSheet.create({
     fontSize: 24,
     marginRight: 10,
   },
+  guidelinesList: {
+  marginTop: 10,
+  paddingLeft: 6,
+  paddingBottom: 10,
+},
   sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: '#1F2937',
   },
-  guidelinesList: {
-    marginLeft: 8,
-  },
+
   guidelineItem: {
     flexDirection: 'row',
     marginBottom: 10,

@@ -17,19 +17,19 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SystemUI from 'expo-system-ui';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
 import { ListedItem } from '@/types/items';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import CarouselPreview from '@/app/onboarding/CarouselPreview';
 
-import Animated from 'react-native-reanimated';
 import {router} from "expo-router";
 import SparkleItemCard from "@/app/components/SparkleItemCard";
-import { useAppDispatch } from 'hooks/reduxHooks';
+import { useAppDispatch, useAppSelector } from 'hooks/reduxHooks';
 import {addToWishlist} from "@/app/wishlistslice";
 import Toast from "react-native-toast-message";
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '@/app/theme/ThemeContext';
 
 const COLUMN_GAP = 12;
+const HORIZONTAL_PADDING = 16;
 
 const goatColors = {
   light: {
@@ -53,14 +53,17 @@ const goatColors = {
 
 export default function HomeScreen() {
   const [username, setUsername] = useState<string | null>(null);
-  const [activeCategory, setActiveCategory] = useState<'Just Listed' | 'Create Auction' | 'Sell Now'>('Just Listed');
+  const [activeCategory, setActiveCategory] = useState<'Just Listed' | 'Must Sell' | 'Create Auction'>('Just Listed');
   const scrollY = useRef(new RNAnimated.Value(0)).current;
   const { theme: appTheme } = useTheme();
   const theme = goatColors[appTheme];
   const [items, setItems] = useState<ListedItem[]>([]);
   const [favoritedItems, setFavoritedItems] = useState<Record<number, boolean>>({});
+  const [refreshKey, setRefreshKey] = useState(0);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const dispatch = useAppDispatch();
+  const cartItemsRedux = useAppSelector((state) => state.cart.items);
+  const cartItemIds = useMemo(() => new Set(cartItemsRedux.map(i => String(i.id))), [cartItemsRedux]);
   const [loading, setLoading] = useState(true);
   const insets = useSafeAreaInsets();
 
@@ -68,10 +71,21 @@ export default function HomeScreen() {
   const { width, height } = useWindowDimensions();
   const isLandscape = useMemo(() => width > height, [width, height]);
   const NUM_COLUMNS = useMemo(() => isLandscape ? 4 : 2, [isLandscape]);
-
+  const ITEM_WIDTH = useMemo(
+    () => (width - HORIZONTAL_PADDING * 2 - COLUMN_GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS,
+    [width, NUM_COLUMNS]
+  );
+  const carouselWidth = useMemo(() => width, [width]);
+  const carouselHeight = useMemo(
+    () => isLandscape ? Math.min(height * 0.7, 280) : 380,
+    [isLandscape, width, height]
+  );
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
 
-  useEffect(() => {
+
+
+
+    useEffect(() => {
     AsyncStorage.getItem('hasSeenWelcome').then((value) => {
       if (!value) {
         setShowWelcomeModal(true);
@@ -90,7 +104,7 @@ export default function HomeScreen() {
         router.push('/landing');
       }
     };
-    checkAuth();
+    void checkAuth();
   }, []);
 
   useEffect(() => {
@@ -107,7 +121,7 @@ export default function HomeScreen() {
 
       const endpoints = {
         'Just Listed': '/api/just-listed',
-        'Sell Now': '/api/sell-now',
+        'Must Sell': '/api/just-listed?strategy=must_sell',
         'Create Auction': '/api/my-auctions',
       } as const;
 
@@ -126,6 +140,7 @@ export default function HomeScreen() {
         name: item.name,
         description: item.description || '',
         price: item.price || 0,
+        buy_it_now: item.buy_it_now || null,
         highest_bid: item.highest_bid || item.highestBid,
         photo_url: item.image || item.photo_url || '',
         bid_count: item.bid_count || item.bidCount,
@@ -150,7 +165,7 @@ export default function HomeScreen() {
 
     setLoading(false);
   })();
-}, [activeCategory]);
+}, [activeCategory, refreshKey]);
 
 
 
@@ -176,7 +191,7 @@ export default function HomeScreen() {
     SystemUI.setBackgroundColorAsync(theme.background);
   }, [theme.background]);
 
-  // Reload favorites from AsyncStorage when the screen comes into focus
+  // Reload favorites and re-fetch items when the screen comes into focus (e.g. after purchase)
   useFocusEffect(
     useCallback(() => {
       const loadFavorites = async () => {
@@ -191,7 +206,8 @@ export default function HomeScreen() {
           console.error('🐐 HomeScreen: Failed to load favorites:', err);
         }
       };
-      loadFavorites();
+      void loadFavorites();
+      setRefreshKey(k => k + 1);
     }, [])
   );
 
@@ -234,7 +250,7 @@ export default function HomeScreen() {
 
     const endpoints = {
       'Just Listed': '/api/just-listed',
-      'Sell Now': '/api/sell-now',
+      'Must Sell': '/api/just-listed?strategy=must_sell',
       'Create Auction': '/api/my-auctions',
     } as const;
 
@@ -263,7 +279,7 @@ export default function HomeScreen() {
   }, [activeCategory, mapApiItemToListedItem]);
 
   useEffect(() => {
-    fetchCategoryItems();
+    void fetchCategoryItems();
   }, [fetchCategoryItems]);
 
   const toggleFavorite = async (id: number) => {
@@ -329,7 +345,7 @@ export default function HomeScreen() {
     <>
       {/* Hidden category buttons - logic kept for CarouselPreview and other screens */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.categorySlider, { display: 'none', height: 0, marginTop: 0, paddingVertical: 0 }]}>
-        {(['Just Listed', 'Create Auction', 'Sell Now'] as const).map(label => {
+        {(['Just Listed', 'Must Sell', 'Create Auction'] as const).map(label => {
           const isActive = activeCategory === label;
           return (
             <TouchableOpacity
@@ -354,11 +370,21 @@ export default function HomeScreen() {
           );
         })}
       </ScrollView>
+
+
+      <View style={{ paddingBottom: 4 }}>
       <View style={styles.carouselHeaderWrap}>
-  <CarouselPreview category={activeCategory} />
-</View>
-    </>
-  );
+        <CarouselPreview
+          category={activeCategory}
+          style={{
+            width: carouselWidth,
+            height: carouselHeight,
+          }}
+        />
+      </View>
+    </View>
+  </>
+);
 
   const handleWishlistTap = async (item: ListedItem) => {
   try {
@@ -389,8 +415,10 @@ export default function HomeScreen() {
 };
 
 
+
+
   return (
-  <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
     {/* 🎉 Welcome Modal */}
     {showWelcomeModal && (
       <Modal transparent animationType="fade">
@@ -434,40 +462,42 @@ export default function HomeScreen() {
     )}
 
     {/*  Main Feed */}
-    <EnhancedHeader
-      scrollY={scrollY}
-      username={username}
-      avatarUrl={avatarUrl ?? undefined}
-      onSearch={(q) => console.log('search', q)}
-    />
 
-    <Animated.FlatList
-      data={items}
-      keyExtractor={(item, index) => `index-${item.id}-${index}`}
-      numColumns={NUM_COLUMNS}
-      key={`grid-${NUM_COLUMNS}`}
-      renderItem={({ item }) => (
-        <SparkleItemCard
-  item={item}
-  isFavorited={favoritedItems[item.id]}
-  toggleFavorite={toggleFavorite}
-  onAddToCart={() => {}}
-  onWishlistTap={handleWishlistTap}
-  showRemoveButton={false}
-  toggleWishlist={() => {}}
-  total_reviews={""}
-  id={""}
-/>
+
+
+   <RNAnimated.FlatList
+  data={items.filter(item => !cartItemIds.has(String(item.id)))}
+  keyExtractor={(item, index) => `index-${item.id}-${index}`}
+  numColumns={NUM_COLUMNS}
+  key={`grid-${NUM_COLUMNS}`}
+  renderItem={({ item }) => (
+
+      <SparkleItemCard
+        item={item}
+        isFavorited={favoritedItems[item.id]}
+        toggleFavorite={toggleFavorite}
+        onAddToCart={() => {}}
+        onWishlistTap={handleWishlistTap}
+        showRemoveButton={false}
+        toggleWishlist={() => {}}
+        total_reviews={""}
+        id={""}
+        itemWidth={ITEM_WIDTH}
+      />
+
+
 
       )}
       contentContainerStyle={[
         styles.cardList,
         {
           paddingTop: HEADER_MAX_HEIGHT,
-          paddingBottom: 80 + insets.bottom + 16
+          paddingBottom: insets.bottom + 60,
+          paddingHorizontal: 16,
         }
       ]}
       columnWrapperStyle={NUM_COLUMNS > 1 ? styles.columnWrapper : undefined}
+
       onScroll={RNAnimated.event(
         [{ nativeEvent: { contentOffset: { y: scrollY } } }],
         { useNativeDriver: false }
@@ -478,6 +508,17 @@ export default function HomeScreen() {
       maxToRenderPerBatch={10}
       windowSize={5}
       initialNumToRender={10}
+      ListFooterComponent={
+        items.length > 0 ? (
+          loading ? (
+            <ActivityIndicator size="large" color="#6A0DAD" style={{ paddingVertical: 12 }} />
+          ) : (
+            <View style={{ alignItems: 'center', paddingVertical: 12 }}>
+              <Text style={{ color: '#999', fontSize: 13, fontWeight: '500' }}>You&#39;ve reached the end 🐐</Text>
+            </View>
+          )
+        ) : null
+      }
       ListEmptyComponent={
         loading ? (
           <ActivityIndicator size="large" color="#FF6B35" style={{ marginTop: 64 }} />
@@ -488,10 +529,17 @@ export default function HomeScreen() {
         )
       }
     />
-  </SafeAreaView>
+
+    <EnhancedHeader
+      scrollY={scrollY}
+      username={username}
+      avatarUrl={avatarUrl}
+    />
+  </View>
 );
 
 }
+
 
 const styles = StyleSheet.create({
   container: {
@@ -569,13 +617,14 @@ const styles = StyleSheet.create({
     fontSize: 13
   },
   carouselHeaderWrap: {
-  width: '100%',
-  alignItems: 'center',
-  justifyContent: 'center',
-  marginTop: -12,
-  marginBottom: -16,
-  paddingHorizontal: 16,
-},
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 0,
+    paddingHorizontal: 0,
+    paddingTop: 8,
+    paddingBottom: 20,
+  },
 
   categoryBar: {
     flexDirection: 'row',
@@ -603,12 +652,14 @@ bidLabel: {
 },
 
   cardList: {
-    padding: 16,
-    paddingTop: 0,
-    paddingBottom: 16,
-  },
+  paddingHorizontal: 16,
+  paddingTop: 0,
+  paddingBottom: 16,
+},
+
   columnWrapper: {
     gap: COLUMN_GAP,
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
+    alignItems: 'stretch',
   },
 });

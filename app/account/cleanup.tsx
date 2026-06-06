@@ -242,7 +242,7 @@ export default function CleanupExpiredScreen() {
         <View style={[styles.infoBox, { backgroundColor: isDark ? '#1a2332' : '#E3F2FD' }]}>
           <Ionicons name="information-circle" size={20} color="#2196F3" />
           <Text style={[styles.infoBoxText, { color: isDark ? '#90CAF9' : '#1565C0' }]}>
-            Use "Resync Search Index" to fix items showing as "undefined" in search results
+            Use &#34;Resync Search Index&#34; to fix items showing as &#34;undefined&#34; in search results
           </Text>
         </View>
 

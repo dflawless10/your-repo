@@ -124,13 +124,14 @@ useEffect(() => {
       if (!token) return;
 
       // Fetch seller's items
-      const itemsResponse = await fetch(`${API_BASE_URL}/api/my-listings`, {
+      const itemsResponse = await fetch(`${API_BASE_URL}/seller/items`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
       if (itemsResponse.ok) {
         const itemsData = await itemsResponse.json();
-        setItems(itemsData.items || []);
+        // /seller/items return a bare array, not { items: [...] }
+        setItems(Array.isArray(itemsData) ? itemsData : (itemsData.items || []));
       }
 
       // Fetch analytics stats

@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView, Alert,
+  ScrollView, Alert, Pressable,
 
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -142,84 +142,110 @@ const DiamondListingCard = ({
 
 
         {imageUris.length > 0 ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageScrollView}>
-           {imageUris.map((uri, index) => (
+  <>
+    {/* Horizontal Image Scroll */}
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.imageScrollView}
+    >
+      {imageUris.map((uri, index) => (
         <View key={index} style={styles.imageWrapper}>
           <Image source={{ uri }} style={styles.image} contentFit="cover" />
 
-          {/* Delete Button */}
+          {/* Delete */}
           <TouchableOpacity
             style={styles.deleteButton}
-            onPress={() => {
-              Alert.alert(
-                'Delete Image',
-                'Are you sure you want to remove this image?',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Delete', style: 'destructive', onPress: () => removeImage(index) }
-                ]
-              );
-            }}
+            onPress={() => removeImage(index)}
           >
             <Ionicons name="close-circle" size={24} color="#FF3B30" />
           </TouchableOpacity>
 
-          {/* Cover Toggle Button */}
+          {/* Cover Toggle */}
           <TouchableOpacity
             style={[
               styles.coverToggle,
               coverIndex === index && styles.coverToggleActive,
             ]}
-            onPress={() => {
-              setCoverIndex(index);
-              Alert.alert('Cover Image Set', `Image ${index + 1} is now your cover.`);
-            }}
+            onPress={() => setCoverIndex(index)}
           >
             <Text style={styles.coverToggleText}>
               {coverIndex === index ? '✅ Cover Image' : 'Set as Cover'}
             </Text>
           </TouchableOpacity>
-      </View>
-     ))}
+        </View>
+      ))}
 
-     {/* Add More Button - Outside the map */}
-     {imageUris.length < 5 && (
-       <TouchableOpacity style={styles.addMoreImageCard} onPress={pickImage}>
-         <Ionicons name="add-circle-outline" size={48} color="#6A0DAD" />
-         <Text style={styles.addMoreCardText}>Add More</Text>
-       </TouchableOpacity>
-     )}
-<TouchableOpacity
-  style={styles.fullscreenButton}
-  onPress={() =>
-    router.push({
-      pathname: '/FullImageScreen',
-      params: {
-        mediaArray: JSON.stringify(imageUris),
-        index: coverIndex.toString(),
-        title: title || `${carat} ${color} ${clarity} ${shape} Diamond`,
+      {/* Upload Badge — only show when under the 5-photo limit */}
+      {imageUris.length < 5 && (
+        <View
+          style={[
+            styles.uploadBadgeContainer,
+            {
+              backgroundColor: colors.background,
+              borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0',
+            },
+          ]}
+        >
+          <Pressable onPress={pickImage} style={styles.uploadBadgeWrapper}>
+            <Image
+              source={require('assets/images/upload-your-gallery.png')}
+              style={{ width: 120, height: 120, resizeMode: 'contain' }}
+            />
+          </Pressable>
+        </View>
+      )}
+    </ScrollView>
+
+    {/* ⭐ FULLSCREEN BUTTON NOW OUTSIDE THE SCROLLVIEW ⭐ */}
+    <TouchableOpacity
+      style={styles.fullscreenButton}
+      onPress={() =>
+        router.push({
+          pathname: '/FullImageScreen',
+          params: {
+            mediaArray: JSON.stringify(imageUris),
+            index: coverIndex.toString(),
+            title:
+              title || `${carat} ${color} ${clarity} ${shape} Diamond`,
+          },
+        })
+      }
+    >
+      <Text style={styles.fullscreenText}>🔍 View Fullscreen</Text>
+    </TouchableOpacity>
+  </>
+) : (
+  <View
+    style={[
+      styles.placeholderImage,
+      {
+        backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC',
+        borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0',
       },
-    })
-  }
->
-  <Text style={styles.fullscreenText}>🔍 View Fullscreen</Text>
-</TouchableOpacity>
+    ]}
+  >
+    <Ionicons
+      name="camera-outline"
+      size={60}
+      color={theme === 'dark' ? '#666' : '#CBD5E0'}
+    />
+    <Text
+      style={[
+        styles.placeholderText,
+        { color: theme === 'dark' ? '#999' : '#A0AEC0' },
+      ]}
+    >
+      No photo uploaded yet
+    </Text>
+  </View>
+)}
 
-          </ScrollView>
-        ) : (
-          <View style={[styles.placeholderImage, {
-            backgroundColor: theme === 'dark' ? '#2C2C2E' : '#F7FAFC',
-            borderColor: theme === 'dark' ? '#3C3C3E' : '#E2E8F0'
-          }]}>
-            <Ionicons name="camera-outline" size={60} color={theme === 'dark' ? '#666' : '#CBD5E0'} />
-            <Text style={[styles.placeholderText, { color: theme === 'dark' ? '#999' : '#A0AEC0' }]}>No photo uploaded yet</Text>
-          </View>
-        )}
        <View style={{ height: 12 }} />
 
         <View style={styles.buttonRow}>
           <TouchableOpacity style={[styles.button, { backgroundColor: theme === 'dark' ? '#0A84FF' : '#0077cc' }]} onPress={pickImage}>
-            <Text style={styles.buttonText}>📷 Upload Photo</Text>
+            <Text style={styles.buttonText}> 📸 Upload Up To 5️⃣  Photos</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.button, { backgroundColor: theme === 'dark' ? '#0A84FF' : '#0077cc' }]} onPress={handleListDiamond}>
             <Text style={styles.buttonText}>📦 List Diamond</Text>
@@ -424,6 +450,19 @@ image: {
     fontWeight: '600',
     textAlign: 'center',
   },
+  uploadBadgeWrapper: {
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+  uploadBadgeContainer: {
+  width: 160,
+  height: 200,
+  borderRadius: 12,
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginRight: 12,
+  borderWidth: 2,
+},
 });
 
 export default DiamondListingCard;

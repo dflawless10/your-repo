@@ -23,10 +23,18 @@ type Props = {
   // All watch specifications
   watchSpecs?: {
     modelNumber?: string;
+    serialNumber?: string;
     yearOfManufacture?: string;
     isNew?: boolean;
-    caseMaterial?: string;
-    bandMaterial?: string;
+    caseMetal?: string;
+    caseMetalFinish?: string;
+    caseGoldKarat?: string;
+    caseBackMaterial?: string;
+    bandMetal?: string;
+    bandGoldColor?: string;
+    bandGoldKarat?: string;
+    bandLeatherType?: string;
+    bandColor?: string;
     movementType?: string;
     rarity?: string;
     waterResistance?: string;

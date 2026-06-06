@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, {useState, useRef, useEffect} from 'react';
 import {
   View,
   Text,
@@ -10,11 +10,13 @@ import {
   ScrollView,
   Platform,
   Dimensions,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { registerUser } from '@/api/auth';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from "expo-haptics";
 
 const { width } = Dimensions.get('window');
 
@@ -27,14 +29,68 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  const goatAnim = useRef(new Animated.Value(0)).current;
+  const stampRotate = useRef(new Animated.Value(0)).current;
+  const stampScale = useRef(new Animated.Value(1)).current;
+
   const router = useRouter();
   const scrollViewRef = useRef<ScrollView>(null);
+
+   // Subtle idle animation for the goat stamp
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.parallel([
+          Animated.timing(stampRotate, {
+            toValue: 1,
+            duration: 3000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(stampScale, {
+            toValue: 1.05,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.parallel([
+          Animated.timing(stampRotate, {
+            toValue: 0,
+            duration: 3000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(stampScale, {
+            toValue: 1,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+        ]),
+      ])
+    ).start();
+  }, []);
+
+  const triggerGoatBounce = () => {
+    Animated.sequence([
+      Animated.timing(goatAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(goatAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
 
   const handleRegister = async () => {
     if (!email || !password || !username || !firstname || !lastname) {
       Alert.alert('Missing Information', 'All fields are required to create your account.');
       return;
     }
+
+     triggerGoatBounce(); // 🐐 Ritual bounce
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -122,12 +178,37 @@ export default function Register() {
           end={{ x: 1, y: 1 }}
           style={styles.header}
         >
-          <Text style={styles.goatEmoji}>🐐</Text>
-          <Text style={styles.title}>Join BidGoat</Text>
+          <Animated.Image
+            source={require('@/assets/goat-stamp.png')}
+            style={[
+              styles.goatStamp,
+              {
+                transform: [
+                  {
+                    scale: Animated.multiply(
+                      stampScale,
+                      goatAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [1, 1.2],
+                      })
+                    ),
+                  },
+                  {
+                    rotate: stampRotate.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: ['-5deg', '5deg'],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          />
+                   <Text style={styles.title}>Welcome Register!</Text>
           <Text style={styles.subtitle}>
-            Start winning with intelligent auction strategies
+            Register to begin your intelligent auction journey
           </Text>
         </LinearGradient>
+
 
         {/* Form Section */}
         <View style={styles.formContainer}>
@@ -282,16 +363,17 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   header: {
-    paddingTop: 60,
-    paddingBottom: 40,
+    paddingTop: 70,
+    paddingBottom: 50,
     paddingHorizontal: 24,
     alignItems: 'center',
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
   },
-  goatEmoji: {
-    fontSize: 64,
-    marginBottom: 12,
+  goatStamp: {
+    width: 100,
+    height: 100,
+    marginBottom: 20,
   },
   title: {
     fontSize: 32,
@@ -307,6 +389,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.95)',
     textAlign: 'center',
     fontWeight: '500',
+    lineHeight: 22,
   },
   formContainer: {
     padding: 24,

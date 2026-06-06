@@ -10,8 +10,7 @@ import {
   RefreshControl,
   Image,
   Modal,
-  Dimensions,
-  TextInput,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -21,21 +20,23 @@ import EnhancedHeader, { HEADER_MAX_HEIGHT } from '../components/EnhancedHeader'
 import { LinearGradient } from 'expo-linear-gradient';
 import GlobalFooter from "@/app/components/GlobalFooter";
 import { useTheme } from '@/app/theme/ThemeContext';
-
-const { width, height } = Dimensions.get('window');
+import {getTimeColor} from "@/utils/time";
 
 interface Auction {
   item_id: number;
+  id: number;
   name: string;
   current_bid: number;
   bid_count: number;
   end_time: string;
+  urgencyColor: string;
   seller_name: string;
   seller_id: number;
-  seller_listing_count: number; // Track if this is one of first 5
+  seller_listing_count: number;
   status: 'active' | 'ending_soon' | 'ended';
+  auction_status: string; // 'review' | 'active' | 'ended' | 'sold'
   photo_url?: string;
-  images?: string[]; // All listing images
+  images?: string[];
   created_at?: string;
 }
 
@@ -53,6 +54,7 @@ export default function AuctionManagementScreen() {
   const { theme, colors } = useTheme();
   const isDark = theme === 'dark';
   const scrollY = new Animated.Value(0);
+  const { width, height } = useWindowDimensions();
 
   const [auctions, setAuctions] = useState<Auction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,8 +73,8 @@ export default function AuctionManagementScreen() {
   const [violationHistory, setViolationHistory] = useState<ViolationRecord[]>([]);
 
   useEffect(() => {
-    loadAuctions();
-    loadViolationHistory();
+   void loadAuctions();
+   void loadViolationHistory();
   }, []);
 
   const loadAuctions = async () => {
@@ -112,8 +114,8 @@ export default function AuctionManagementScreen() {
 
   const handleRefresh = () => {
     setRefreshing(true);
-    loadAuctions();
-    loadViolationHistory();
+   void loadAuctions();
+   void loadViolationHistory();
   };
 
   // 🖼️ Open Image Review Modal
@@ -196,7 +198,7 @@ export default function AuctionManagementScreen() {
 
       const itemData = await itemResponse.json();
 
-      // Save to violations table with full snapshot
+      // Save to violation table with full snapshot
       const response = await fetch(`${API_BASE_URL}/api/admin/violations/save`, {
         method: 'POST',
         headers: {
@@ -224,6 +226,40 @@ export default function AuctionManagementScreen() {
     }
   };
 
+  const handleApproveReview = (auction: Auction) => {
+    Alert.alert(
+      'Approve Listing',
+      `Approve "${auction.name}" and publish it live now?\n\nThis counts toward ${auction.seller_name}'s probation progress.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Approve & Go Live',
+          onPress: async () => {
+            try {
+              const token = await AsyncStorage.getItem('jwtToken');
+              const response = await fetch(
+                `${API_BASE_URL}/api/admin/review-items/${auction.item_id}/approve`,
+                {
+                  method: 'POST',
+                  headers: { Authorization: `Bearer ${token}` },
+                }
+              );
+              if (response.ok) {
+                Alert.alert('✅ Approved', `"${auction.name}" is now live.`);
+                await loadAuctions();
+              } else {
+                const data = await response.json().catch(() => ({}));
+                Alert.alert('Error', data.error || 'Failed to approve listing');
+              }
+            } catch (error) {
+              Alert.alert('Error', 'Failed to approve listing');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleEndAuction = (itemId: number) => {
     Alert.alert(
       'End Auction Early',
@@ -242,8 +278,11 @@ export default function AuctionManagementScreen() {
               });
 
               if (response.ok) {
-                Alert.alert('Success', 'Auction ended');
+                Alert.alert('Success', 'Auction ended successfully');
                 await loadAuctions();
+              } else {
+                const data = await response.json().catch(() => ({}));
+                Alert.alert('Error', data.error || `Server error (${response.status})`);
               }
             } catch (error) {
               console.error('Failed to end auction:', error);
@@ -256,12 +295,14 @@ export default function AuctionManagementScreen() {
   };
 
   const renderAuction = (auction: Auction) => {
+    const isInReview = auction.auction_status === 'review';
     const timeLeft = Math.max(0, new Date(auction.end_time).getTime() - Date.now());
     const daysLeft = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
     const hoursLeft = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
     const minutesLeft = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
 
     const isEndingSoon = timeLeft < 24 * 60 * 60 * 1000 && timeLeft > 0;
+    const isCritical = timeLeft < 60 * 60 * 1000 && timeLeft > 0;
     const hasEnded = timeLeft === 0;
     const isNewUser = auction.seller_listing_count <= 5;
 
@@ -272,14 +313,25 @@ export default function AuctionManagementScreen() {
       return `${minutesLeft}m left`;
     };
 
+
+
+
     return (
       <View key={auction.item_id} style={[styles.card, { backgroundColor: colors.surface, borderColor: isDark ? '#333' : '#E0E0E0' }]}>
+        {/* UNDER REVIEW BANNER */}
+        {isInReview && (
+          <View style={styles.reviewBanner}>
+            <Ionicons name="shield-checkmark-outline" size={16} color="#FFF" />
+            <Text style={styles.newUserText}>UNDER REVIEW — Not yet live</Text>
+          </View>
+        )}
+
         {/* NEW USER BADGE */}
         {isNewUser && (
           <View style={styles.newUserBanner}>
             <MaterialCommunityIcons name="account-alert" size={16} color="#FFF" />
             <Text style={styles.newUserText}>
-              NEW USER - Listing #{auction.seller_listing_count}/5
+              NEW SELLER — {auction.seller_listing_count ?? 0}/5 listings approved
             </Text>
           </View>
         )}
@@ -287,10 +339,16 @@ export default function AuctionManagementScreen() {
         <View style={styles.cardHeader}>
           <View style={styles.cardTitleRow}>
             <Text style={[styles.itemName, { color: colors.textPrimary }]}>{auction.name}</Text>
-            {isEndingSoon && (
+            {isEndingSoon && !isCritical && (
               <View style={styles.urgentBadge}>
                 <Ionicons name="flame" size={12} color="#FFF" />
                 <Text style={styles.urgentBadgeText}>ENDING SOON</Text>
+              </View>
+            )}
+            {isCritical && (
+              <View style={[styles.urgentBadge, { backgroundColor: '#F44336' }]}>
+                <Ionicons name="alarm" size={12} color="#FFF" />
+                <Text style={styles.urgentBadgeText}>CRITICAL</Text>
               </View>
             )}
             {hasEnded && (
@@ -310,15 +368,39 @@ export default function AuctionManagementScreen() {
             />
           )}
 
-          <Text style={styles.currentBid}>${auction.current_bid.toFixed(2)}</Text>
-          <Text style={[styles.bidCount, { color: colors.textSecondary }]}>{auction.bid_count} bids</Text>
+          <View style={styles.priceRow}>
+            <Text style={styles.currentBid}>${auction.current_bid.toFixed(2)}</Text>
+            {auction.bid_count > 0 && (
+              <View style={styles.bidBadge}>
+                <Text style={styles.bidBadgeText}>{auction.bid_count} BIDS</Text>
+              </View>
+            )}
+          </View>
           <Text style={[styles.seller, { color: colors.textSecondary }]}>
             Seller: {auction.seller_name} {isNewUser && '⭐ NEW'}
           </Text>
           <View style={styles.endTime}>
-            <Ionicons name="time-outline" size={14} color={isDark ? '#999' : '#666'} />
-            <Text style={[styles.endTimeText, { color: colors.textSecondary }]}>
-              {' '}Ends {new Date(auction.end_time).toLocaleString()}
+            <Ionicons
+  name="time-outline"
+  size={14}
+  color={auction.urgencyColor}
+/>
+
+<Text
+  style={[
+    styles.endTimeText,
+    {
+      color: auction.urgencyColor,
+      fontWeight:
+        auction.urgencyColor === '#E53E3E' || auction.urgencyColor === '#DD6B20'
+          ? '700'
+          : '400'
+    }
+  ]}
+>
+
+              {isInReview ? ' Under review — ' : ' Ends '}
+              {new Date(auction.end_time).toLocaleDateString()}
               {' '}({getTimeLeftText()})
             </Text>
           </View>
@@ -326,13 +408,24 @@ export default function AuctionManagementScreen() {
 
         {/* ADMIN ACTION BUTTONS */}
         <View style={styles.cardActions}>
+          {/* Approve (review items only) */}
+          {isInReview && (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.approveButton]}
+              onPress={() => handleApproveReview(auction)}
+            >
+              <Ionicons name="checkmark-circle" size={16} color="#22C55E" />
+              <Text style={[styles.actionButtonText, { color: '#22C55E' }]}>Approve</Text>
+            </TouchableOpacity>
+          )}
+
           {/* Review Images */}
           <TouchableOpacity
             style={[styles.actionButton, styles.reviewButton]}
             onPress={() => handleReviewImages(auction)}
           >
             <Ionicons name="images" size={16} color="#9C27B0" />
-            <Text style={[styles.actionButtonText, { color: '#9C27B0' }]}>Review</Text>
+            <Text style={[styles.actionButtonText, { color: '#9C27B0' }]}>Images</Text>
           </TouchableOpacity>
 
           {/* Flag Violation */}
@@ -344,17 +437,19 @@ export default function AuctionManagementScreen() {
             <Text style={[styles.actionButtonText, { color: '#FF6B35' }]}>Flag</Text>
           </TouchableOpacity>
 
-          {/* View Listing */}
-          <TouchableOpacity
-            style={[styles.actionButton, styles.viewButton]}
-            onPress={() => router.push(`/item/${auction.item_id}` as any)}
-          >
-            <Ionicons name="eye" size={16} color="#2196F3" />
-            <Text style={[styles.actionButtonText, { color: '#2196F3' }]}>View</Text>
-          </TouchableOpacity>
+          {/* View Listing — blocked during review */}
+          {!isInReview && (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.viewButton]}
+              onPress={() => router.push(`/item/${auction.item_id}` as any)}
+            >
+              <Ionicons name="eye" size={16} color="#2196F3" />
+              <Text style={[styles.actionButtonText, { color: '#2196F3' }]}>View</Text>
+            </TouchableOpacity>
+          )}
 
           {/* End Early */}
-          {!hasEnded && (
+          {!hasEnded && !isInReview && (
             <TouchableOpacity
               style={[styles.actionButton, styles.endButton]}
               onPress={() => handleEndAuction(auction.item_id)}
@@ -368,7 +463,8 @@ export default function AuctionManagementScreen() {
     );
   };
 
-  const filteredAuctions = auctions.filter(a => {
+  const filteredAuctions = auctions
+  .filter(a => {
     if (filterStatus === 'all') return true;
     if (filterStatus === 'new_users') return a.seller_listing_count <= 5;
     if (filterStatus === 'ending_soon') {
@@ -378,9 +474,15 @@ export default function AuctionManagementScreen() {
     if (filterStatus === 'ended') return new Date(a.end_time).getTime() <= Date.now();
     if (filterStatus === 'active') return new Date(a.end_time).getTime() > Date.now();
     return a.status === filterStatus;
-  });
+  })
+  .map(a => ({
+    ...a,
+    urgencyColor: getTimeColor(a.end_time)   // ← your real platform logic
+  }));
 
-  const newUserCount = auctions.filter(a => a.seller_listing_count <= 5).length;
+
+  const newUserSellers = new Set(auctions.filter(a => a.seller_listing_count <= 5).map(a => a.seller_id));
+  const newUserCount = newUserSellers.size;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -410,7 +512,7 @@ export default function AuctionManagementScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             {[
               { key: 'all', label: 'All' },
-              { key: 'new_users', label: `New Users (${newUserCount})` },
+              { key: 'new_users', label: `New Sellers (${newUserCount})` },
               { key: 'active', label: 'Active' },
               { key: 'ending_soon', label: 'Ending Soon' },
               { key: 'ended', label: 'Ended' },
@@ -446,7 +548,7 @@ export default function AuctionManagementScreen() {
           </View>
           <View style={styles.statsItem}>
             <Text style={styles.statsValue}>{newUserCount}</Text>
-            <Text style={styles.statsLabel}>New Users (≤5)</Text>
+            <Text style={styles.statsLabel}>New Sellers</Text>
           </View>
           <View style={styles.statsItem}>
             <Text style={styles.statsValue}>{violationHistory.length}</Text>
@@ -469,7 +571,7 @@ export default function AuctionManagementScreen() {
       {/* 🖼️ IMAGE REVIEW MODAL */}
       <Modal visible={imageModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={[styles.imageModal, { backgroundColor: isDark ? '#1C1C1E' : '#FFF' }]}>
+          <View style={[styles.imageModal, { backgroundColor: isDark ? '#1C1C1E' : '#FFF', width: width * 0.95, maxHeight: height * 0.85 }]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>📸 Image Review</Text>
               <TouchableOpacity onPress={() => setImageModalVisible(false)}>
@@ -478,6 +580,25 @@ export default function AuctionManagementScreen() {
             </View>
 
             <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>{selectedAuction?.name}</Text>
+{selectedAuction?.photo_url ? (
+  <Image
+    source={{ uri: selectedAuction.photo_url }}
+    style={{
+      width: '100%',
+      height: Math.min(300, height * 0.4),
+      borderRadius: 12,
+      marginTop: 20,
+    }}
+    resizeMode="contain"
+  />
+) : (
+  <View style={{ marginTop: 40, alignItems: 'center' }}>
+    <Ionicons name="image" size={64} color={isDark ? '#555' : '#CCC'} />
+    <Text style={{ color: colors.textSecondary, marginTop: 10 }}>
+      No image available
+    </Text>
+  </View>
+)}
 
 
           </View>
@@ -487,7 +608,7 @@ export default function AuctionManagementScreen() {
       {/* 🚨 COMMUNITY GUIDELINES VIOLATION MODAL */}
       <Modal visible={violationModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={[styles.violationModal, { backgroundColor: isDark ? '#1C1C1E' : '#FFF' }]}>
+          <View style={[styles.violationModal, { backgroundColor: isDark ? '#1C1C1E' : '#FFF', width: width * 0.95, maxHeight: height * 0.85 }]}>
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={styles.modalHeader}>
                 <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>🚨 Flag Violation</Text>
@@ -502,13 +623,18 @@ export default function AuctionManagementScreen() {
               <Text style={[styles.inputLabel, { color: colors.textPrimary }]}>Community Guideline Violation</Text>
               <View style={styles.violationTypes}>
                 {[
-                  { key: 'profanity', label: 'Use profanity or offensive language', severity: 'high' },
-                  { key: 'contact_info', label: 'Share contact information or external links (email, phone, social media)', severity: 'high' },
-                  { key: 'misleading', label: 'Post misleading photos or descriptions', severity: 'high' },
+                  { key: 'prohibited_item', label: 'List prohibited items (weapons, drugs, hazmat, etc.)', severity: 'high' },
                   { key: 'counterfeit', label: 'List counterfeit, replica, or fake items', severity: 'high' },
-                  { key: 'stock_photos', label: 'Use stock photos or images from other websites', severity: 'medium' },
-                  { key: 'harassment', label: 'Harass, threaten, or intimidate other users', severity: 'high' },
+                  { key: 'stolen_item', label: 'List stolen or misappropriated property', severity: 'high' },
+                  { key: 'wildlife_product', label: 'List illegal wildlife products (ivory, protected species, etc.)', severity: 'high' },
+                  { key: 'misleading', label: 'Post misleading photos or descriptions', severity: 'high' },
+                  { key: 'inappropriate_content', label: 'Post explicit, offensive, or hateful content', severity: 'high' },
+                  { key: 'contact_info', label: 'Share contact information or external links', severity: 'high' },
                   { key: 'price_manipulation', label: 'Manipulate prices or solicit off-platform payments', severity: 'high' },
+                  { key: 'profanity', label: 'Use profanity or offensive language', severity: 'high' },
+                  { key: 'harassment', label: 'Harass, threaten, or intimidate other users', severity: 'high' },
+                  { key: 'off_platform', label: 'List items not permitted on BidGoat', severity: 'medium' },
+                  { key: 'stock_photos', label: 'Use stock photos or images from other websites', severity: 'medium' },
                   { key: 'pressure_tactics', label: 'Use high-pressure sales tactics', severity: 'medium' },
                 ].map(({ key, label, severity }) => (
                   <TouchableOpacity
@@ -630,6 +756,16 @@ const styles = StyleSheet.create({
     elevation: 2,
     borderWidth: 1,
   },
+  reviewBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#5C6BC0',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    gap: 8,
+  },
   newUserBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -661,13 +797,21 @@ const styles = StyleSheet.create({
   urgentBadgeText: { fontSize: 9, fontWeight: '800', color: '#FFF', letterSpacing: 0.5 },
   thumbnail: {
     width: '100%',
-    height: 150,
+    aspectRatio: 4 / 3,
     borderRadius: 8,
     marginVertical: 8,
     backgroundColor: '#F5F5F5',
   },
-  currentBid: { fontSize: 20, fontWeight: '700', color: '#4CAF50', marginBottom: 4 },
-  bidCount: { fontSize: 14, color: '#666', marginBottom: 4 },
+  priceRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  currentBid: { fontSize: 20, fontWeight: '700', color: '#6A0DAD' },
+  bidBadge: {
+    backgroundColor: '#FF6B35',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  bidBadgeText: { fontSize: 10, fontWeight: '700', color: '#FFF' },
   seller: { fontSize: 13, color: '#999', marginBottom: 4 },
   endTime: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   endTimeText: { fontSize: 13, color: '#666' },
@@ -682,6 +826,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     gap: 6,
   },
+  approveButton: { backgroundColor: '#F0FDF4' },
   reviewButton: { backgroundColor: '#F3E5F5' },
   flagButton: { backgroundColor: '#FFF3E0' },
   viewButton: { backgroundColor: '#E3F2FD' },
@@ -699,15 +844,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   imageModal: {
-    width: width * 0.95,
-    maxHeight: height * 0.85,
     backgroundColor: '#FFF',
     borderRadius: 20,
     padding: 20,
   },
   violationModal: {
-    width: width * 0.95,
-    maxHeight: height * 0.85,
     backgroundColor: '#FFF',
     borderRadius: 20,
     padding: 20,
@@ -722,7 +863,7 @@ const styles = StyleSheet.create({
   modalSubtitle: { fontSize: 14, fontWeight: '600', color: '#666', marginBottom: 16 },
   imageGallery: { alignItems: 'center' },
   fullImage: {
-    width: width * 0.85,
+    width: '85%',
     height: 400,
     borderRadius: 12,
     backgroundColor: '#F5F5F5',

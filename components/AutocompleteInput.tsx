@@ -249,7 +249,7 @@ export default function AutocompleteInput({ label, value,
 
       {isOpen && (filteredOptions.length > 0 || showAddCustom) && (
         <ScrollView style={themedStyles.dropdown} nestedScrollEnabled>
-          {filteredOptions.slice(0, 6).map((option, index) => (
+          {filteredOptions.map((option, index) => (
             <TouchableOpacity
               key={option.value}
               onPress={() => handleSelect(option)}

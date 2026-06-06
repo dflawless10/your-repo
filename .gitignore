@@ -41,5 +41,35 @@ desktop.ini
 *.tsbuildinfo
 
 app-example
-".expo/" 
-.expo/ 
+".expo/"
+.expo/
+
+# Firebase - contains API keys, never commit
+google-services.json
+GoogleService-Info.plist
+
+# Build artifacts
+*.apk
+*.aab
+
+# SSL certificates
+*.zip
+*.pem
+
+# Backup files
+*.bak
+*.disabled
+*.backup
+
+# Windows command artifacts
+nul
+eas
+Get
+Run
+Task
+Internet
+Compilation
+A
+
+# Logs
+*.log

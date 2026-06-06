@@ -118,18 +118,16 @@ export default function BuyerReviewForm({ seller, orderId }: Readonly<{ seller: 
     try {
       const requestBody: any = {
         seller_id: seller.id,
-        buyer_id: buyerId,
+        order_id: orderId,
         ...review,
       };
 
-      // Include order_id if provided
-      if (orderId) {
-        requestBody.order_id = orderId;
-      }
-
       const response = await fetch(`${API_BASE}/api/reviews`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
         body: JSON.stringify(requestBody),
       });
 

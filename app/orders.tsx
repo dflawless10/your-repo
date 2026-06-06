@@ -23,7 +23,73 @@ import {ReturnOrder, ReturnRequestModal} from '@/app/components/ReturnRequestMod
 import { DisputeModal } from '@/app/components/DisputeModal';
 import { useTheme } from '@/app/theme/ThemeContext';
 import { orders } from '@/types/orders';
+import {initPaymentSheet, presentPaymentSheet} from "@stripe/stripe-react-native";
+import PrePaymentModal, { ShippingTier } from '@/app/components/PrePaymentModal';
 
+
+export type Order = {
+  id: number;
+  buyer_id: number;
+  buyer_name: string;
+  buyer_notes?: string;
+  buyer_email: string
+  payment_intent_id?: string;
+  refund_id?: string;
+  refund_amount?: number;
+  refund_reason?: string;
+  refunded_at?: string;
+  cancelled_at?: string;
+  cancelled_by?: string;
+  cancellation_reason?: string;
+  item_id: number;
+  item_name: string;
+  seller_username: string;
+  seller_id: number;
+  photo_url: string;
+  sale_price: number;
+  shipping_deadline?: string;
+  listing_type?: string;
+  shipping_cost: number;
+  insurance_cost: number;
+  total_amount: number;
+  bidgoat_commission?: number;
+  bidgoat_premium_fee: number;
+  seller: {
+    id: number;
+    name: string;
+    email: string;
+
+  };
+  tracking_number?: string;
+  carrier?: string;
+  status: string;
+  created_at: string;
+  order_date: string;
+  shipped_at?: string;
+  shipping_address: string;
+  shipping_city: string;
+  shipping_state: string;
+  shipping_zip: string;
+  shipping_country: string;
+  order_status: string;
+  payment_status: string;
+  payment_method: string;
+  payment_gateway: string;
+  payment_completed_at: string;
+  delivered_at: string;
+  confirmed_at?: string;
+  archived_at?: string;
+  review_submitted: number;
+  review_submitted_at?: string;
+  urgency_level?: string;
+  urgency_score?: number;
+  premium_shipping: boolean;
+  premium_shipping_hours?: number;
+  premium_shipping_cost?: number;
+  premium_carrier_cost: number;
+  time_remaining?: string;
+  is_late?: boolean;
+};
 const API_URL = `${API_BASE_URL}`;
 
 // Goat bleat sound function
@@ -49,7 +115,7 @@ export default function BuyerOrdersScreen() {
   const { theme, colors } = useTheme();
   const styles = createStyles(theme === 'dark', colors);
   const router = useRouter();
-  const [orders, setOrders] = useState<orders[]>([]);
+  const [order, setOrder] = useState<orders[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
@@ -59,7 +125,11 @@ export default function BuyerOrdersScreen() {
   const headerOpacity = React.useRef(new Animated.Value(0)).current;
   const headerScale = React.useRef(new Animated.Value(1)).current;
   const [selectedOrder, setSelectedOrder] = useState<orders | null>(null);
-
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [includeInsurance, setIncludeInsurance] = useState(false);
+  const [shippingPriority, setShippingPriority] = useState<ShippingTier>('standard');
+  const [showPrePaymentModal, setShowPrePaymentModal] = useState(false);
+  const [pendingOrder, setPendingOrder] = useState<Order | null>(null);
 
 
 
@@ -71,7 +141,7 @@ export default function BuyerOrdersScreen() {
         duration: 2000, // 2 seconds - slow and dramatic
         useNativeDriver: true,
       }).start(() => {
-        // After fade-in completes, start pulsing animation
+        // After fade-in completing, start pulsing animation
         Animated.loop(
           Animated.sequence([
             Animated.timing(headerScale, {
@@ -144,6 +214,116 @@ export default function BuyerOrdersScreen() {
     fetchOrders();
   };
 
+  const handleCompletePurchase = async (order: Order, insurance?: boolean, shipping?: ShippingTier) => {
+  const actualInsurance = insurance ?? includeInsurance;
+  const actualShipping = shipping ?? shippingPriority;
+  try {
+    const token = await AsyncStorage.getItem('jwtToken');
+
+    // 1. Create PaymentIntent WITH insurance + shipping options
+    const res = await fetch(`${API_URL}/api/orders/${order.id}/create-payment-intent`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        include_insurance: actualInsurance,
+        shipping_priority: actualShipping,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      Alert.alert('Error', data.error || 'Failed to start payment');
+      return;
+    }
+
+    const { clientSecret, paymentIntentId } = data;
+
+    // 2. Init Stripe PaymentSheet
+    const { error: initError } = await initPaymentSheet({
+      merchantDisplayName: 'BidGoat',
+      paymentIntentClientSecret: clientSecret,
+      returnURL: 'bidgoat://stripe-redirect',
+    });
+
+    if (initError) {
+      Alert.alert('Error', initError.message);
+      return;
+    }
+
+    // 3. Present PaymentSheet
+    const { error: presentError } = await presentPaymentSheet();
+
+    if (presentError) {
+      if (presentError.code !== 'Canceled') {
+        Alert.alert('Payment Failed', presentError.message);
+      }
+      return;
+    }
+
+    // 4. Confirm payment with backend
+    const confirmRes = await fetch(`${API_URL}/api/orders/${order.id}/pay`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        payment_intent_id: paymentIntentId,
+        include_insurance: actualInsurance,
+        shipping_priority: actualShipping,
+      }),
+    });
+
+    const confirmData = await confirmRes.json();
+
+    if (!confirmRes.ok) {
+      Alert.alert('Error', confirmData.error || 'Payment confirmation failed');
+      return;
+    }
+
+    fetchOrders();
+
+    // Build delivery estimate based on shipping tier
+    const deliveryDays = actualShipping === 'overnight' ? 1 : actualShipping === 'expedited' ? 2 : 7;
+    const deliveryDate = new Date(Date.now() + deliveryDays * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+    router.push({
+      pathname: '/order-confirmation',
+      params: {
+        items: JSON.stringify([{
+          id: order.item_id,
+          name: order.item_name,
+          price: order.sale_price,
+          quantity: 1,
+          photo_url: order.photo_url,
+          seller: order.seller ? {
+            username: order.seller.username || order.seller.name,
+            memberSince: order.seller.memberSince,
+            rating: order.seller.rating ?? 0,
+            reviewCount: order.seller.reviewCount ?? 0,
+            itemsSold: order.seller.itemsSold ?? 0,
+            shippingPolicy: order.seller.shippingPolicy,
+            returnPolicyDays: order.seller.returnPolicyDays ?? 30,
+          } : undefined,
+        }]),
+        total: String(confirmData.total_amount ?? order.total_amount ?? order.sale_price),
+        address: `${order.shipping_address}, ${order.shipping_city}, ${order.shipping_state} ${order.shipping_zip}`,
+        buyerName: order.buyer_name,
+        deliveryDate,
+      },
+    } as any);
+
+  } catch (err) {
+    console.error(err);
+    Alert.alert('Error', 'Something went wrong');
+  }
+};
+
+
   const handleConfirmDelivery = async (orderId: number) => {
     Alert.alert(
       'Confirm Delivery',
@@ -193,8 +373,24 @@ export default function BuyerOrdersScreen() {
                 console.log('🐐 Escrow released:', escrowData);
               }
 
-              Alert.alert('Success!', 'Thank you for confirming delivery. Payment has been released to the seller.');
               fetchOrders(); // Refresh list
+              const reviewOrder = orders.find(o => o.id === orderId);
+              const reviewSellerId = reviewOrder?.seller?.id;
+              Alert.alert(
+                '📦 Delivery Confirmed!',
+                'Payment has been released to the seller. Would you like to leave a review?',
+                [
+                  { text: 'Maybe Later', style: 'cancel' },
+                  {
+                    text: 'Leave a Review',
+                    onPress: () => {
+                      if (reviewSellerId) {
+                        router.push(`/seller/${reviewSellerId}?itemId=${reviewOrder?.item_id ?? ''}&orderId=${orderId}`);
+                      }
+                    },
+                  },
+                ]
+              );
 
             } catch (error) {
               console.error('Confirm delivery error:', error);
@@ -232,6 +428,8 @@ export default function BuyerOrdersScreen() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
+      case 'pending_payment':
+        return '#805AD5';
       case 'pending_shipment':
         return '#F6AD55';
       case 'shipped':
@@ -245,6 +443,8 @@ export default function BuyerOrdersScreen() {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
+      case 'pending_payment':
+        return 'card-outline';
       case 'pending_shipment':
         return 'time-outline';
       case 'shipped':
@@ -258,6 +458,8 @@ export default function BuyerOrdersScreen() {
 
   const getStatusLabel = (status: string, confirmedAt?: string) => {
     switch (status) {
+      case 'pending_payment':
+        return 'Payment Required';
       case 'pending_shipment':
         return 'Awaiting Shipment';
       case 'shipped':
@@ -316,7 +518,7 @@ export default function BuyerOrdersScreen() {
             onPress={() => router.back()}
             style={styles.backButton}
           >
-              <Ionicons name="arrow-back" size={24} color="#6A0DAD"  />
+               <Ionicons name="arrow-back" size={24} color={theme === 'dark' ? '#B794F4' : '#6A0DAD'} />
           </TouchableOpacity>
           <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>My Orders</Text>
         </Animated.View>
@@ -368,6 +570,8 @@ export default function BuyerOrdersScreen() {
                   </View>
                 </View>
 
+
+
                 {/* Status */}
                 <View style={styles.statusContainer}>
                   <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) }]}>
@@ -401,13 +605,6 @@ export default function BuyerOrdersScreen() {
                   <Text style={[styles.priceLabel, { color: theme === 'dark' ? '#999' : '#718096' }]}>Item Price</Text>
                   <Text style={[styles.priceValue, { color: colors.textPrimary }]}>${order.sale_price.toFixed(2)}</Text>
                 </View>
-                {order.bidgoat_commission != null && order.bidgoat_commission > 0 && (
-                  <View style={{ marginTop: -4, marginBottom: 8 }}>
-                    <Text style={[styles.feeInfoLabel, { color: theme === 'dark' ? '#999' : '#718096' }]}>
-                      (incl. BidGoat fee 8%: ${order.bidgoat_commission.toFixed(2)})
-                    </Text>
-                  </View>
-                )}
                 <View style={styles.priceRow}>
                   <Text style={[styles.priceLabel, { color: theme === 'dark' ? '#999' : '#718096' }]}>Shipping</Text>
                   <Text style={[styles.priceValue, { color: colors.textPrimary }]}>${order.shipping_cost.toFixed(2)}</Text>
@@ -436,23 +633,33 @@ export default function BuyerOrdersScreen() {
               </View>
 
               {/* Order Actions */}
-              {order.status === 'shipped' && (
+              {order.payment_status === 'pending' && (
                 <TouchableOpacity
-                  style={styles.confirmDeliveryButton}
-                  onPress={() => {
-                    Alert.alert(
-                      'Confirm Delivery',
-                      'Yes, I received it',
-                      [
-                        { text: 'Cancel', style: 'cancel' },
-                        { text: 'Confirm', onPress: () => handleConfirmDelivery(order.id) }
-                      ]
-                    );
-                  }}
+                  style={styles.completePurchaseButton}
+                  onPress={() => { setPendingOrder(order); setShowPrePaymentModal(true); }}
                 >
-                  <Ionicons name="checkmark-circle" size={18} color="#48BB78" />
-                  <Text style={styles.confirmDeliveryButtonText}>Confirm Delivery</Text>
+                  <Ionicons name="card-outline" size={18} color="#fff" />
+                  <Text style={styles.completePurchaseButtonText}>Complete Purchase</Text>
                 </TouchableOpacity>
+              )}
+
+              {order.status === 'shipped' && (
+                <View>
+                  <TouchableOpacity
+                    style={styles.confirmDeliveryButton}
+                    onPress={() => handleConfirmDelivery(order.id)}
+                  >
+                    <Ionicons name="checkmark-circle" size={18} color="#48BB78" />
+                    <Text style={styles.confirmDeliveryButtonText}>Confirm Delivery</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.disputeButton}
+                    onPress={() => { setSelectedOrder(order); setDisputeModalVisible(true); }}
+                  >
+                    <Ionicons name="alert-circle-outline" size={18} color="#E53E3E" />
+                    <Text style={styles.disputeButtonText}>File a Dispute</Text>
+                  </TouchableOpacity>
+                </View>
               )}
 
               {order.status === 'delivered' && !order.review_submitted && (
@@ -460,7 +667,7 @@ export default function BuyerOrdersScreen() {
                   <TouchableOpacity
                     style={styles.reviewButton}
                     onPress={() => {
-                      if (!order.seller?.id || order.seller.id === null || order.seller.id === undefined) {
+                      if (!order.seller?.id) {
                         Alert.alert('Error', 'Seller information is unavailable for this order.');
                         return;
                       }
@@ -502,7 +709,7 @@ export default function BuyerOrdersScreen() {
                 </TouchableOpacity>
               )}
 
-              {order.status === 'delivered' && order.review_submitted && (
+              {order.status === 'delivered' && !!(order.review_submitted) && (
                 <View style={[styles.goatThankYouBanner, { backgroundColor: theme === 'dark' ? '#2C2C1E' : '#FFF5E6', borderColor: theme === 'dark' ? '#8B6914' : '#FFD580' }]}>
                   <Text style={styles.goatEmoji}>🐐</Text>
                   <View style={styles.goatThankYouContent}>
@@ -546,7 +753,7 @@ export default function BuyerOrdersScreen() {
           onSuccess={() => {
             setReturnModalVisible(false);
             setSelectedOrder(null);
-            fetchOrders();
+            void fetchOrders();
           }}
         />
       )}
@@ -567,6 +774,16 @@ export default function BuyerOrdersScreen() {
       )}
 
       <GlobalFooter />
+
+      <PrePaymentModal
+        visible={showPrePaymentModal}
+        order={pendingOrder}
+        onClose={() => { setShowPrePaymentModal(false); setPendingOrder(null); }}
+        onProceed={(insurance, shipping) => {
+          setShowPrePaymentModal(false);
+          if (pendingOrder) handleCompletePurchase(pendingOrder, insurance, shipping);
+        }}
+      />
     </View>
   );
 }
@@ -604,6 +821,28 @@ const createStyles = (isDark: boolean, colors: any) => StyleSheet.create({
     fontWeight: '700',
     color: colors.textPrimary,
   },
+  toggleRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  paddingVertical: 10,
+  paddingHorizontal: 4,
+  marginTop: 8,
+},
+
+toggleRowLight: {
+  backgroundColor: '#F9FAFB',
+},
+
+toggleRowDark: {
+  backgroundColor: '#2C2C2E',
+},
+
+toggleRowLandscape: {
+  paddingVertical: 6,
+  paddingHorizontal: 2,
+},
+
   ordersContainer: {
     padding: 16,
   },
@@ -750,6 +989,21 @@ const createStyles = (isDark: boolean, colors: any) => StyleSheet.create({
     fontWeight: '700',
     color: '#48BB78',
   },
+  completePurchaseButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#6A0DAD',
+    padding: 14,
+    borderRadius: 10,
+    gap: 8,
+    marginBottom: 8,
+  },
+  completePurchaseButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFF',
+  },
   confirmDeliveryButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -763,6 +1017,22 @@ const createStyles = (isDark: boolean, colors: any) => StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#FFF',
+  },
+  disputeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#E53E3E',
+    padding: 10,
+    borderRadius: 8,
+    gap: 8,
+    marginTop: 8,
+  },
+  disputeButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#E53E3E',
   },
   reviewButton: {
     flexDirection: 'row',

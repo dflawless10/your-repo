@@ -16,8 +16,10 @@ export interface User {
   username: string;
   firstname: string;
   lastname: string;
-  avatar_url?: string;
+  avatar_url?: string | null;
   jewelryBox?: JewelryItem[];
+  isPremium?: boolean;
+  is_premium_seller?: boolean;
 }
 
 interface LoginRecord {

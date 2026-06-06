@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Alert,
   KeyboardAvoidingView,
+  ScrollView,
   Platform,
   Animated,
 } from 'react-native';
@@ -107,8 +108,14 @@ export default function VerifyCodeScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
       {/* Header */}
       <LinearGradient
         colors={['#8B5CF6', '#FF6B35']}
@@ -155,7 +162,9 @@ export default function VerifyCodeScreen() {
             value={code}
             onChangeText={setCode}
             maxLength={6}
-            keyboardType="number-pad"
+            keyboardType="default"   // ← this is the fix
+            autoCapitalize="none"
+            autoCorrect={false}
             editable={!loading}
           />
         </View>
@@ -211,6 +220,7 @@ export default function VerifyCodeScreen() {
           </Text>
         </View>
       </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -219,6 +229,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   header: {
     paddingTop: 80,

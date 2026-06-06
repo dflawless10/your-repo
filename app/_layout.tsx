@@ -5,6 +5,8 @@ import {
   DefaultTheme as NavigationDefaultTheme,
   ThemeProvider as NavigationThemeProvider,
 } from '@react-navigation/native';
+import { StripeProvider } from '@stripe/stripe-react-native';
+import { STRIPE_PUBLISHABLE_KEY } from '@/config';
 
 import { useFonts } from 'expo-font';
 import { Stack, useRouter, useSegments } from 'expo-router';
@@ -13,6 +15,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 import { AuthProvider } from '@/hooks/AuthContext';
 import React, { useEffect, useRef, useState } from 'react';
+import { View } from 'react-native';
+import * as Updates from 'expo-updates';
 import { Provider } from 'react-redux';
 import store from '@/utils/filestore';
 import {
@@ -37,9 +41,27 @@ function ThemedNavigation({ children }: { children: React.ReactNode }) {
 }
 
 export default function RootLayout() {
+  const router = useRouter();
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
+
+  // Check for OTA updates on every launch
+  useEffect(() => {
+    const checkForUpdate = async () => {
+      if (__DEV__) return; // Skip in development
+      try {
+        const update = await Updates.checkForUpdateAsync();
+        if (update.isAvailable) {
+          await Updates.fetchUpdateAsync();
+          await Updates.reloadAsync();
+        }
+      } catch {
+        // Silently ignore update errors — don't crash the app
+      }
+    };
+    checkForUpdate();
+  }, []);
 
   const notificationListener = useRef<Notifications.Subscription | null>(null);
   const responseListener = useRef<Notifications.Subscription | null>(null);
@@ -98,10 +120,14 @@ export default function RootLayout() {
           console.log('🐐 Notification received in foreground:', notification);
         },
         (response) => {
-          console.log('🐐 Notification tapped:', response);
-          const data = response.notification.request.content.data;
-          if (data?.itemId) {
-            console.log('🐐 Navigate to item:', data.itemId);
+          const data = response.notification.request.content.data as any;
+          if (!data) return;
+          const action = data.action;
+          if (action === 'view_orders' || action === 'view_order') {
+            router.push('/orders' as any);
+          } else if (data.itemId || data.item_id) {
+            const id = data.itemId || data.item_id;
+            router.push(`/item/${id}` as any);
           }
         }
       );
@@ -146,6 +172,7 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <StripeProvider publishableKey={STRIPE_PUBLISHABLE_KEY} merchantIdentifier="merchant.com.dflawless.BidGoatMobile">
       <Provider store={store}>
 
           <AppThemeProvider>
@@ -193,12 +220,15 @@ export default function RootLayout() {
                   <Stack.Screen name="+not-found" />
                 </Stack>
                   <StatusBar style="auto" />
-                  <Toast />
+                  <View pointerEvents="box-none" style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, zIndex: 99999, elevation: 999 }}>
+                    <Toast />
+                  </View>
                 </>
               </AuthProvider>
             </ThemedNavigation>
           </AppThemeProvider>
       </Provider>
+      </StripeProvider>
     </GestureHandlerRootView>
   );
 }

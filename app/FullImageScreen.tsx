@@ -3,136 +3,244 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   TouchableOpacity,
-  Dimensions,
-  Platform,
   Animated,
+  useWindowDimensions,
 } from 'react-native';
-import {useEffect, useRef, useState} from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Image } from 'expo-image';
-import {
-  GestureDetector,
-  Gesture,
-} from 'react-native-gesture-handler';
+import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import ReanimatedAnimated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
+  withSpring,
   runOnJS,
+  Easing,
 } from 'react-native-reanimated';
-import React from "react";
+import React from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import GlobalFooter from "./components/GlobalFooter";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import GlobalFooter from './components/GlobalFooter';
 import EnhancedHeader, { HEADER_MAX_HEIGHT } from '@/app/components/EnhancedHeader';
 import { useTheme } from '@/app/theme/ThemeContext';
 
-
-const { width, height } = Dimensions.get('window');
 const fallbackImage = 'https://via.placeholder.com/300x200.png?text=No+Image+Available';
+const PAGE_HEADER_HEIGHT = 48;
+const SWIPE_THRESHOLD = 0.25; // fraction of width to trigger page change
+const SPRING_CONFIG = { damping: 20, stiffness: 200, mass: 0.5 };
 
-const ZoomableImage = ({
+// ─── Single zoomable slot ─────────────────────────────────────────────────────
+
+const ZoomableSlot = ({
   uri,
-  scrollEnabledSetter,
-  onLoad,
+  width,
+  height,
+  slotOffset,
+  onNavigate,
+  canGoNext,
+  canGoPrev,
 }: {
   uri: string;
-  scrollEnabledSetter: (enabled: boolean) => void;
-  onLoad: () => void;
+  width: number;
+  height: number;
+  slotOffset: number; // -width (prev), 0 (current), +width (next)
+  onNavigate: (dir: 1 | -1) => void;
+  canGoNext: boolean;
+  canGoPrev: boolean;
 }) => {
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
-  const translateX = useSharedValue(0);
-  const translateY = useSharedValue(0);
-  const savedTranslateX = useSharedValue(0);
-  const savedTranslateY = useSharedValue(0);
-  const focalX = useSharedValue(width / 2);
-  const focalY = useSharedValue(height / 2);
+  const imgX = useSharedValue(0);
+  const imgY = useSharedValue(0);
+  const savedImgX = useSharedValue(0);
+  const savedImgY = useSharedValue(0);
 
+  // Page-level offset (drives the swipe transition)
+  const pageX = useSharedValue(0);
+
+  // Reset zoom/pan when URI changes (slot is reassigned to a new image)
   useEffect(() => {
     scale.value = 1;
     savedScale.value = 1;
-    translateX.value = 0;
-    translateY.value = 0;
-    savedTranslateX.value = 0;
-    savedTranslateY.value = 0;
+    imgX.value = 0;
+    imgY.value = 0;
+    savedImgX.value = 0;
+    savedImgY.value = 0;
+    pageX.value = 0;
   }, [uri]);
 
-  const tapGesture = Gesture.Tap()
+  const triggerPage = (dir: 1 | -1) => {
+    // Reset zoom as page slides out
+    scale.value = withTiming(1, { duration: 250 });
+    savedScale.value = 1;
+    imgX.value = withTiming(0, { duration: 250 });
+    imgY.value = withTiming(0, { duration: 250 });
+    savedImgX.value = 0;
+    savedImgY.value = 0;
+
+    // Slide page out then notify parent
+    pageX.value = withTiming(
+      -dir * width,
+      { duration: 280, easing: Easing.out(Easing.quad) },
+      (finished) => {
+        if (finished) {
+          pageX.value = 0;
+          runOnJS(onNavigate)(dir);
+        }
+      }
+    );
+  };
+
+  // Double-tap: toggle zoom 1 ↔ 2.5
+  const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
-    .onEnd(() => {
-      const targetScale = scale.value > 1 ? 1 : 2;
-      scale.value = withTiming(targetScale, { duration: 200 });
-      savedScale.value = targetScale;
-      // Reset position when zooming out
-      if (targetScale <= 1) {
-        translateX.value = withTiming(0, { duration: 200 });
-        translateY.value = withTiming(0, { duration: 200 });
-        savedTranslateX.value = 0;
-        savedTranslateY.value = 0;
-        runOnJS(scrollEnabledSetter)(true);
+    .maxDuration(300)
+    .onEnd((e) => {
+      if (scale.value > 1) {
+        scale.value = withTiming(1, { duration: 220 });
+        savedScale.value = 1;
+        imgX.value = withTiming(0, { duration: 220 });
+        imgY.value = withTiming(0, { duration: 220 });
+        savedImgX.value = 0;
+        savedImgY.value = 0;
       } else {
-        runOnJS(scrollEnabledSetter)(false);
+        const targetScale = 2.5;
+        const cx = width / 2;
+        const cy = height / 2;
+        const offsetX = (cx - e.x) * (targetScale - 1);
+        const offsetY = (cy - e.y) * (targetScale - 1);
+        const boundX = ((targetScale - 1) / 2) * width;
+        const boundY = ((targetScale - 1) / 2) * height;
+        const clampedX = Math.max(-boundX, Math.min(boundX, offsetX));
+        const clampedY = Math.max(-boundY, Math.min(boundY, offsetY));
+        scale.value = withTiming(targetScale, { duration: 220 });
+        savedScale.value = targetScale;
+        imgX.value = withTiming(clampedX, { duration: 220 });
+        imgY.value = withTiming(clampedY, { duration: 220 });
+        savedImgX.value = clampedX;
+        savedImgY.value = clampedY;
       }
     });
 
-  const pinchGesture = Gesture.Pinch()
+  // Pinch
+  const pinch = Gesture.Pinch()
     .onUpdate((e) => {
-      const newScale = savedScale.value * e.scale;
-      const clamped = Math.max(1, Math.min(newScale, 3));
-      scale.value = clamped;
-      focalX.value = e.focalX;
-      focalY.value = e.focalY;
-      if (clamped > 1) runOnJS(scrollEnabledSetter)(false);
+      const next = Math.max(1, Math.min(savedScale.value * e.scale, 4));
+      scale.value = next;
     })
     .onEnd(() => {
-      // Save the current scale so zoom persists
-      savedScale.value = scale.value;
-      // Only re-enable scrolling if zoomed out
-      if (scale.value <= 1) {
-        translateX.value = withTiming(0, { duration: 200 });
-        translateY.value = withTiming(0, { duration: 200 });
-        savedTranslateX.value = 0;
-        savedTranslateY.value = 0;
-        runOnJS(scrollEnabledSetter)(true);
+      if (scale.value < 1.05) {
+        scale.value = withTiming(1, { duration: 200 });
+        savedScale.value = 1;
+        imgX.value = withTiming(0, { duration: 200 });
+        imgY.value = withTiming(0, { duration: 200 });
+        savedImgX.value = 0;
+        savedImgY.value = 0;
+      } else {
+        savedScale.value = scale.value;
+        // Clamp position within new bounds
+        const bound = ((scale.value - 1) / 2) * width;
+        const clampedX = Math.max(-bound, Math.min(bound, imgX.value));
+        imgX.value = withTiming(clampedX, { duration: 150 });
+        savedImgX.value = clampedX;
       }
     });
 
-  const panGesture = Gesture.Pan()
-    .enabled(scale.value > 1)
+  // Pan: image pan when zoomed, page swipe when at boundary or not zoomed
+  const pan = Gesture.Pan()
+    .minDistance(4)
     .onUpdate((e) => {
-      translateX.value = savedTranslateX.value + e.translationX;
-      translateY.value = savedTranslateY.value + e.translationY;
+      const zoomed = scale.value > 1.05;
+
+      if (!zoomed) {
+        // Pure page swipe
+        pageX.value = e.translationX;
+        return;
+      }
+
+      // Zoomed: move image, bleed excess into page offset
+      const bound = ((scale.value - 1) / 2) * width;
+      const rawX = savedImgX.value + e.translationX;
+      const clampedX = Math.max(-bound, Math.min(bound, rawX));
+      imgX.value = clampedX;
+      imgY.value = savedImgY.value + e.translationY;
+
+      // Bleed: excess translation beyond bounds drives the page
+      const excess = rawX - clampedX;
+      if ((excess < 0 && canGoNext) || (excess > 0 && canGoPrev)) {
+        pageX.value = excess * 0.5; // damped feel
+      }
     })
-    .onEnd(() => {
-      savedTranslateX.value = translateX.value;
-      savedTranslateY.value = translateY.value;
+    .onEnd((e) => {
+      const zoomed = scale.value > 1.05;
+
+      if (!zoomed) {
+        // Decide page change or snap back
+        const velo = e.velocityX;
+        const dist = e.translationX;
+        const goNext = (dist < -width * SWIPE_THRESHOLD || velo < -600) && canGoNext;
+        const goPrev = (dist > width * SWIPE_THRESHOLD || velo > 600) && canGoPrev;
+
+        if (goNext) {
+          runOnJS(triggerPage)(1);
+        } else if (goPrev) {
+          runOnJS(triggerPage)(-1);
+        } else {
+          pageX.value = withSpring(0, SPRING_CONFIG);
+        }
+        return;
+      }
+
+      // Zoomed: save image position, check if bleed should trigger page
+      savedImgX.value = imgX.value;
+      savedImgY.value = imgY.value;
+
+      const bound = ((scale.value - 1) / 2) * width;
+      const rawX = savedImgX.value + e.translationX;
+      const excess = rawX - Math.max(-bound, Math.min(bound, rawX));
+      const velo = e.velocityX;
+
+      const goNext = (excess < -width * 0.15 || velo < -800) && canGoNext;
+      const goPrev = (excess > width * 0.15 || velo > 800) && canGoPrev;
+
+      if (goNext) {
+        runOnJS(triggerPage)(1);
+      } else if (goPrev) {
+        runOnJS(triggerPage)(-1);
+      } else {
+        pageX.value = withSpring(0, SPRING_CONFIG);
+      }
     });
 
-  const composedGesture = Gesture.Simultaneous(
-    Gesture.Exclusive(panGesture, pinchGesture),
-    tapGesture
+  const composed = Gesture.Simultaneous(
+    Gesture.Exclusive(pan, pinch),
+    doubleTap
   );
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
-      { translateX: translateX.value + (1 - scale.value) * (focalX.value - width / 2) },
-      { translateY: translateY.value + (1 - scale.value) * (focalY.value - height / 2) },
+      { translateX: pageX.value + imgX.value },
+      { translateY: imgY.value },
       { scale: scale.value },
     ],
   }));
 
   return (
-    <View style={styles.imageWrapper}>
-      <GestureDetector gesture={composedGesture}>
-        <ReanimatedAnimated.View style={[styles.imageContainer, animatedStyle]}>
+    <View
+      style={[
+        StyleSheet.absoluteFill,
+        { left: slotOffset, right: -slotOffset, backgroundColor: '#000' },
+      ]}
+    >
+      <GestureDetector gesture={composed}>
+        <ReanimatedAnimated.View style={[StyleSheet.absoluteFill, animatedStyle]}>
           <Image
             source={{ uri: uri || fallbackImage }}
-            style={styles.image}
+            style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }]}
             contentFit="contain"
+            cachePolicy="memory-disk"
             placeholder={require('../assets/goat-icon.png')}
-            onLoad={onLoad}
           />
         </ReanimatedAnimated.View>
       </GestureDetector>
@@ -140,190 +248,208 @@ const ZoomableImage = ({
   );
 };
 
+// ─── Main screen ─────────────────────────────────────────────────────────────
+
 export default function FullImageScreen() {
   const { theme, colors } = useTheme();
+  const isDark = theme === 'dark';
+  const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const isLandscape = width > height;
+
   const { mediaArray, index, title } = useLocalSearchParams();
   const router = useRouter();
   const scrollY = useRef(new Animated.Value(0)).current;
-  const headerOpacity = React.useRef(new Animated.Value(0)).current;
-  const headerScale = React.useRef(new Animated.Value(1)).current;
+  const headerScale = useRef(new Animated.Value(1)).current;
 
-  let images: string[] = [];
-  try {
-    const rawMediaArray = Array.isArray(mediaArray) ? mediaArray[0] : mediaArray;
-    images = JSON.parse(rawMediaArray || '[]');
-  } catch (err) {
-    console.warn('Failed to parse mediaArray:', err);
-  }
+  const [images] = useState<string[]>(() => {
+    try {
+      const raw = Array.isArray(mediaArray) ? mediaArray[0] : mediaArray;
+      return JSON.parse(raw || '[]');
+    } catch {
+      return [];
+    }
+  });
 
-  const itemTitle = typeof title === 'string' ? title : (Array.isArray(title) ? title[0] : 'Images');
+  const itemTitle =
+    typeof title === 'string' ? title : Array.isArray(title) ? title[0] : 'Images';
 
   const start = Math.min(Math.max(Number(index) || 0, 0), images.length - 1);
   const [activeIndex, setActiveIndex] = useState(start);
-  const [scrollEnabled, setScrollEnabled] = useState(true);
-  const flatListRef = useRef<FlatList>(null);
-  const [loaded, setLoaded] = useState(false);
 
+  // Pulse animation
   useEffect(() => {
-    // Fade in header title and arrow - wait for screen to fully render first
-    setTimeout(() => {
-      Animated.timing(headerOpacity, {
-        toValue: 1,
-        duration: 2000, // 2 seconds - slow and dramatic
-        useNativeDriver: true,
-      }).start(() => {
-        // After fade-in completes, start pulsing animation
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(headerScale, {
-              toValue: 1.05,
-              duration: 1500,
-              useNativeDriver: true,
-            }),
-            Animated.timing(headerScale, {
-              toValue: 1,
-              duration: 1500,
-              useNativeDriver: true,
-            }),
-          ])
-        ).start();
-      });
-    }, 500); // 500ms delay - let screen render fully first
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(headerScale, { toValue: 1.05, duration: 1500, useNativeDriver: true }),
+        Animated.timing(headerScale, { toValue: 1, duration: 1500, useNativeDriver: true }),
+      ])
+    ).start();
   }, []);
 
+  // Prefetch adjacent images whenever activeIndex changes
+  useEffect(() => {
+    const toPrefetch: string[] = [];
+    if (images[activeIndex - 1]) toPrefetch.push(images[activeIndex - 1]);
+    if (images[activeIndex + 1]) toPrefetch.push(images[activeIndex + 1]);
+    toPrefetch.forEach((uri) => Image.prefetch(uri));
+  }, [activeIndex, images]);
 
-  const scrollToIndex = (i: number) => {
-    flatListRef.current?.scrollToIndex({ index: i, animated: true });
-    setActiveIndex(i);
-    setScrollEnabled(true);
-  };
-
-  const renderItem = ({ item }: { item: string }) => (
-    <ZoomableImage uri={item} scrollEnabledSetter={setScrollEnabled} onLoad={() => setLoaded(true)} />
+  const navigate = useCallback(
+    (dir: 1 | -1) => {
+      setActiveIndex((prev) => Math.min(Math.max(prev + dir, 0), images.length - 1));
+    },
+    [images.length]
   );
 
+  // Derive the 3 slot URIs from activeIndex
+  const prevUri = images[activeIndex - 1] ?? '';
+  const currUri = images[activeIndex] ?? '';
+  const nextUri = images[activeIndex + 1] ?? '';
+
+  const galleryMarginTop = isLandscape
+    ? insets.top + PAGE_HEADER_HEIGHT
+    : HEADER_MAX_HEIGHT + PAGE_HEADER_HEIGHT;
+
+  const galleryHeight = height - galleryMarginTop;
+
+  const pageHeaderTop = isLandscape ? insets.top : HEADER_MAX_HEIGHT - 10;
+  const pageHeaderPaddingLeft = 16 + (isLandscape ? insets.left : 0);
+
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <View style={{ flex: 1, backgroundColor: '#000' }}>
       <Stack.Screen options={{ headerShown: false }} />
-      <EnhancedHeader scrollY={scrollY} />
 
-      {/* Title with Back Arrow - Overlays on top */}
-      <Animated.View
-        style={[
-          styles.headerTitleContainer,
-          {
-            opacity: headerOpacity,
-            transform: [{ scale: headerScale }],
-          }
-        ]}
-      >
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backButton}
-        >
-          <Ionicons name="arrow-back" size={28} color="#6A0DAD" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>
-          {itemTitle}
-        </Text>
-      </Animated.View>
+      {!isLandscape && (
+        <View style={{ zIndex: 1, elevation: 1 }}>
+          <EnhancedHeader scrollY={scrollY} />
+        </View>
+      )}
 
-      <View style={styles.container}>
-        <FlatList
-        ref={flatListRef}
-        data={images}
-        horizontal
-        pagingEnabled
-        scrollEnabled={scrollEnabled}
-        initialScrollIndex={start}
-        renderItem={renderItem}
-        keyExtractor={(_, i) => `image-${i}`}
-        showsHorizontalScrollIndicator={false}
-        removeClippedSubviews={false}
-        contentContainerStyle={{ paddingTop: 84 }}
-        getItemLayout={(data, index) => ({
-          length: width,
-          offset: width * index,
-          index,
-        })}
-        onScrollToIndexFailed={(info) => {
-          setTimeout(() => {
-            flatListRef.current?.scrollToIndex({ index: info.index, animated: true });
-          }, 300);
-        }}
-        onMomentumScrollEnd={(e) => {
-          const i = Math.round(e.nativeEvent.contentOffset.x / width);
-          setActiveIndex(i);
-          setScrollEnabled(true);
-        }}
-      />
-
-      <View style={styles.dotRow}>
-        {images.map((_, i) => (
-          <View
-            key={i}
-            style={[
-              styles.dot,
-              { backgroundColor: i === activeIndex ? '#6A0DAD' : '#D6D6D6' },
-            ]}
+      {/* 3-slot gallery */}
+      <View style={[styles.galleryContainer, { marginTop: galleryMarginTop, width }]}>
+        {/* Prev slot */}
+        {prevUri ? (
+          <ZoomableSlot
+            key={`prev-${activeIndex}`}
+            uri={prevUri}
+            width={width}
+            height={galleryHeight}
+            slotOffset={-width}
+            onNavigate={navigate}
+            canGoNext={activeIndex < images.length - 1}
+            canGoPrev={activeIndex > 0}
           />
-        ))}
+        ) : null}
+
+        {/* Current slot */}
+        <ZoomableSlot
+          key={`curr-${activeIndex}`}
+          uri={currUri}
+          width={width}
+          height={galleryHeight}
+          slotOffset={0}
+          onNavigate={navigate}
+          canGoNext={activeIndex < images.length - 1}
+          canGoPrev={activeIndex > 0}
+        />
+
+        {/* Next slot */}
+        {nextUri ? (
+          <ZoomableSlot
+            key={`next-${activeIndex}`}
+            uri={nextUri}
+            width={width}
+            height={galleryHeight}
+            slotOffset={width}
+            onNavigate={navigate}
+            canGoNext={activeIndex < images.length - 1}
+            canGoPrev={activeIndex > 0}
+          />
+        ) : null}
+
+        {/* Dot indicators */}
+        <View style={[styles.dotRow, { bottom: isLandscape ? 8 : 60 }]}>
+          {images.map((_, i) => (
+            <View
+              key={i}
+              style={[
+                styles.dot,
+                { backgroundColor: i === activeIndex ? '#6A0DAD' : '#D6D6D6' },
+              ]}
+            />
+          ))}
         </View>
       </View>
-      <GlobalFooter />
+
+      {!isLandscape && <GlobalFooter />}
+
+      {/* Page header — absolutely pinned */}
+      <Animated.View
+        style={[
+          styles.pageHeaderRow,
+          {
+            top: pageHeaderTop,
+            paddingLeft: pageHeaderPaddingLeft,
+            backgroundColor: '#000',
+            transform: [{ scale: headerScale }],
+          },
+        ]}
+      >
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color={isDark ? '#B794F4' : '#6A0DAD'} />
+        </TouchableOpacity>
+        <Text style={[styles.pageTitle, { color: '#FFF' }]} numberOfLines={1}>
+          {itemTitle}
+        </Text>
+        <Text style={[styles.counter, { color: '#999' }]}>
+          {activeIndex + 1} / {images.length}
+        </Text>
+      </Animated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  headerTitleContainer: {
+  pageHeaderRow: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 160 : 150,
     left: 0,
     right: 0,
+    zIndex: 9999,
+    elevation: 50,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingRight: 16,
     paddingVertical: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    zIndex: 1000,
+    paddingBottom: 6,
+    height: PAGE_HEADER_HEIGHT,
   },
   backButton: {
     marginRight: 12,
     padding: 4,
   },
-  headerTitle: {
+  pageTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1A1A1A',
+    flex: 1,
   },
-  imageWrapper: {
-    width,
-    height,
-    justifyContent: 'center',
-    alignItems: 'center',
+  counter: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  galleryContainer: {
+    flex: 1,
     overflow: 'hidden',
-  },
-  imageContainer: {
-    width,
-    height,
-  },
-  image: {
-    width,
-    height,
+    backgroundColor: '#000',
   },
   dotRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 6,
     position: 'absolute',
-    bottom: 60,
     left: 0,
     right: 0,
+    zIndex: 10,
   },
   dot: {
     width: 6,
